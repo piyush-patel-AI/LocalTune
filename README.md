@@ -89,3 +89,4 @@ To stream music from a phone, tablet, or secondary PC on your local Wi-Fi:
 
 - **Backend:** Node.js, Express, SQLite (`better-sqlite3`), `music-metadata`, `bcryptjs`, `express-session`
 - **Frontend:** React, Vite, Vanilla CSS design tokens (Dark mode theme)
+# LocalTune
