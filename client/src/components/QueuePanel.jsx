@@ -1,5 +1,20 @@
 import { usePlayer } from '../context/PlayerContext';
-import { IconClose, IconPlay, IconPause, IconMusic, IconChevronUp, IconChevronDown } from './Icons';
+import {
+  IconClose,
+  IconPlay,
+  IconPause,
+  IconMusic,
+  IconChevronUp,
+  IconChevronDown,
+  IconShuffle
+} from './Icons';
+
+function formatDuration(seconds) {
+  if (!seconds || isNaN(seconds)) return '--:--';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
 
 export default function QueuePanel({ onClose }) {
   const {
@@ -9,7 +24,9 @@ export default function QueuePanel({ onClose }) {
     isPlaying,
     playTrack,
     removeFromQueue,
-    reorderQueue
+    reorderQueue,
+    shuffleQueue,
+    shuffle
   } = usePlayer();
 
   const moveUp = (idx) => {
@@ -32,22 +49,40 @@ export default function QueuePanel({ onClose }) {
 
   return (
     <div className="queue-panel">
+      {/* Header */}
       <div className="queue-header">
         <div>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: '800', fontFamily: 'var(--font-display)' }}>Play Queue</h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            {queue.length} track{queue.length !== 1 ? 's' : ''} in queue
+          <h3 style={{ fontSize: '1.15rem', fontWeight: '800', fontFamily: 'var(--font-display)', margin: 0 }}>
+            Play Queue
+          </h3>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', margin: 0 }}>
+            {queue.length} track{queue.length !== 1 ? 's' : ''} • Up next
           </p>
         </div>
-        <button className="control-btn" onClick={onClose}>
-          <IconClose size={18} />
-        </button>
+
+        <div className="queue-header-actions">
+          <button
+            className={`btn-secondary ${shuffle ? 'active' : ''}`}
+            onClick={shuffleQueue}
+            disabled={queue.length <= 1}
+            style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', gap: '0.35rem' }}
+            title="Shuffle Queue"
+          >
+            <IconShuffle size={14} color={shuffle ? 'var(--accent-primary)' : 'var(--text-secondary)'} />
+            <span>Shuffle</span>
+          </button>
+          <button className="control-btn" onClick={onClose} title="Close Queue">
+            <IconClose size={18} />
+          </button>
+        </div>
       </div>
 
+      {/* Queue List */}
       <div className="queue-list">
         {queue.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginTop: '2rem' }}>
-            Queue is empty
+          <div className="empty-bento-box" style={{ justifyContent: 'center', marginTop: '2rem' }}>
+            <IconMusic size={24} color="var(--text-muted)" />
+            <span>Queue is empty</span>
           </div>
         ) : (
           queue.map((track, idx) => {
@@ -57,9 +92,10 @@ export default function QueuePanel({ onClose }) {
                 key={`${track.id}-${idx}`}
                 className={`queue-item ${isCurrent ? 'playing' : ''}`}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                {/* Left: Play button, Cover Art & Metadata */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', overflow: 'hidden', flex: 1 }}>
                   {isCurrent && isPlaying ? (
-                    <div className="vu-equalizer" style={{ flexShrink: 0, margin: '0 4px' }}>
+                    <div className="vu-equalizer" style={{ flexShrink: 0, margin: '0 2px' }}>
                       <span />
                       <span />
                       <span />
@@ -69,40 +105,70 @@ export default function QueuePanel({ onClose }) {
                       className="play-row-btn"
                       onClick={() => playTrack(track)}
                       style={{ flexShrink: 0 }}
+                      title={isCurrent ? 'Pause' : 'Play'}
                     >
                       {isCurrent ? <IconPause size={12} /> : <IconPlay size={12} />}
                     </button>
                   )}
-                  <div style={{ overflow: 'hidden' }}>
-                    <div className="card-title" style={{ fontSize: '0.85rem' }}>{track.title}</div>
-                    <div className="card-sub" style={{ fontSize: '0.75rem' }}>{track.artist}</div>
+
+                  {track.cover_art_path ? (
+                    <img
+                      src={`/api/tracks/${track.id}/art`}
+                      alt={track.title}
+                      className="queue-track-art"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="queue-track-art-fallback">
+                      <IconMusic size={18} color="var(--accent-primary)" />
+                    </div>
+                  )}
+
+                  <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                    <div
+                      className="track-name-bold"
+                      style={{ fontSize: '0.84rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      title={track.title}
+                    >
+                      {track.title}
+                    </div>
+                    <div
+                      style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      title={track.artist}
+                    >
+                      {track.artist}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {formatDuration(track.duration_seconds || track.duration)}
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                {/* Right: Reorder & Remove Actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', flexShrink: 0 }}>
                   <button
-                    className="control-btn"
+                    className="reorder-btn"
                     onClick={() => moveUp(idx)}
                     disabled={idx === 0}
                     title="Move Up"
                   >
-                    <IconChevronUp size={16} />
+                    <IconChevronUp size={15} />
                   </button>
                   <button
-                    className="control-btn"
+                    className="reorder-btn"
                     onClick={() => moveDown(idx)}
                     disabled={idx === queue.length - 1}
                     title="Move Down"
                   >
-                    <IconChevronDown size={16} />
+                    <IconChevronDown size={15} />
                   </button>
                   <button
-                    className="control-btn"
+                    className="reorder-btn"
                     style={{ color: 'var(--danger)' }}
                     onClick={() => removeFromQueue(idx)}
-                    title="Remove"
+                    title="Remove from queue"
                   >
-                    <IconClose size={16} />
+                    <IconClose size={15} />
                   </button>
                 </div>
               </div>

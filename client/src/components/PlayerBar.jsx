@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import {
   IconMusic,
@@ -40,13 +41,26 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
     toggleFavorite
   } = usePlayer();
 
-  const isFav = currentTrack ? !!favoritesMap[currentTrack.id] : false;
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTime, setDragTime] = useState(0);
 
-  const handleScrubClick = (e) => {
-    if (!currentTrack || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
-    seek(pos * duration);
+  const isFav = currentTrack ? !!favoritesMap[currentTrack.id] : false;
+  const displayTime = isDragging ? dragTime : currentTime;
+  const progressPercent = duration ? (displayTime / duration) * 100 : 0;
+
+  const handleSeekChange = (e) => {
+    setDragTime(parseFloat(e.target.value));
+  };
+
+  const handleSeekMouseDown = () => {
+    setIsDragging(true);
+    setDragTime(currentTime);
+  };
+
+  const handleSeekMouseUp = (e) => {
+    const newTime = parseFloat(e.target.value);
+    setIsDragging(false);
+    seek(newTime);
   };
 
   const cycleRepeat = () => {
@@ -153,11 +167,24 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
         </div>
 
         <div className="scrub-container">
-          <span className="time-stamp">{formatTime(currentTime)}</span>
-          <div className="scrub-bar" onClick={handleScrubClick}>
-            <div
-              className="scrub-fill"
-              style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+          <span className="time-stamp">{formatTime(displayTime)}</span>
+          <div className="scrub-bar-wrapper">
+            <input
+              type="range"
+              min="0"
+              max={duration || 100}
+              step="0.1"
+              value={displayTime}
+              onChange={handleSeekChange}
+              onMouseDown={handleSeekMouseDown}
+              onMouseUp={handleSeekMouseUp}
+              onTouchStart={handleSeekMouseDown}
+              onTouchEnd={handleSeekMouseUp}
+              disabled={!currentTrack || !duration}
+              className="scrub-slider"
+              style={{
+                background: `linear-gradient(to right, var(--accent-primary) 0%, #fbbf24 ${progressPercent}%, rgba(255, 255, 255, 0.14) ${progressPercent}%, rgba(255, 255, 255, 0.14) 100%)`
+              }}
             />
           </div>
           <span className="time-stamp">{formatTime(duration)}</span>

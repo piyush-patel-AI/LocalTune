@@ -9,8 +9,25 @@ import {
   IconChevronDown,
   IconClose,
   IconPlus,
-  IconMusic
+  IconMusic,
+  IconSparkles,
+  IconDisc
 } from '../components/Icons';
+
+function formatDuration(seconds) {
+  if (!seconds || isNaN(seconds)) return '--:--';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+function calculateTotalDuration(tracks) {
+  const totalSecs = tracks.reduce((acc, t) => acc + (t.duration_seconds || t.duration || 0), 0);
+  const mins = Math.floor(totalSecs / 60);
+  if (mins < 60) return `${mins} mins`;
+  const hrs = (mins / 60).toFixed(1);
+  return `${hrs} hrs`;
+}
 
 export default function PlaylistsView() {
   const [playlists, setPlaylists] = useState([]);
@@ -21,16 +38,17 @@ export default function PlaylistsView() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const { playTrack, currentTrack, isPlaying } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
 
   const fetchPlaylists = async () => {
     try {
       const res = await fetch('/api/playlists', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setPlaylists(data.playlists || []);
-        if (data.playlists.length > 0 && !activePlaylist) {
-          selectPlaylist(data.playlists[0]);
+        const list = data.playlists || [];
+        setPlaylists(list);
+        if (list.length > 0 && !activePlaylist) {
+          selectPlaylist(list[0]);
         }
       }
     } catch (err) {
@@ -145,8 +163,7 @@ export default function PlaylistsView() {
 
     setPlaylistTracks(newTracks);
 
-    // Save order to server
-    const trackIds = newTracks.map(t => t.id);
+    const trackIds = newTracks.map((t) => t.id);
     await fetch(`/api/playlists/${activePlaylist.id}/reorder`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -155,76 +172,114 @@ export default function PlaylistsView() {
     });
   };
 
+  const handleShufflePlay = () => {
+    if (playlistTracks.length === 0) return;
+    const shuffled = [...playlistTracks].sort(() => 0.5 - Math.random());
+    playTrack(shuffled[0], shuffled);
+  };
+
+  // Extract artwork subset for composite artwork grid
+  const artworkTracks = playlistTracks.filter((t) => t.cover_art_path).slice(0, 4);
+
   return (
     <div>
       <div className="view-header">
         <div>
-          <h1 className="view-title">Your Playlists</h1>
-          <p className="view-subtitle">Private custom playlists for your account</p>
+          <h1 className="view-title">Playlists</h1>
+          <p className="view-subtitle">Organize and curate your personal music collection</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '2rem' }}>
-        {/* Playlists List Sidebar */}
-        <div style={{ backgroundColor: 'var(--bg-card)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
-          <form onSubmit={handleCreatePlaylist} style={{ marginBottom: '1.25rem' }}>
+      <div className="playlist-view-layout">
+        {/* Playlists Navigation Sidebar */}
+        <div className="playlist-sidebar-card">
+          <form onSubmit={handleCreatePlaylist} className="playlist-create-box">
             <input
               type="text"
               className="form-input"
               placeholder="+ New Playlist Name"
               value={newPlaylistName}
               onChange={(e) => setNewPlaylistName(e.target.value)}
-              style={{ marginBottom: '0.5rem' }}
             />
-            <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+            <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }}>
               <IconPlus size={16} color="#0f172a" />
               <span>Create Playlist</span>
             </button>
           </form>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-            {playlists.map((pl) => (
-              <div
-                key={pl.id}
-                onClick={() => selectPlaylist(pl)}
-                style={{
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  backgroundColor: activePlaylist && activePlaylist.id === pl.id ? 'var(--bg-card-hover)' : 'transparent',
-                  borderLeft: activePlaylist && activePlaylist.id === pl.id ? '3px solid var(--accent-primary)' : '3px solid transparent',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{pl.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{pl.track_count} tracks</div>
+          <div className="playlist-nav-list">
+            {playlists.length > 0 ? (
+              playlists.map((pl) => {
+                const isActive = activePlaylist && activePlaylist.id === pl.id;
+                return (
+                  <button
+                    key={pl.id}
+                    className={`playlist-item-btn ${isActive ? 'active' : ''}`}
+                    onClick={() => selectPlaylist(pl)}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pl.name}
+                    </span>
+                    <span className="playlist-item-count">{pl.track_count || 0}</span>
+                  </button>
+                );
+              })
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem 0' }}>
+                No playlists yet.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
-        {/* Selected Playlist Content */}
+        {/* Selected Playlist Main Content */}
         <div>
           {activePlaylist ? (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div>
+              {/* Hero Banner */}
+              <div className="playlist-hero-banner">
+                {artworkTracks.length >= 4 ? (
+                  <div className="playlist-art-grid">
+                    {artworkTracks.map((t) => (
+                      <img
+                        key={t.id}
+                        src={`/api/tracks/${t.id}/art`}
+                        alt={t.title}
+                        className="playlist-art-tile"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ))}
+                  </div>
+                ) : artworkTracks.length > 0 ? (
+                  <div className="playlist-art-fallback">
+                    <img
+                      src={`/api/tracks/${artworkTracks[0].id}/art`}
+                      alt={artworkTracks[0].title}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="playlist-art-fallback">
+                    <IconDisc size={54} color="var(--accent-primary)" />
+                  </div>
+                )}
+
+                <div className="playlist-meta-container">
                   {isEditing ? (
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div className="playlist-title-edit">
                       <input
                         type="text"
                         className="form-input"
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
+                        style={{ fontSize: '1.2rem', padding: '0.4rem 0.75rem' }}
                       />
                       <button className="btn-primary" onClick={handleRenamePlaylist}>Save</button>
                       <button className="btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      <h2 style={{ fontSize: '1.75rem', fontWeight: '800', fontFamily: 'var(--font-display)' }}>{activePlaylist.name}</h2>
+                    <div className="playlist-title-edit">
+                      <h2 className="playlist-title-text">{activePlaylist.name}</h2>
                       <button
                         className="control-btn"
                         onClick={() => { setEditingName(activePlaylist.name); setIsEditing(true); }}
@@ -234,28 +289,59 @@ export default function PlaylistsView() {
                       </button>
                     </div>
                   )}
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem', fontFamily: 'var(--font-mono)' }}>
-                    {playlistTracks.length} tracks
-                  </p>
-                </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  {playlistTracks.length > 0 && (
-                    <button className="btn-primary" onClick={() => playTrack(playlistTracks[0], playlistTracks)}>
-                      <IconPlay size={16} color="#0f172a" fill="#0f172a" />
-                      <span>Play Playlist</span>
+                  <div className="playlist-details-pill">
+                    <span>PLAYLIST</span>
+                    <span>•</span>
+                    <span>{playlistTracks.length} TRACKS</span>
+                    <span>•</span>
+                    <span>{calculateTotalDuration(playlistTracks)}</span>
+                  </div>
+
+                  <div className="playlist-action-bar">
+                    {playlistTracks.length > 0 && (
+                      <>
+                        <button
+                          className="btn-primary"
+                          onClick={() => {
+                            if (currentTrack && playlistTracks.some((t) => t.id === currentTrack.id)) {
+                              togglePlay();
+                            } else {
+                              playTrack(playlistTracks[0], playlistTracks);
+                            }
+                          }}
+                        >
+                          {isPlaying && playlistTracks.some((t) => t.id === currentTrack?.id) ? (
+                            <>
+                              <IconPause size={16} color="#0f172a" fill="#0f172a" />
+                              <span>Pause</span>
+                            </>
+                          ) : (
+                            <>
+                              <IconPlay size={16} color="#0f172a" fill="#0f172a" />
+                              <span>Play Playlist</span>
+                            </>
+                          )}
+                        </button>
+                        <button className="btn-secondary" onClick={handleShufflePlay}>
+                          <IconSparkles size={16} color="var(--accent-primary)" />
+                          <span>Shuffle</span>
+                        </button>
+                      </>
+                    )}
+                    <button className="btn-secondary btn-danger" onClick={() => handleDeletePlaylist(activePlaylist.id)}>
+                      <IconTrash size={16} />
+                      <span>Delete</span>
                     </button>
-                  )}
-                  <button className="btn-secondary btn-danger" onClick={() => handleDeletePlaylist(activePlaylist.id)}>
-                    <IconTrash size={16} />
-                    <span>Delete Playlist</span>
-                  </button>
+                  </div>
                 </div>
               </div>
 
+              {/* Tracks Table */}
               {playlistTracks.length === 0 ? (
-                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Playlist is empty. Add songs from your Music Library or Search view using the ➕ button!
+                <div className="empty-bento-box" style={{ padding: '2.5rem', justifyContent: 'center' }}>
+                  <IconMusic size={28} color="var(--text-muted)" />
+                  <span>Playlist is empty. Add songs from your Library using the ➕ button!</span>
                 </div>
               ) : (
                 <table className="track-table">
@@ -264,18 +350,24 @@ export default function PlaylistsView() {
                       <th style={{ width: '45px' }}>#</th>
                       <th>Title</th>
                       <th>Artist</th>
-                      <th>Order</th>
-                      <th style={{ width: '60px' }}>Remove</th>
+                      <th>Album</th>
+                      <th style={{ textAlign: 'center', width: '80px' }}>Reorder</th>
+                      <th style={{ width: '70px', textAlign: 'right' }}>Time</th>
+                      <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {playlistTracks.map((track, idx) => {
                       const isCurrent = currentTrack && currentTrack.id === track.id;
                       return (
-                        <tr key={`${track.id}-${idx}`} className={`track-row ${isCurrent ? 'active' : ''}`} onDoubleClick={() => playTrack(track, playlistTracks)}>
+                        <tr
+                          key={`${track.id}-${idx}`}
+                          className={`track-row ${isCurrent ? 'active' : ''}`}
+                          onDoubleClick={() => playTrack(track, playlistTracks)}
+                        >
                           <td>
                             {isCurrent && isPlaying ? (
-                              <div className="vu-equalizer" style={{ marginLeft: '6px' }}>
+                              <div className="vu-equalizer" style={{ marginLeft: '4px' }}>
                                 <span />
                                 <span />
                                 <span />
@@ -286,12 +378,39 @@ export default function PlaylistsView() {
                               </button>
                             )}
                           </td>
-                          <td className="track-name-bold">{track.title}</td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{track.artist}</td>
+
                           <td>
-                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              {track.cover_art_path ? (
+                                <img
+                                  src={`/api/tracks/${track.id}/art`}
+                                  alt={track.title}
+                                  className="track-thumb"
+                                  onError={(e) => { e.target.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="track-thumb-fallback">
+                                  <IconMusic size={16} color="var(--accent-primary)" />
+                                </div>
+                              )}
+                              <div>
+                                <div className="track-name-bold">{track.title}</div>
+                                {track.format && (
+                                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                                    {track.format.toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td style={{ color: 'var(--text-secondary)' }}>{track.artist}</td>
+                          <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{track.album || 'Single'}</td>
+
+                          <td>
+                            <div className="reorder-btns" style={{ justifyContent: 'center' }}>
                               <button
-                                className="control-btn"
+                                className="reorder-btn"
                                 onClick={() => moveTrack(idx, -1)}
                                 disabled={idx === 0}
                                 title="Move Up"
@@ -299,7 +418,7 @@ export default function PlaylistsView() {
                                 <IconChevronUp size={16} />
                               </button>
                               <button
-                                className="control-btn"
+                                className="reorder-btn"
                                 onClick={() => moveTrack(idx, 1)}
                                 disabled={idx === playlistTracks.length - 1}
                                 title="Move Down"
@@ -308,7 +427,12 @@ export default function PlaylistsView() {
                               </button>
                             </div>
                           </td>
-                          <td>
+
+                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                            {formatDuration(track.duration_seconds || track.duration)}
+                          </td>
+
+                          <td style={{ textAlign: 'center' }}>
                             <button
                               className="control-btn"
                               style={{ color: 'var(--danger)' }}
@@ -326,8 +450,9 @@ export default function PlaylistsView() {
               )}
             </div>
           ) : (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Select or create a playlist from the left panel.
+            <div className="empty-bento-box" style={{ padding: '3rem', justifyContent: 'center' }}>
+              <IconMusic size={28} color="var(--text-muted)" />
+              <span>Select or create a playlist from the left panel to begin.</span>
             </div>
           )}
         </div>

@@ -16,7 +16,7 @@ export default function Navbar({ activeView, setActiveView }) {
   const navItems = [
     { id: 'home', label: 'Home', icon: IconHome },
     { id: 'library', label: 'Library', icon: IconMusic },
-    { id: 'albums', label: 'Albums', icon: IconDisc },
+    { id: 'albums', label: 'Albums & EPs', icon: IconDisc },
     { id: 'artists', label: 'Artists', icon: IconUser },
     { id: 'playlists', label: 'Playlists', icon: IconPlaylists },
     { id: 'favorites', label: 'Favorites', icon: IconHeart },

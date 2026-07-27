@@ -7,13 +7,16 @@ export default function AlbumsView() {
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [albumTracks, setAlbumTracks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'album' | 'ep' | 'single'
 
   const { playTrack, currentTrack, isPlaying } = usePlayer();
 
   useEffect(() => {
     async function fetchAlbums() {
+      setLoading(true);
       try {
-        const res = await fetch('/api/tracks?groupBy=album', { credentials: 'include' });
+        const query = activeFilter !== 'all' ? `&releaseType=${activeFilter}` : '';
+        const res = await fetch(`/api/tracks?groupBy=album${query}`, { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setAlbums(data.albums || []);
@@ -25,7 +28,7 @@ export default function AlbumsView() {
       }
     }
     fetchAlbums();
-  }, []);
+  }, [activeFilter]);
 
   const handleSelectAlbum = async (album) => {
     setSelectedAlbum(album);
@@ -57,22 +60,68 @@ export default function AlbumsView() {
     }
   };
 
+  const getBadgeClass = (type) => {
+    switch ((type || 'album').toLowerCase()) {
+      case 'ep': return 'release-badge badge-ep';
+      case 'single': return 'release-badge badge-single';
+      default: return 'release-badge badge-album';
+    }
+  };
+
+  const getBadgeLabel = (type) => {
+    switch ((type || 'album').toLowerCase()) {
+      case 'ep': return '💽 EP';
+      case 'single': return '🎵 SINGLE';
+      default: return '💿 ALBUM';
+    }
+  };
+
   return (
     <div>
-      <div className="view-header">
+      <div className="view-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="view-title">Albums</h1>
-          <p className="view-subtitle">{albums.length} albums in your studio catalog</p>
+          <h1 className="view-title">Albums & EPs</h1>
+          <p className="view-subtitle">{albums.length} releases in your library</p>
         </div>
+
+        {!selectedAlbum && (
+          <div className="filter-tab-bar">
+            <button
+              className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('all')}
+            >
+              All Releases
+            </button>
+            <button
+              className={`filter-tab ${activeFilter === 'album' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('album')}
+            >
+              💿 Studio LPs
+            </button>
+            <button
+              className={`filter-tab ${activeFilter === 'ep' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('ep')}
+            >
+              💽 EPs
+            </button>
+            <button
+              className={`filter-tab ${activeFilter === 'single' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('single')}
+            >
+              🎵 Singles
+            </button>
+          </div>
+        )}
+
         {selectedAlbum && (
           <button className="btn-secondary" onClick={() => setSelectedAlbum(null)}>
-            ← Back to Albums
+            ← Back to Releases
           </button>
         )}
       </div>
 
       {loading ? (
-        <div style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>Loading albums...</div>
+        <div style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>Loading catalog...</div>
       ) : selectedAlbum ? (
         <div>
           <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', marginBottom: '2rem' }}>
@@ -89,6 +138,11 @@ export default function AlbumsView() {
               )}
             </div>
             <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+                <span className={getBadgeClass(selectedAlbum.release_type)}>
+                  {getBadgeLabel(selectedAlbum.release_type)}
+                </span>
+              </div>
               <h2 style={{ fontSize: '2rem', fontWeight: '800', fontFamily: 'var(--font-display)' }}>{selectedAlbum.album}</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', marginTop: '0.25rem' }}>
                 By {selectedAlbum.artist} • {albumTracks.length} tracks
@@ -100,7 +154,7 @@ export default function AlbumsView() {
                 disabled={albumTracks.length === 0}
               >
                 <IconPlay size={16} color="#0f172a" fill="#0f172a" />
-                <span>Play Album</span>
+                <span>Play Release</span>
               </button>
             </div>
           </div>
@@ -175,6 +229,9 @@ export default function AlbumsView() {
                 ) : (
                   <IconDisc size={48} color="var(--accent-primary)" />
                 )}
+                <span className={getBadgeClass(alb.release_type)} style={{ position: 'absolute', top: '8px', left: '8px', zIndex: 2 }}>
+                  {getBadgeLabel(alb.release_type)}
+                </span>
                 <div className="overlay-play">
                   <button className="play-circle-btn" onClick={(e) => playAlbum(alb, e)}>
                     <IconPlay size={20} color="#111" fill="#111" style={{ marginLeft: '2px' }} />

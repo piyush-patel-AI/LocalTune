@@ -50,6 +50,7 @@ export const parseAudioFile = async (filePath) => {
     let title = filenameNoExt;
     let artist = 'Unknown Artist';
     let album = 'Unknown Album';
+    let releaseType = 'album';
     let durationSeconds = 0;
 
     try {
@@ -64,6 +65,16 @@ export const parseAudioFile = async (filePath) => {
         if (metadata.common.album && metadata.common.album.trim()) {
           album = metadata.common.album.trim();
         }
+        if (metadata.common.releasetype && typeof metadata.common.releasetype === 'string') {
+          const rt = metadata.common.releasetype.toLowerCase();
+          if (rt.includes('ep')) releaseType = 'ep';
+          else if (rt.includes('single')) releaseType = 'single';
+        }
+      }
+      if (album.match(/\bEP\b/i) || album.toLowerCase().includes('(ep)') || album.toLowerCase().includes('[ep]')) {
+        releaseType = 'ep';
+      } else if (album.match(/\bSingle\b/i) || album.toLowerCase().includes('(single)')) {
+        releaseType = 'single';
       }
       if (metadata.format && metadata.format.duration) {
         durationSeconds = Math.round(metadata.format.duration);
@@ -77,6 +88,7 @@ export const parseAudioFile = async (filePath) => {
       title,
       artist,
       album,
+      releaseType,
       durationSeconds,
       format: formatStr,
       fileSize: stats.size,

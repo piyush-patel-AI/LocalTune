@@ -52,6 +52,8 @@ export const PlayerProvider = ({ children }) => {
     };
   }, [queue, queueIndex, repeat, shuffle]);
 
+  const [originalQueue, setOriginalQueue] = useState([]);
+
   // Load user favorites when authenticated
   const loadFavorites = async () => {
     if (!user) return;
@@ -99,6 +101,39 @@ export const PlayerProvider = ({ children }) => {
     }
   };
 
+  const shuffleQueue = () => {
+    if (queue.length <= 1) return;
+    const current = queue[queueIndex] || currentTrack;
+    const remaining = queue.filter((_, idx) => idx !== queueIndex);
+
+    for (let i = remaining.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+    }
+
+    const newQueue = current ? [current, ...remaining] : remaining;
+    setQueue(newQueue);
+    setQueueIndex(0);
+  };
+
+  const toggleShuffle = () => {
+    const nextState = !shuffle;
+    setShuffle(nextState);
+    if (nextState) {
+      if (originalQueue.length === 0) {
+        setOriginalQueue([...queue]);
+      }
+      shuffleQueue();
+    } else if (originalQueue.length > 0) {
+      setQueue(originalQueue);
+      if (currentTrack) {
+        const idx = originalQueue.findIndex((t) => t.id === currentTrack.id);
+        setQueueIndex(idx !== -1 ? idx : 0);
+      }
+      setOriginalQueue([]);
+    }
+  };
+
   const playTrack = (track, newQueue = null) => {
     if (!track) return;
 
@@ -106,10 +141,12 @@ export const PlayerProvider = ({ children }) => {
 
     if (newQueue) {
       setQueue(newQueue);
+      setOriginalQueue([...newQueue]);
       const idx = newQueue.findIndex(t => t.id === track.id);
       setQueueIndex(idx !== -1 ? idx : 0);
     } else if (queue.length === 0) {
       setQueue([track]);
+      setOriginalQueue([track]);
       setQueueIndex(0);
     }
 
@@ -249,7 +286,9 @@ export const PlayerProvider = ({ children }) => {
       prevTrack,
       seek,
       setVolume,
-      setShuffle: () => setShuffle(!shuffle),
+      setShuffle: toggleShuffle,
+      toggleShuffle,
+      shuffleQueue,
       setRepeat: (r) => setRepeat(r),
       toggleFavorite,
       addToQueue,

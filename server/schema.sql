@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS tracks (
   duration_seconds INTEGER DEFAULT 0,
   format TEXT NOT NULL,
   file_size INTEGER DEFAULT 0,
+  release_type TEXT DEFAULT 'album',
   date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
   date_modified DATETIME NOT NULL
 );

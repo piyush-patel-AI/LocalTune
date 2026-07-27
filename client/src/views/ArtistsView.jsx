@@ -30,7 +30,7 @@ export default function ArtistsView() {
   const handleSelectArtist = async (art) => {
     setSelectedArtist(art);
     try {
-      const res = await fetch(`/api/tracks?search=${encodeURIComponent(art.artist)}`, { credentials: 'include' });
+      const res = await fetch(`/api/tracks?artist=${encodeURIComponent(art.artist)}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const filtered = (data.tracks || []).filter(t => t.artist && t.artist.toLowerCase().includes(art.artist.toLowerCase()));
@@ -44,7 +44,7 @@ export default function ArtistsView() {
   const playArtist = async (art, e) => {
     if (e) e.stopPropagation();
     try {
-      const res = await fetch(`/api/tracks?search=${encodeURIComponent(art.artist)}`, { credentials: 'include' });
+      const res = await fetch(`/api/tracks?artist=${encodeURIComponent(art.artist)}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const filtered = (data.tracks || []).filter(t => t.artist && t.artist.toLowerCase().includes(art.artist.toLowerCase()));

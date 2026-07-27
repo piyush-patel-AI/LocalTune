@@ -5,10 +5,10 @@ const router = express.Router();
 
 // GET /api/tracks
 router.get('/', (req, res) => {
-  const { search, sortBy, sortOrder, groupBy } = req.query;
+  const { search, artist, releaseType, sortBy, sortOrder, groupBy } = req.query;
 
   if (groupBy === 'album') {
-    const albums = getAlbums();
+    const albums = getAlbums(releaseType);
     return res.json({ albums });
   }
 
@@ -17,7 +17,7 @@ router.get('/', (req, res) => {
     return res.json({ artists });
   }
 
-  const tracks = getAllTracks({ search, sortBy, sortOrder });
+  const tracks = getAllTracks({ search, artist, releaseType, sortBy, sortOrder });
   return res.json({ tracks });
 });
 

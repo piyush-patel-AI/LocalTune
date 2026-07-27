@@ -101,12 +101,13 @@ app.post('/upload-artist', upload.single('artistImage'), async (req, res) => {
   }
 });
 
-// POST /upload - Upload song with metadata & optional artwork
-app.post('/upload', upload.fields([
+export const uploadFieldsMiddleware = upload.fields([
   { name: 'audioFile', maxCount: 1 },
   { name: 'coverArt', maxCount: 1 },
   { name: 'artistImage', maxCount: 1 }
-]), async (req, res) => {
+]);
+
+export const handleUploadTrack = async (req, res) => {
   try {
     if (!req.files || !req.files.audioFile || req.files.audioFile.length === 0) {
       return res.status(400).json({ error: 'Audio file is required' });
@@ -148,6 +149,7 @@ app.post('/upload', upload.fields([
     const finalTitle = customTitle || parsed.title || path.basename(audioFile.originalname, path.extname(audioFile.originalname));
     const finalArtist = customArtist || parsed.artist || 'Unknown Artist';
     const finalAlbum = customAlbum || parsed.album || 'Unknown Album';
+    const finalReleaseType = (req.body.releaseType || req.body.release_type || parsed.releaseType || 'album').toLowerCase();
     const ext = path.extname(audioPath).replace('.', '').toLowerCase();
 
     // Safety check: Prevent duplicate upload of the same song
@@ -169,6 +171,7 @@ app.post('/upload', upload.fields([
       title: finalTitle,
       artist: finalArtist,
       album: finalAlbum,
+      releaseType: finalReleaseType,
       durationSeconds: parsed.durationSeconds || 0,
       format: ext,
       fileSize: fileStats.size,
@@ -193,6 +196,7 @@ app.post('/upload', upload.fields([
         title: finalTitle,
         artist: finalArtist,
         album: finalAlbum,
+        releaseType: finalReleaseType,
         format: ext,
         coverArtPath: coverArtPath,
         artistImagePath: artistImgPath
@@ -203,7 +207,9 @@ app.post('/upload', upload.fields([
     console.error('Upload endpoint error:', err);
     return res.status(500).json({ error: 'Failed to upload song: ' + err.message });
   }
-});
+};
+
+app.post('/upload', uploadFieldsMiddleware, handleUploadTrack);
 
 // Single Page Upload Interface
 app.get('/', (req, res) => {
@@ -524,9 +530,18 @@ app.get('/', (req, res) => {
           <div id="existingArtistBadge" class="existing-artist-badge">✓ Linked to existing artist profile</div>
         </div>
         <div class="form-group" style="margin-bottom:0;">
-          <label>Album Name</label>
-          <input type="text" id="albumInput" name="album" placeholder="e.g. Parachutes">
+          <label>Album / EP Title</label>
+          <input type="text" id="albumInput" name="album" placeholder="e.g. Parachutes or Kaleidoscope EP">
         </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label>Release Type</label>
+        <select name="releaseType" id="releaseTypeSelect" style="width: 100%; padding: 0.75rem 1rem; background: #0f172a; border: 1px solid var(--border); border-radius: 0.5rem; color: #fff; font-size: 0.9rem; outline: none;">
+          <option value="album">💿 Studio Album</option>
+          <option value="ep">💽 EP (Extended Play)</option>
+          <option value="single">🎵 Single</option>
+        </select>
       </div>
 
       <!-- Collaboration Artists Section -->

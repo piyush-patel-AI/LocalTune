@@ -13,7 +13,7 @@ import playlistsRoutes from './routes/playlists.js';
 import favoritesRoutes from './routes/favorites.js';
 import streamRoutes from './routes/stream.js';
 import { requireAuth } from './middleware/auth.js';
-import './uploader.js';
+import { uploadFieldsMiddleware, handleUploadTrack } from './uploader.js';
 
 dotenv.config();
 
@@ -79,6 +79,7 @@ app.use('/api/scan', requireAuth, scanRoutes);
 app.use('/api/tracks', requireAuth, tracksRoutes);
 app.use('/api/playlists', requireAuth, playlistsRoutes);
 app.use('/api/favorites', requireAuth, favoritesRoutes);
+app.post('/api/upload', requireAuth, uploadFieldsMiddleware, handleUploadTrack);
 
 // Protected Audio Streaming route
 app.use('/stream', requireAuth, streamRoutes);
