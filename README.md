@@ -1,6 +1,6 @@
 # 🎵 LocalTune — Personal LAN-Only Music Streaming Web App
 
-> ⚠️ **SECURITY & NETWORK WARNING**
+> ⚠️ **SECURITY & NETWORK WARNING**  
 > **LAN-ONLY NOTICE:** LocalTune is designed strictly for local area network (LAN) self-hosting. It binds to `0.0.0.0` so devices on your home Wi-Fi can stream music from your PC. **DO NOT expose this application directly to the public internet** (e.g., via port forwarding or public VPS without proper reverse proxy authentication/VPN), as auth sessions are designed for trusted LAN users rather than internet-facing defense.
 
 ---
@@ -9,11 +9,15 @@
 
 LocalTune is a lightweight, self-hosted web application that recursively scans configured music folders on your PC, indexes tracks into a local SQLite database, and streams audio to any device with a web browser (PC, phone, tablet) on the same home network.
 
-### Features
-- **Shared Library, Private State:** Everyone on the LAN accesses the same indexed music library, while playlists and favorites are private per account.
-- **Fast Scanning & Reconciliation:** Automatically discovers audio files (`.mp3`, `.flac`, `.wav`, `.m4a`), parses ID3 metadata, and reconciles changes/deletions.
-- **True Seeking (Scrubbing):** Dedicated streaming endpoint supporting `HTTP 206 Partial Content` (Range requests) for smooth audio seeking.
-- **Dark-First Modern UI:** Persistent bottom player bar, track search, queue reordering, playlists, and favorites.
+### Key Features
+
+- **🎯 Contextual Music Recommendation Engine:** Intelligent recommendation algorithm that dynamically scores and suggests 20+ tracks tailored specifically to your active artist & album listening history, recently played tracks, and favorites.
+- **🍱 Bento Box Modern Dashboard:** High-density dashboard featuring a Featured Spotlight Hero, library statistics, and personalized track discovery grid.
+- **📀 Smart Release Classification (Albums, EPs & Singles):** Automatic distinction between full Albums, EPs (Extended Plays), and Singles with instant category filters.
+- **🎨 Glassmorphic Playlist Manager:** Dynamic 2x2 composite album artwork mosaic generation, automatic playlist duration calculation, track reordering, and format badges (e.g. `FLAC`, `MP3`).
+- **🔀 Smart Queue Shuffle & Smooth Drag Scrubbing:** Shuffle your active playback queue effortlessly without disturbing your recommended tracks list, accompanied by smooth, real-time timeline scrubbing.
+- **🔒 Shared Library, Private State:** Everyone on the LAN accesses the same indexed music library, while playlists and favorites remain completely private per user account.
+- **⚡ True Seeking (HTTP Range):** Dedicated streaming endpoint supporting `HTTP 206 Partial Content` (Range requests) for instant seeking without latency.
 
 ---
 
@@ -88,4 +92,4 @@ To stream music from a phone, tablet, or secondary PC on your local Wi-Fi:
 ## Technology Stack
 
 - **Backend:** Node.js, Express, SQLite (`better-sqlite3`), `music-metadata`, `bcryptjs`, `express-session`
-- **Frontend:** React, Vite, Vanilla CSS design tokens (Dark mode theme)
+- **Frontend:** React, Vite, Vanilla CSS design tokens (Dark mode Bento Box theme)
