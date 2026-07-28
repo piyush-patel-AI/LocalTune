@@ -81,8 +81,8 @@ app.use('/api/playlists', requireAuth, playlistsRoutes);
 app.use('/api/favorites', requireAuth, favoritesRoutes);
 app.post('/api/upload', requireAuth, uploadFieldsMiddleware, handleUploadTrack);
 
-// Protected Audio Streaming route
-app.use('/stream', requireAuth, streamRoutes);
+// Audio Streaming route
+app.use('/stream', streamRoutes);
 
 // 404 Handler
 app.use((req, res) => {
