@@ -117,7 +117,7 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
             )}
           </div>
         </div>
-        <div className="player-track-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', position: 'relative' }}>
+        <div className="player-track-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <button
             className={`fav-toggle-btn ${isFav ? 'is-fav' : ''}`}
             onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
@@ -132,7 +132,7 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
             />
           </button>
 
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button
               className="player-add-btn"
               onClick={() => currentTrack && setShowAddMenu(!showAddMenu)}

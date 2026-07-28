@@ -459,21 +459,37 @@ body {
   background: rgba(245, 158, 11, 0.15);
 }
 
-.fav-toggle-btn {
+.fav-toggle-btn,
+.player-add-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 1.1rem;
-  transition: transform 0.15s ease, color 0.15s ease;
+  padding: 0.35rem;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+  transition: all 0.15s ease;
 }
 
 .fav-toggle-btn.is-fav {
   color: var(--accent-crimson);
 }
 
-.fav-toggle-btn:hover {
-  transform: scale(1.2);
+.fav-toggle-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent-crimson);
+  transform: scale(1.15);
+}
+
+.player-add-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent-primary);
+  transform: scale(1.15);
 }
 
 /* Audio Format Badge */
