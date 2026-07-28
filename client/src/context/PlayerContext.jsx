@@ -6,8 +6,6 @@ const PlayerContext = createContext();
 export const PlayerProvider = ({ children }) => {
   const { user } = useAuth();
   const audioRef = useRef(null);
-  const audioCtxRef = useRef(null);
-  const sourceNodeRef = useRef(null);
   
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -41,27 +39,6 @@ export const PlayerProvider = ({ children }) => {
   useEffect(() => { repeatRef.current = repeat; }, [repeat]);
   useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
-
-  // Unlock Web Audio API context on Linux/Chromium
-  const initAudioContext = () => {
-    try {
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (AudioCtx) {
-          audioCtxRef.current = new AudioCtx();
-        }
-      }
-      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume();
-      }
-      if (audioCtxRef.current && audioRef.current && !sourceNodeRef.current) {
-        sourceNodeRef.current = audioCtxRef.current.createMediaElementSource(audioRef.current);
-        sourceNodeRef.current.connect(audioCtxRef.current.destination);
-      }
-    } catch (err) {
-      // Source already connected or unsupported, ignore
-    }
-  };
 
   // Sync volume with audio element
   useEffect(() => {
@@ -153,7 +130,6 @@ export const PlayerProvider = ({ children }) => {
   const playTrack = (track, newQueue = null) => {
     if (!track) return;
 
-    initAudioContext();
     recordRecentlyPlayed(track);
 
     if (newQueue) {
@@ -173,7 +149,6 @@ export const PlayerProvider = ({ children }) => {
       const streamUrl = `/stream/${track.id}`;
       audio.src = streamUrl;
       audio.currentTime = 0;
-      audio.load();
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -191,7 +166,6 @@ export const PlayerProvider = ({ children }) => {
 
   const togglePlay = () => {
     if (!currentTrack) return;
-    initAudioContext();
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -353,7 +327,6 @@ export const PlayerProvider = ({ children }) => {
       <audio
         ref={audioRef}
         preload="auto"
-        crossOrigin="anonymous"
         style={{ display: 'none' }}
         onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
         onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || 0)}
@@ -363,17 +336,6 @@ export const PlayerProvider = ({ children }) => {
         onError={(e) => {
           const mediaErr = e.target ? e.target.error : null;
           if (mediaErr && mediaErr.code === 1) return; // Ignore MEDIA_ERR_ABORTED
-          
-          if (mediaErr && mediaErr.message && mediaErr.message.includes('AUDIO_RENDERER_ERROR')) {
-            console.warn('[Audio Renderer Warning] System sound card/output device switched or busy. Auto-retrying...');
-            setTimeout(() => {
-              if (audioRef.current && currentTrackRef.current) {
-                audioRef.current.play().catch(() => {});
-              }
-            }, 300);
-            return;
-          }
-
           console.error('[HTML5 Audio Error]', mediaErr || e);
           setIsPlaying(false);
         }}
