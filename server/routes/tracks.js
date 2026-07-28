@@ -1,7 +1,37 @@
 import express from 'express';
-import { getAllTracks, getTrackById, getAlbums, getArtists, getArtistImage } from '../db.js';
+import { getAllTracks, getTrackById, getAlbums, getArtists, getArtistImage, getUserFavorites } from '../db.js';
+import { generateRecommendations } from '../recommendationEngine.js';
 
 const router = express.Router();
+
+// GET /api/tracks/recommendations
+router.get('/recommendations', (req, res) => {
+  try {
+    const userId = req.user ? req.user.id : (req.session && req.session.userId ? req.session.userId : 1);
+    const currentTrackId = req.query.currentTrackId ? parseInt(req.query.currentTrackId, 10) : null;
+    const allTracks = getAllTracks({});
+
+    let favoritesMap = {};
+    if (userId) {
+      const favs = getUserFavorites(userId);
+      favs.forEach((f) => {
+        favoritesMap[f.id] = true;
+      });
+    }
+
+    const recommendedTracks = generateRecommendations({
+      allTracks,
+      favoritesMap,
+      userId,
+      currentTrackId
+    });
+
+    return res.json({ tracks: recommendedTracks });
+  } catch (err) {
+    console.error('Error generating recommendations:', err);
+    return res.status(500).json({ error: 'Failed to generate recommendations' });
+  }
+});
 
 // GET /api/tracks
 router.get('/', (req, res) => {

@@ -38,67 +38,25 @@ export default function HomeView() {
 
   useEffect(() => {
     fetchSuggestedTracks();
-  }, [recentlyPlayed.length, favoritesMap]);
+  }, [currentTrack?.id, recentlyPlayed.length, favoritesMap]);
 
   const fetchSuggestedTracks = async () => {
     try {
-      const res = await fetch('/api/tracks', { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      const all = data.tracks || [];
-      setAllTracks(all);
-
-      // Collect user listening history context
-      const listenedArtists = new Set();
-      const listenedAlbums = new Set();
-
-      if (currentTrack) {
-        if (currentTrack.artist) listenedArtists.add(currentTrack.artist.toLowerCase());
-        if (currentTrack.album) listenedAlbums.add(currentTrack.album.toLowerCase());
+      setLoading(true);
+      const resAll = await fetch('/api/tracks', { credentials: 'include' });
+      if (resAll.ok) {
+        const dataAll = await resAll.json();
+        setAllTracks(dataAll.tracks || []);
       }
 
-      recentlyPlayed.forEach((t) => {
-        if (t.artist) listenedArtists.add(t.artist.toLowerCase());
-        if (t.album) listenedAlbums.add(t.album.toLowerCase());
-      });
-
-      // Incorporate favorited tracks
-      all.forEach((t) => {
-        if (favoritesMap[t.id]) {
-          if (t.artist) listenedArtists.add(t.artist.toLowerCase());
-          if (t.album) listenedAlbums.add(t.album.toLowerCase());
-        }
-      });
-
-      const hasHistory = listenedArtists.size > 0 || listenedAlbums.size > 0;
-      const candidates = all.filter((t) => !currentTrack || t.id !== currentTrack.id);
-
-      const scored = candidates.map((track) => {
-        let score = 0;
-        const trackArtist = (track.artist || '').toLowerCase();
-        const trackAlbum = (track.album || '').toLowerCase();
-
-        if (hasHistory) {
-          if ([...listenedArtists].some((art) => trackArtist.includes(art) || art.includes(trackArtist))) {
-            score += 25;
-          }
-          if ([...listenedAlbums].some((alb) => trackAlbum.includes(alb) || alb.includes(trackAlbum))) {
-            score += 20;
-          }
-          if (favoritesMap[track.id]) {
-            score += 10;
-          }
-        }
-
-        score += Math.random() * 5;
-        return { track, score };
-      });
-
-      scored.sort((a, b) => b.score - a.score);
-      const topSuggested = scored.map((s) => s.track).slice(0, Math.max(20, Math.min(20, scored.length)));
-      setSuggestedTracks(topSuggested.length > 0 ? topSuggested : candidates.slice(0, 20));
+      const recUrl = `/api/tracks/recommendations${currentTrack ? `?currentTrackId=${currentTrack.id}` : ''}`;
+      const resRec = await fetch(recUrl, { credentials: 'include' });
+      if (resRec.ok) {
+        const dataRec = await resRec.json();
+        setSuggestedTracks(dataRec.tracks || []);
+      }
     } catch (err) {
-      console.error('Error fetching suggested tracks:', err);
+      console.error('Error fetching smart recommendations:', err);
     } finally {
       setLoading(false);
     }

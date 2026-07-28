@@ -423,3 +423,43 @@ export const isFavorite = (userId, trackId) => {
   const row = db.prepare(`SELECT 1 FROM favorites WHERE user_id = ? AND track_id = ?`).get(userId, trackId);
   return !!row;
 };
+
+// --- Recommendation Telemetry & Data Operations ---
+export const logPlayEvent = ({ userId, trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId }) => {
+  const listened = parseFloat(listenedSeconds) || 0;
+  const duration = parseFloat(durationSeconds) || 0;
+  const completionRatio = duration > 0 ? Math.min(1.0, listened / duration) : 0;
+  const isSkip = (listened < 15 && duration >= 20 && completionRatio < 0.3) ? 1 : 0;
+  const hourOfDay = new Date().getHours();
+
+  db.prepare(`
+    INSERT INTO play_logs (user_id, track_id, listened_seconds, duration_seconds, completion_ratio, is_skip, is_replay, hour_of_day)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, trackId, listened, duration, completionRatio, isSkip, isReplay ? 1 : 0, hourOfDay);
+
+  if (previousTrackId && previousTrackId !== trackId) {
+    db.prepare(`
+      INSERT INTO song_transitions (user_id, from_track_id, to_track_id, transition_count, last_transition_time)
+      VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, from_track_id, to_track_id) DO UPDATE SET
+        transition_count = transition_count + 1,
+        last_transition_time = CURRENT_TIMESTAMP
+    `).run(userId, previousTrackId, trackId);
+  }
+};
+
+export const getPlayLogsForUser = (userId) => {
+  return db.prepare(`
+    SELECT * FROM play_logs 
+    WHERE user_id = ? 
+    ORDER BY timestamp DESC 
+    LIMIT 2000
+  `).all(userId);
+};
+
+export const getTransitionsForUser = (userId) => {
+  return db.prepare(`
+    SELECT * FROM song_transitions 
+    WHERE user_id = ?
+  `).all(userId);
+};

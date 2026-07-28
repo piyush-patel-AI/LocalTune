@@ -47,3 +47,25 @@ CREATE TABLE IF NOT EXISTS artist_images (
   artist_name TEXT PRIMARY KEY,
   image_path TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS play_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  listened_seconds REAL NOT NULL,
+  duration_seconds REAL NOT NULL,
+  completion_ratio REAL NOT NULL,
+  is_skip BOOLEAN DEFAULT 0,
+  is_replay BOOLEAN DEFAULT 0,
+  hour_of_day INTEGER NOT NULL,
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS song_transitions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  to_track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  transition_count INTEGER DEFAULT 1,
+  last_transition_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, from_track_id, to_track_id)
+);

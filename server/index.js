@@ -12,6 +12,7 @@ import tracksRoutes from './routes/tracks.js';
 import playlistsRoutes from './routes/playlists.js';
 import favoritesRoutes from './routes/favorites.js';
 import streamRoutes from './routes/stream.js';
+import statsRoutes from './routes/stats.js';
 import { requireAuth } from './middleware/auth.js';
 import { uploadFieldsMiddleware, handleUploadTrack } from './uploader.js';
 
@@ -79,6 +80,7 @@ app.use('/api/scan', requireAuth, scanRoutes);
 app.use('/api/tracks', requireAuth, tracksRoutes);
 app.use('/api/playlists', requireAuth, playlistsRoutes);
 app.use('/api/favorites', requireAuth, favoritesRoutes);
+app.use('/api/stats', requireAuth, statsRoutes);
 app.post('/api/upload', requireAuth, uploadFieldsMiddleware, handleUploadTrack);
 
 // Audio Streaming route

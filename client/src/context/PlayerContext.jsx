@@ -127,10 +127,47 @@ export const PlayerProvider = ({ children }) => {
     }
   };
 
+  const telemetryRef = useRef({
+    trackId: null,
+    listenedSeconds: 0,
+    duration: 0,
+    previousTrackId: null,
+    lastTime: 0
+  });
+
+  const sendTelemetry = (newTrackId = null) => {
+    const cur = telemetryRef.current;
+    if (cur.trackId && cur.listenedSeconds >= 1) {
+      const isReplay = newTrackId === cur.trackId;
+      fetch('/api/stats/listen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          trackId: cur.trackId,
+          listenedSeconds: cur.listenedSeconds,
+          durationSeconds: cur.duration,
+          isReplay,
+          previousTrackId: cur.previousTrackId
+        })
+      }).catch(() => {});
+    }
+  };
+
   const playTrack = (track, newQueue = null) => {
     if (!track) return;
 
     recordRecentlyPlayed(track);
+
+    sendTelemetry(track.id);
+    const prevTrackId = currentTrackRef.current ? currentTrackRef.current.id : null;
+    telemetryRef.current = {
+      trackId: track.id,
+      listenedSeconds: 0,
+      duration: track.duration_seconds || 0,
+      previousTrackId: prevTrackId,
+      lastTime: 0
+    };
 
     if (newQueue) {
       setQueue(newQueue);
@@ -335,7 +372,21 @@ export const PlayerProvider = ({ children }) => {
         ref={audioRef}
         preload="auto"
         style={{ display: 'none' }}
-        onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+        onTimeUpdate={() => {
+          if (audioRef.current) {
+            const cur = audioRef.current.currentTime;
+            const dur = audioRef.current.duration || 0;
+            setCurrentTime(cur);
+            if (!isNaN(dur) && dur > 0) setDuration(dur);
+
+            const tel = telemetryRef.current;
+            if (tel.trackId && tel.lastTime > 0 && cur > tel.lastTime && (cur - tel.lastTime) < 2) {
+              tel.listenedSeconds += (cur - tel.lastTime);
+              if (dur > 0) tel.duration = dur;
+            }
+            tel.lastTime = cur;
+          }
+        }}
         onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || 0)}
         onEnded={handleEnded}
         onPlay={() => setIsPlaying(true)}
