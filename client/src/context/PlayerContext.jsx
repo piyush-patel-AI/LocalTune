@@ -35,7 +35,12 @@ export const PlayerProvider = ({ children }) => {
     const handleLoadedMetadata = () => setDuration(audio.duration || 0);
     const handleEnded = () => handleNextEnded();
     const handleError = (e) => {
-      console.error('[Audio Error]', e);
+      const mediaErr = e.target ? e.target.error : null;
+      if (mediaErr && mediaErr.code === 1) {
+        // MEDIA_ERR_ABORTED: Normal when changing tracks or pausing, ignore
+        return;
+      }
+      console.error('[Audio Error]', mediaErr || e);
       setIsPlaying(false);
     };
 
@@ -152,13 +157,21 @@ export const PlayerProvider = ({ children }) => {
 
     setCurrentTrack(track);
     const audio = audioRef.current;
+    audio.pause();
     audio.src = `/stream/${track.id}`;
-    audio.play().then(() => {
-      setIsPlaying(true);
-    }).catch(err => {
-      console.error('Playback error:', err);
-      setIsPlaying(false);
-    });
+    audio.load();
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        setIsPlaying(true);
+      }).catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('Playback error:', err);
+          setIsPlaying(false);
+        }
+      });
+    }
   };
 
   const togglePlay = () => {
@@ -168,7 +181,14 @@ export const PlayerProvider = ({ children }) => {
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => setIsPlaying(true)).catch(err => {
+          if (err.name !== 'AbortError') {
+            setIsPlaying(false);
+          }
+        });
+      }
     }
   };
 
