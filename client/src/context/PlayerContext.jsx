@@ -337,6 +337,17 @@ export const PlayerProvider = ({ children }) => {
         onError={(e) => {
           const mediaErr = e.target ? e.target.error : null;
           if (mediaErr && mediaErr.code === 1) return; // Ignore MEDIA_ERR_ABORTED
+          
+          if (mediaErr && mediaErr.message && mediaErr.message.includes('AUDIO_RENDERER_ERROR')) {
+            console.warn('[Audio Renderer Warning] System sound card/output device switched or busy. Auto-retrying...');
+            setTimeout(() => {
+              if (audioRef.current && currentTrackRef.current) {
+                audioRef.current.play().catch(() => {});
+              }
+            }, 300);
+            return;
+          }
+
           console.error('[HTML5 Audio Error]', mediaErr || e);
           setIsPlaying(false);
         }}
