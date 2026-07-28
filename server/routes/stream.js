@@ -1,6 +1,5 @@
 import express from 'express';
 import fs from 'fs';
-import path from 'path';
 import { getTrackById } from '../db.js';
 
 const router = express.Router();
@@ -9,7 +8,9 @@ const MIME_TYPES = {
   mp3: 'audio/mpeg',
   flac: 'audio/flac',
   wav: 'audio/wav',
-  m4a: 'audio/mp4'
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  aac: 'audio/aac'
 };
 
 // GET /stream/:trackId — Stream track with HTTP Range support
@@ -31,7 +32,8 @@ router.get('/:trackId', (req, res) => {
 
   const stat = fs.statSync(filePath);
   const fileSize = stat.size;
-  const mimeType = MIME_TYPES[track.format.toLowerCase()] || 'audio/mpeg';
+  const format = (track.format || '').replace('.', '').toLowerCase();
+  const mimeType = MIME_TYPES[format] || 'audio/mpeg';
 
   const range = req.headers.range;
 
@@ -42,7 +44,8 @@ router.get('/:trackId', (req, res) => {
 
     if (isNaN(start) || start >= fileSize || end >= fileSize || start > end) {
       res.writeHead(416, {
-        'Content-Range': `bytes */${fileSize}`
+        'Content-Range': `bytes */${fileSize}`,
+        'Accept-Ranges': 'bytes'
       });
       return res.end();
     }
@@ -54,17 +57,35 @@ router.get('/:trackId', (req, res) => {
       'Content-Range': `bytes ${start}-${end}/${fileSize}`,
       'Accept-Ranges': 'bytes',
       'Content-Length': chunksize,
-      'Content-Type': mimeType
+      'Content-Type': mimeType,
+      'Cache-Control': 'no-cache'
+    });
+
+    file.on('error', (err) => {
+      console.error('[Stream File Error]', err);
+      if (!res.headersSent) {
+        res.status(500).end();
+      }
     });
 
     file.pipe(res);
   } else {
     res.writeHead(200, {
       'Content-Length': fileSize,
-      'Content-Type': mimeType
+      'Content-Type': mimeType,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-cache'
     });
 
-    fs.createReadStream(filePath).pipe(res);
+    const file = fs.createReadStream(filePath);
+    file.on('error', (err) => {
+      console.error('[Stream File Error]', err);
+      if (!res.headersSent) {
+        res.status(500).end();
+      }
+    });
+
+    file.pipe(res);
   }
 });
 

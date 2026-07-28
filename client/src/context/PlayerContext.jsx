@@ -147,6 +147,13 @@ export const PlayerProvider = ({ children }) => {
     const audio = audioRef.current;
     if (audio) {
       const streamUrl = `/stream/${track.id}`;
+      try {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+      } catch (e) {
+        // ignore reset errors
+      }
       audio.src = streamUrl;
       audio.currentTime = 0;
 
