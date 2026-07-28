@@ -5,7 +5,7 @@ const PlayerContext = createContext();
 
 export const PlayerProvider = ({ children }) => {
   const { user } = useAuth();
-  const audioRef = useRef(new Audio());
+  const audioRef = useRef(null);
   
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -14,9 +14,10 @@ export const PlayerProvider = ({ children }) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.8);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState('off'); // 'off', 'all', 'one'
+  const [shuffle, setShuffleState] = useState(false);
+  const [repeat, setRepeatState] = useState('off'); // 'off', 'all', 'one'
   const [favoritesMap, setFavoritesMap] = useState({}); // trackId -> true
+  const [originalQueue, setOriginalQueue] = useState([]);
   const [recentlyPlayed, setRecentlyPlayed] = useState(() => {
     try {
       const saved = localStorage.getItem('localtune_recently_played');
@@ -26,38 +27,25 @@ export const PlayerProvider = ({ children }) => {
     }
   });
 
-  // Sync audio element events
+  // Keep refs in sync to avoid stale closures in event handlers
+  const queueRef = useRef(queue);
+  const queueIndexRef = useRef(queueIndex);
+  const repeatRef = useRef(repeat);
+  const shuffleRef = useRef(shuffle);
+  const currentTrackRef = useRef(currentTrack);
+
+  useEffect(() => { queueRef.current = queue; }, [queue]);
+  useEffect(() => { queueIndexRef.current = queueIndex; }, [queueIndex]);
+  useEffect(() => { repeatRef.current = repeat; }, [repeat]);
+  useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
+  useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
+
+  // Sync volume with audio element
   useEffect(() => {
-    const audio = audioRef.current;
-    audio.volume = volume;
-
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleLoadedMetadata = () => setDuration(audio.duration || 0);
-    const handleEnded = () => handleNextEnded();
-    const handleError = (e) => {
-      const mediaErr = e.target ? e.target.error : null;
-      if (mediaErr && mediaErr.code === 1) {
-        // MEDIA_ERR_ABORTED: Normal when changing tracks or pausing, ignore
-        return;
-      }
-      console.error('[Audio Error]', mediaErr || e);
-      setIsPlaying(false);
-    };
-
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
-
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-    };
-  }, [queue, queueIndex, repeat, shuffle]);
-
-  const [originalQueue, setOriginalQueue] = useState([]);
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
 
   // Load user favorites when authenticated
   const loadFavorites = async () => {
@@ -123,7 +111,7 @@ export const PlayerProvider = ({ children }) => {
 
   const toggleShuffle = () => {
     const nextState = !shuffle;
-    setShuffle(nextState);
+    setShuffleState(nextState);
     if (nextState) {
       if (originalQueue.length === 0) {
         setOriginalQueue([...queue]);
@@ -157,34 +145,19 @@ export const PlayerProvider = ({ children }) => {
 
     setCurrentTrack(track);
     const audio = audioRef.current;
-    audio.pause();
-    audio.src = `/stream/${track.id}`;
-    audio.load();
+    if (audio) {
+      const streamUrl = `/stream/${track.id}`;
+      audio.src = streamUrl;
+      audio.currentTime = 0;
+      audio.load();
 
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        if (err.name !== 'AbortError') {
-          console.error('Playback error:', err);
-          setIsPlaying(false);
-        }
-      });
-    }
-  };
-
-  const togglePlay = () => {
-    if (!currentTrack) return;
-    const audio = audioRef.current;
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
-    } else {
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.then(() => setIsPlaying(true)).catch(err => {
+        playPromise.then(() => {
+          setIsPlaying(true);
+        }).catch(err => {
           if (err.name !== 'AbortError') {
+            console.error('[Playback Error]', err);
             setIsPlaying(false);
           }
         });
@@ -192,64 +165,99 @@ export const PlayerProvider = ({ children }) => {
     }
   };
 
-  const handleNextEnded = () => {
-    if (repeat === 'one') {
-      const audio = audioRef.current;
-      audio.currentTime = 0;
-      audio.play();
-      return;
+  const togglePlay = () => {
+    if (!currentTrack) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+        }).catch(err => {
+          if (err.name !== 'AbortError') {
+            console.error('[Toggle Play Error]', err);
+            setIsPlaying(false);
+          }
+        });
+      }
     }
-    nextTrack();
   };
 
   const nextTrack = () => {
-    if (queue.length === 0) return;
+    const q = queueRef.current;
+    const idx = queueIndexRef.current;
+    const isShuf = shuffleRef.current;
+    const rep = repeatRef.current;
 
-    let nextIdx = queueIndex + 1;
-    if (shuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
+    if (q.length === 0) return;
+
+    let nextIdx = idx + 1;
+    if (isShuf) {
+      nextIdx = Math.floor(Math.random() * q.length);
     }
 
-    if (nextIdx < queue.length) {
+    if (nextIdx < q.length) {
       setQueueIndex(nextIdx);
-      playTrack(queue[nextIdx]);
-    } else if (repeat === 'all') {
+      playTrack(q[nextIdx]);
+    } else if (rep === 'all') {
       setQueueIndex(0);
-      playTrack(queue[0]);
+      playTrack(q[0]);
     } else {
       setIsPlaying(false);
     }
   };
 
   const prevTrack = () => {
-    if (queue.length === 0) return;
+    const q = queueRef.current;
+    const idx = queueIndexRef.current;
+    const rep = repeatRef.current;
+
+    if (q.length === 0) return;
     
-    // If audio played > 3s, restart current song
-    if (audioRef.current.currentTime > 3) {
+    if (audioRef.current && audioRef.current.currentTime > 3) {
       audioRef.current.currentTime = 0;
       return;
     }
 
-    let prevIdx = queueIndex - 1;
+    let prevIdx = idx - 1;
     if (prevIdx >= 0) {
       setQueueIndex(prevIdx);
-      playTrack(queue[prevIdx]);
-    } else if (repeat === 'all') {
-      const lastIdx = queue.length - 1;
+      playTrack(q[prevIdx]);
+    } else if (rep === 'all') {
+      const lastIdx = q.length - 1;
       setQueueIndex(lastIdx);
-      playTrack(queue[lastIdx]);
+      playTrack(q[lastIdx]);
     }
   };
 
+  const handleEnded = () => {
+    const rep = repeatRef.current;
+    if (rep === 'one') {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play();
+      }
+      return;
+    }
+    nextTrack();
+  };
+
   const seek = (time) => {
-    const audio = audioRef.current;
-    audio.currentTime = time;
-    setCurrentTime(time);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
   };
 
   const setVolume = (val) => {
     setVolumeState(val);
-    audioRef.current.volume = val;
+    if (audioRef.current) {
+      audioRef.current.volume = val;
+    }
   };
 
   const toggleFavorite = async (trackId) => {
@@ -309,7 +317,7 @@ export const PlayerProvider = ({ children }) => {
       setShuffle: toggleShuffle,
       toggleShuffle,
       shuffleQueue,
-      setRepeat: (r) => setRepeat(r),
+      setRepeat: (r) => setRepeatState(r),
       toggleFavorite,
       addToQueue,
       removeFromQueue,
@@ -317,6 +325,22 @@ export const PlayerProvider = ({ children }) => {
       loadFavorites
     }}>
       {children}
+      <audio
+        ref={audioRef}
+        preload="auto"
+        style={{ display: 'none' }}
+        onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+        onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || 0)}
+        onEnded={handleEnded}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onError={(e) => {
+          const mediaErr = e.target ? e.target.error : null;
+          if (mediaErr && mediaErr.code === 1) return; // Ignore MEDIA_ERR_ABORTED
+          console.error('[HTML5 Audio Error]', mediaErr || e);
+          setIsPlaying(false);
+        }}
+      />
     </PlayerContext.Provider>
   );
 };
