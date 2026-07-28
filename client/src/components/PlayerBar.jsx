@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import AddToPlaylistModal from './AddToPlaylistModal';
 import {
   IconMusic,
   IconPlay,
@@ -11,7 +12,8 @@ import {
   IconRepeatOne,
   IconVolume,
   IconQueue,
-  IconHeart
+  IconHeart,
+  IconPlus
 } from './Icons';
 
 function formatTime(seconds) {
@@ -38,11 +40,15 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
     setVolume,
     setShuffle,
     setRepeat,
-    toggleFavorite
+    toggleFavorite,
+    addToQueue
   } = usePlayer();
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragTime, setDragTime] = useState(0);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
 
   const isFav = currentTrack ? !!favoritesMap[currentTrack.id] : false;
   const displayTime = isDragging ? dragTime : currentTime;
@@ -111,20 +117,72 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
             )}
           </div>
         </div>
-        <button
-          className={`fav-toggle-btn ${isFav ? 'is-fav' : ''}`}
-          onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
-          disabled={!currentTrack}
-          title={currentTrack ? (isFav ? 'Remove from favorites' : 'Add to favorites') : 'No active track'}
-          style={{ opacity: currentTrack ? 1 : 0.4 }}
-        >
-          <IconHeart
-            size={18}
-            color={isFav ? 'var(--accent-crimson)' : 'var(--text-muted)'}
-            fill={isFav ? 'var(--accent-crimson)' : 'none'}
-          />
-        </button>
+        <div className="player-track-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', position: 'relative' }}>
+          <button
+            className={`fav-toggle-btn ${isFav ? 'is-fav' : ''}`}
+            onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
+            disabled={!currentTrack}
+            title={currentTrack ? (isFav ? 'Remove from favorites' : 'Add to favorites') : 'No active track'}
+            style={{ opacity: currentTrack ? 1 : 0.4 }}
+          >
+            <IconHeart
+              size={18}
+              color={isFav ? 'var(--accent-crimson)' : 'var(--text-muted)'}
+              fill={isFav ? 'var(--accent-crimson)' : 'none'}
+            />
+          </button>
+
+          <div style={{ position: 'relative' }}>
+            <button
+              className="player-add-btn"
+              onClick={() => currentTrack && setShowAddMenu(!showAddMenu)}
+              disabled={!currentTrack}
+              title={currentTrack ? "Add track to Playlist or Queue" : "No active track"}
+              style={{ opacity: currentTrack ? 1 : 0.4 }}
+            >
+              <IconPlus size={18} color={showAddMenu ? 'var(--accent-primary)' : 'var(--text-muted)'} />
+            </button>
+
+            {showAddMenu && currentTrack && (
+              <>
+                <div className="popover-backdrop" onClick={() => setShowAddMenu(false)} />
+                <div className="player-add-popover">
+                  <button
+                    className="player-popover-item"
+                    onClick={() => {
+                      addToQueue(currentTrack);
+                      setShowAddMenu(false);
+                      setToastMsg('Added to Queue!');
+                      setTimeout(() => setToastMsg(''), 2000);
+                    }}
+                  >
+                    <IconQueue size={15} color="var(--accent-primary)" />
+                    <span>Add to Queue</span>
+                  </button>
+                  <button
+                    className="player-popover-item"
+                    onClick={() => {
+                      setShowAddMenu(false);
+                      setShowPlaylistModal(true);
+                    }}
+                  >
+                    <IconPlus size={15} color="var(--accent-primary)" />
+                    <span>Add to Playlist...</span>
+                  </button>
+                </div>
+              </>
+            )}
+            {toastMsg && <div className="player-toast-popup">{toastMsg}</div>}
+          </div>
+        </div>
       </div>
+
+      {showPlaylistModal && currentTrack && (
+        <AddToPlaylistModal
+          track={currentTrack}
+          onClose={() => setShowPlaylistModal(false)}
+        />
+      )}
 
       {/* Center: Transport & Progress Scrub Bar */}
       <div className="player-center">
