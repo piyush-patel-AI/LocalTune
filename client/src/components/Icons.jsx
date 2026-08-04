@@ -7,6 +7,24 @@ export function IconHome({ size = 18, color = "currentColor", className = "" }) 
   );
 }
 
+export function IconImage({ size = 18, color = "currentColor", className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+
+export function IconCheck({ size = 18, color = "currentColor", className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 export function IconSparkles({ size = 18, color = "currentColor", className = "" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -186,10 +204,10 @@ export function IconVolume({ size = 18, color = "currentColor", className = "" }
 export function IconQueue({ size = 18, color = "currentColor", className = "" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="15" y2="12" />
-      <line x1="3" y1="18" x2="18" y2="18" />
-      <polygon points="18 9 22 12 18 15 18 9" fill={color} />
+      <line x1="3" y1="6" x2="14" y2="6" />
+      <line x1="3" y1="12" x2="11" y2="12" />
+      <line x1="3" y1="18" x2="11" y2="18" />
+      <path d="M15 15.5a2.5 2.5 0 1 1-2.5-2.5c.36 0 .7.08 1 .22V5.5l6-1.5v6" />
     </svg>
   );
 }
@@ -252,6 +270,45 @@ export function IconLogOut({ size = 18, color = "currentColor", className = "" }
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+export function IconX({ size = 18, color = "currentColor", className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+export function IconBug({ size = 18, color = "currentColor", className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect width="8" height="14" x="8" y="6" rx="4" />
+      <path d="m19 7-3 2" />
+      <path d="m5 7 3 2" />
+      <path d="m19 19-3-2" />
+      <path d="m5 19 3-2" />
+      <path d="M20 13h-4" />
+      <path d="M4 13h4" />
+      <path d="m10 4 1 2" />
+      <path d="m14 4-1 2" />
+    </svg>
+  );
+}
+
+
+
+export function IconChecklist({ size = 18, color = "currentColor", className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m3 17 2 2 4-4" />
+      <path d="m3 7 2 2 4-4" />
+      <path d="M13 6h8" />
+      <path d="M13 12h8" />
+      <path d="M13 18h8" />
     </svg>
   );
 }

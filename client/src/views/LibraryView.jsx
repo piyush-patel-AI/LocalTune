@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
-import { IconPlay, IconPause, IconHeart, IconPlus, IconMusic } from '../components/Icons';
+import EditMetadataModal from '../components/EditMetadataModal';
+import { IconPlay, IconPause, IconHeart, IconPlus, IconMusic, IconEdit } from '../components/Icons';
 
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -15,6 +16,7 @@ export default function LibraryView() {
   const [sortBy, setSortBy] = useState('title');
   const [loading, setLoading] = useState(true);
   const [selectedTrackForPlaylist, setSelectedTrackForPlaylist] = useState(null);
+  const [selectedTrackForEdit, setSelectedTrackForEdit] = useState(null);
 
   const { currentTrack, isPlaying, playTrack, toggleFavorite, favoritesMap } = usePlayer();
 
@@ -82,7 +84,7 @@ export default function LibraryView() {
               <th>Artist</th>
               <th>Album</th>
               <th style={{ width: '90px' }}>Duration</th>
-              <th style={{ width: '100px' }}>Actions</th>
+              <th style={{ width: '120px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -132,6 +134,11 @@ export default function LibraryView() {
                         <div className="track-name-bold">{track.title}</div>
                         <div style={{ marginTop: '0.2rem' }}>
                           <span className="format-badge">{track.format.toUpperCase()}</span>
+                          {track.genre && (
+                            <span className="format-badge" style={{ marginLeft: '0.35rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', borderColor: 'rgba(99, 102, 241, 0.3)' }}>
+                              {track.genre}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -162,6 +169,14 @@ export default function LibraryView() {
                       >
                         <IconPlus size={18} />
                       </button>
+                      <button
+                        className="control-btn"
+                        style={{ fontSize: '1rem' }}
+                        onClick={() => setSelectedTrackForEdit(track)}
+                        title="Edit Track Info"
+                      >
+                        <IconEdit size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -175,6 +190,17 @@ export default function LibraryView() {
         <AddToPlaylistModal
           track={selectedTrackForPlaylist}
           onClose={() => setSelectedTrackForPlaylist(null)}
+        />
+      )}
+
+      {selectedTrackForEdit && (
+        <EditMetadataModal
+          track={selectedTrackForEdit}
+          onClose={() => setSelectedTrackForEdit(null)}
+          onSave={() => {
+            fetchTracks();
+            setSelectedTrackForEdit(null);
+          }}
         />
       )}
     </div>

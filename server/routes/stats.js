@@ -1,7 +1,25 @@
 import express from 'express';
-import { logPlayEvent } from '../db.js';
+import db, { logPlayEvent } from '../db.js';
 
 const router = express.Router();
+
+// GET /api/stats - Library overview counts
+router.get('/', (req, res) => {
+  try {
+    const totalTracks = db.prepare('SELECT COUNT(*) AS count FROM tracks').get()?.count || 0;
+    const totalArtists = db.prepare('SELECT COUNT(DISTINCT artist) AS count FROM tracks').get()?.count || 0;
+    const totalAlbums = db.prepare('SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ""').get()?.count || 0;
+
+    res.json({
+      totalTracks,
+      totalArtists,
+      totalAlbums
+    });
+  } catch (err) {
+    console.error('Error fetching library stats:', err);
+    res.status(500).json({ error: 'Failed to fetch library stats' });
+  }
+});
 
 // POST /api/stats/listen
 router.post('/listen', (req, res) => {

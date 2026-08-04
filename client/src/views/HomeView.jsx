@@ -8,8 +8,7 @@ import {
   IconMusic,
   IconClock,
   IconSparkles,
-  IconDisc,
-  IconUser
+  IconDisc
 } from '../components/Icons';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
 
@@ -66,18 +65,17 @@ export default function HomeView() {
     const pool = allTracks.length > 0 ? allTracks : suggestedTracks;
     if (pool.length === 0) return;
 
-    // Randomize entire candidate pool
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const newSuggestions = shuffled.slice(0, Math.max(20, Math.min(20, shuffled.length)));
     setSuggestedTracks(newSuggestions);
 
-    // Play the first track from the newly shuffled list
     if (newSuggestions.length > 0) {
       playTrack(newSuggestions[0], newSuggestions);
     }
   };
 
   const heroTrack = currentTrack || (suggestedTracks.length > 0 ? suggestedTracks[0] : null);
+  const quickPicks = (allTracks.length > 0 ? allTracks : suggestedTracks).slice(0, 6);
 
   const renderSongTile = (track, trackList) => {
     const isCurrent = currentTrack && currentTrack.id === track.id;
@@ -115,10 +113,6 @@ export default function HomeView() {
             </span>
           )}
 
-          {track.format && (
-            <span className="tile-format-badge">{track.format.toUpperCase()}</span>
-          )}
-
           <div className="tile-hover-overlay">
             <button
               className="tile-play-btn"
@@ -144,31 +138,36 @@ export default function HomeView() {
         <div className="tile-info">
           <div className="tile-title" title={track.title}>{track.title}</div>
           <div className="tile-artist" title={track.artist}>{track.artist}</div>
-          <div className="tile-meta">
-            <span className="tile-album">{track.album || 'Single'}</span>
-            <span className="tile-duration">{formatDuration(track.duration_seconds || track.duration)}</span>
-          </div>
+          <div className="tile-album" title={track.album}>{track.album || 'Single'}</div>
         </div>
 
-        <div className="tile-actions" onClick={(e) => e.stopPropagation()}>
-          <button
-            className={`tile-action-btn ${isFav ? 'is-fav' : ''}`}
-            onClick={() => toggleFavorite(track.id)}
-            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <IconHeart
-              size={16}
-              color={isFav ? 'var(--accent-crimson)' : 'var(--text-muted)'}
-              fill={isFav ? 'var(--accent-crimson)' : 'none'}
-            />
-          </button>
-          <button
-            className="tile-action-btn"
-            onClick={() => setSelectedTrackForPlaylist(track)}
-            title="Add to Playlist"
-          >
-            <IconPlus size={16} color="var(--text-muted)" />
-          </button>
+        <div className="tile-card-divider" />
+
+        <div className="tile-actions-footer" onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <button
+              className={`tile-action-btn ${isFav ? 'is-fav' : ''}`}
+              onClick={() => toggleFavorite(track.id)}
+              title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <IconHeart
+                size={15}
+                color={isFav ? 'var(--accent-crimson)' : 'var(--text-muted)'}
+                fill={isFav ? 'var(--accent-crimson)' : 'none'}
+              />
+            </button>
+            <button
+              className="tile-action-btn"
+              onClick={() => setSelectedTrackForPlaylist(track)}
+              title="Add to Playlist"
+            >
+              <IconPlus size={15} color="var(--text-muted)" />
+            </button>
+          </div>
+
+          <span className="tile-duration-text">
+            {formatDuration(track.duration_seconds || track.duration)}
+          </span>
         </div>
       </div>
     );
@@ -182,10 +181,43 @@ export default function HomeView() {
         <p className="view-subtitle">Your personal dashboard & curated recommendations</p>
       </div>
 
-      {/* Bento Top Grid */}
+      {/* MOBILE ONLY: Quick Picks 6-Pill Grid */}
+      {quickPicks.length > 0 && (
+        <div className="mobile-only-quickpicks">
+          <div className="quick-picks-container">
+            {quickPicks.map((track) => {
+              const isCurrent = currentTrack && currentTrack.id === track.id;
+              return (
+                <div
+                  key={track.id}
+                  className={`quick-pick-pill ${isCurrent ? 'active' : ''}`}
+                  onClick={() => playTrack(track, quickPicks)}
+                >
+                  {track.cover_art_path ? (
+                    <img src={`/api/tracks/${track.id}/art`} alt={track.title} className="quick-pick-art" />
+                  ) : (
+                    <div className="quick-pick-art fallback">
+                      <IconMusic size={18} color="var(--accent-primary)" />
+                    </div>
+                  )}
+                  <span className="quick-pick-title">{track.title}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* DESKTOP ONLY: Bento Top Grid (Hero + Insights) */}
       <div className="bento-grid-top">
-        {/* Featured Hero Card */}
         <div className="bento-card bento-hero">
+          {heroTrack && heroTrack.cover_art_path && (
+            <div
+              className="bento-hero-bg-blur"
+              style={{ backgroundImage: `url(/api/tracks/${heroTrack.id}/art)` }}
+            />
+          )}
+
           <div className="bento-hero-art">
             {heroTrack && heroTrack.cover_art_path ? (
               <img
@@ -195,17 +227,17 @@ export default function HomeView() {
               />
             ) : (
               <div className="hero-art-fallback">
-                <IconDisc size={48} color="var(--accent-primary)" />
+                <IconDisc size={56} color="var(--accent-primary)" />
               </div>
             )}
           </div>
 
           <div className="bento-hero-content">
             <span className="bento-pill">
-              {isPlaying && currentTrack ? '⚡ NOW PLAYING' : '✨ FEATURED'}
+              {isPlaying && currentTrack ? '⚡ NOW PLAYING' : '✨ RECOMMENDED TODAY'}
             </span>
             <h2 className="bento-hero-title">{heroTrack ? heroTrack.title : 'Welcome to LocalTune'}</h2>
-            <p className="bento-hero-subtitle">{heroTrack ? heroTrack.artist : 'High Fidelity Music Streaming'}</p>
+            <p className="bento-hero-subtitle">{heroTrack ? `${heroTrack.artist} • ${heroTrack.album || 'Single'}` : 'High Fidelity Music Streaming'}</p>
             {heroTrack && (
               <div className="bento-hero-actions">
                 <button
@@ -243,69 +275,59 @@ export default function HomeView() {
           </div>
         </div>
 
-        {/* Quick Stats Bento Card */}
-        <div className="bento-card bento-stats">
-          <div className="bento-stats-header">
-            <span className="bento-pill-muted">LIBRARY INSIGHTS</span>
+        {/* Library Insights Widget */}
+        <div className="bento-card bento-stats-widget">
+          <div className="widget-header">
+            <span className="widget-pill-muted">LIBRARY INSIGHTS</span>
           </div>
-          <div className="bento-stats-body">
-            <div className="stat-item">
-              <div className="stat-value">{allTracks.length}</div>
-              <div className="stat-label">
+
+          <div className="widget-pills-container">
+            <div className="widget-pill-row">
+              <div className="widget-icon-badge icon-amber">
                 <IconMusic size={14} color="var(--accent-primary)" />
-                Total Tracks
+              </div>
+              <div className="widget-pill-info">
+                <span className="widget-pill-val">{allTracks.length}</span>
+                <span className="widget-pill-lbl">Library Songs</span>
               </div>
             </div>
-            <div className="stat-item">
-              <div className="stat-value">{suggestedTracks.length}</div>
-              <div className="stat-label">
+
+            <div className="widget-pill-row">
+              <div className="widget-icon-badge icon-cyan">
                 <IconSparkles size={14} color="var(--accent-cyan)" />
-                Suggested Songs
+              </div>
+              <div className="widget-pill-info">
+                <span className="widget-pill-val">{suggestedTracks.length}</span>
+                <span className="widget-pill-lbl">Recommended Today</span>
               </div>
             </div>
-            <div className="stat-item">
-              <div className="stat-value">{Object.keys(favoritesMap).length}</div>
-              <div className="stat-label">
+
+            <div className="widget-pill-row">
+              <div className="widget-icon-badge icon-crimson">
                 <IconHeart size={14} color="var(--accent-crimson)" fill="var(--accent-crimson)" />
-                Favorites
+              </div>
+              <div className="widget-pill-info">
+                <span className="widget-pill-val">{Object.keys(favoritesMap).length}</span>
+                <span className="widget-pill-lbl">Favorites</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recently Played Section */}
-      <section className="home-section" style={{ marginTop: '0.5rem' }}>
-        <div className="bento-section-title">
-          <IconClock size={18} color="var(--accent-primary)" />
-          <h2>Recently Played</h2>
-        </div>
-
-        {recentlyPlayed.length > 0 ? (
-          <div className="tiles-grid">
-            {recentlyPlayed.map((track) => renderSongTile(track, recentlyPlayed))}
-          </div>
-        ) : (
-          <div className="empty-bento-box">
-            <IconMusic size={24} color="var(--text-muted)" />
-            <span>No tracks played recently. Jump straight into suggested music below!</span>
-          </div>
-        )}
-      </section>
-
-      {/* Suggested Music Section (20+ Items) */}
-      <section className="home-section" style={{ marginTop: '0.75rem' }}>
-        <div className="bento-section-title" style={{ justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      {/* Suggested Music Section (FIRST) */}
+      <section className="home-section" style={{ marginTop: '1.5rem' }}>
+        <div className="bento-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="bento-section-title">
             <IconSparkles size={18} color="var(--accent-primary)" />
             <h2>Suggested Music ({suggestedTracks.length})</h2>
           </div>
           <button
             className="btn-secondary"
-            style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+            style={{ padding: '0.35rem 0.85rem', fontSize: '0.78rem' }}
             onClick={fetchSuggestedTracks}
           >
-            Refresh Suggestions
+            Refresh
           </button>
         </div>
 
@@ -318,6 +340,28 @@ export default function HomeView() {
         ) : (
           <div className="empty-bento-box">
             <span>No tracks found in library.</span>
+          </div>
+        )}
+      </section>
+
+      {/* Recently Played Section (SECOND) */}
+      <section className="home-section" style={{ marginTop: '1.75rem' }}>
+        <div className="bento-section-header">
+          <div className="bento-section-title">
+            <IconClock size={18} color="var(--accent-primary)" />
+            <h2>Recently Played</h2>
+          </div>
+          <p className="bento-section-subtitle">Continue where you left off</p>
+        </div>
+
+        {recentlyPlayed.length > 0 ? (
+          <div className="tiles-grid">
+            {recentlyPlayed.map((track) => renderSongTile(track, recentlyPlayed))}
+          </div>
+        ) : (
+          <div className="empty-bento-box">
+            <IconMusic size={24} color="var(--text-muted)" />
+            <span>No tracks played recently. Jump straight into suggested music above!</span>
           </div>
         )}
       </section>

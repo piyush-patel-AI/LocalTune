@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import PlaylistCover from '../components/PlaylistCover';
 import {
   IconPlay,
   IconPause,
@@ -11,7 +12,8 @@ import {
   IconPlus,
   IconMusic,
   IconSparkles,
-  IconDisc
+  IconDisc,
+  IconImage
 } from '../components/Icons';
 
 function formatDuration(seconds) {
@@ -76,21 +78,55 @@ export default function PlaylistsView() {
     fetchPlaylists();
   }, []);
 
+  const [newCoverFile, setNewCoverFile] = useState(null);
+  const [newCoverPreview, setNewCoverPreview] = useState(null);
+
+  const handleCoverUploadForPlaylist = async (e, playlistId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('cover', file);
+
+      const res = await fetch(`/api/playlists/${playlistId}/cover`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setActivePlaylist(data.playlist);
+        fetchPlaylists();
+      }
+    } catch (err) {
+      console.error('Error uploading playlist cover:', err);
+    }
+  };
+
   const handleCreatePlaylist = async (e) => {
     e.preventDefault();
     if (!newPlaylistName.trim()) return;
 
     try {
+      const formData = new FormData();
+      formData.append('name', newPlaylistName.trim());
+      if (newCoverFile) {
+        formData.append('cover', newCoverFile);
+      }
+
       const res = await fetch('/api/playlists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name: newPlaylistName.trim() })
+        body: formData
       });
 
       if (res.ok) {
         const data = await res.json();
         setNewPlaylistName('');
+        setNewCoverFile(null);
+        setNewCoverPreview(null);
         await fetchPlaylists();
         selectPlaylist(data.playlist);
       }
@@ -216,8 +252,10 @@ export default function PlaylistsView() {
                     key={pl.id}
                     className={`playlist-item-btn ${isActive ? 'active' : ''}`}
                     onClick={() => selectPlaylist(pl)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}
                   >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <PlaylistCover playlist={pl} size={32} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {pl.name}
                     </span>
                     <span className="playlist-item-count">{pl.track_count || 0}</span>
@@ -238,31 +276,35 @@ export default function PlaylistsView() {
             <div>
               {/* Hero Banner */}
               <div className="playlist-hero-banner">
-                {artworkTracks.length >= 4 ? (
-                  <div className="playlist-art-grid">
-                    {artworkTracks.map((t) => (
-                      <img
-                        key={t.id}
-                        src={`/api/tracks/${t.id}/art`}
-                        alt={t.title}
-                        className="playlist-art-tile"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    ))}
+                <label
+                  style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+                  title="Click to upload custom cover art"
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => handleCoverUploadForPlaylist(e, activePlaylist.id)}
+                  />
+                  <PlaylistCover playlist={activePlaylist} tracks={playlistTracks} size={140} />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(0, 0, 0, 0.4)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: 0,
+                      transition: 'opacity 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = 0)}
+                  >
+                    <IconImage size={28} color="#fff" />
                   </div>
-                ) : artworkTracks.length > 0 ? (
-                  <div className="playlist-art-fallback">
-                    <img
-                      src={`/api/tracks/${artworkTracks[0].id}/art`}
-                      alt={artworkTracks[0].title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  </div>
-                ) : (
-                  <div className="playlist-art-fallback">
-                    <IconDisc size={54} color="var(--accent-primary)" />
-                  </div>
-                )}
+                </label>
 
                 <div className="playlist-meta-container">
                   {isEditing ? (

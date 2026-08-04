@@ -1,0 +1,37 @@
+{
+  "version": "v1",
+  "weights": {
+    "completionHigh": 15.0,
+    "completionMedium": 6.0,
+    "replayBonusMax": 15.0,
+    "replayMultiplier": 5.0,
+    "skipPenaltyBase": -12.0,
+    "skipRecoveryMultiplier": 0.5,
+    "frequencyMax": 25.0,
+    "frequencyMultiplier": 5.5,
+    "timeDecayRate": 0.04,
+    "timeDecayBase": 0.4,
+    "timeDecayScale": 0.6,
+    "discoveryUnplayed": 18.0,
+    "discoverySinglePlay": 8.0,
+    "discoveryLowPlay": 3.0,
+    "artistMatchCurrentTrack": 20.0,
+    "albumMatchCurrentTrack": 15.0,
+    "genreMatchCurrentTrack": 18.0,
+    "genreAffinityMax": 15.0,
+    "genreAffinityMultiplier": 3.0,
+    "artistAffinityMax": 15.0,
+    "artistAffinityMultiplier": 3.0,
+    "favoriteBonus": 12.0,
+    "transitionBoostMax": 25.0,
+    "transitionBoostMultiplier": 10.0,
+    "timeOfDayMatchMax": 10.0,
+    "timeOfDayMultiplier": 4.0
+  },
+  "thresholds": {
+    "forgottenDays": 30,
+    "cooldownHours": 6,
+    "consecutiveSameArtistMax": 2,
+    "topArtistMaxCount": 4
+  }
+}

@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { runMigrations } from './migrations/migrationManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,22 +13,15 @@ const db = new Database(dbPath);
 // Enable foreign key constraints
 db.pragma('foreign_keys = ON');
 
-// Initialize schema
+// Initialize schema & run versioned migrations
 const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 db.exec(schemaSql);
 
-// Migration: Ensure cover_art_path column exists
+// Run MigrationManager
 try {
-  db.exec(`ALTER TABLE tracks ADD COLUMN cover_art_path TEXT;`);
-} catch (e) {
-  // Column already exists
-}
-
-// Migration: Ensure release_type column exists
-try {
-  db.exec(`ALTER TABLE tracks ADD COLUMN release_type TEXT DEFAULT 'album';`);
-} catch (e) {
-  // Column already exists
+  runMigrations(db);
+} catch (migErr) {
+  console.error('[db.js] Error running migrations:', migErr.message);
 }
 
 // Export db instance & prepared statement wrappers
@@ -49,20 +43,33 @@ export const getUserByUsername = (username) => {
 };
 
 export const getUserById = (id) => {
-  const stmt = db.prepare(`SELECT id, username, display_name, date_created FROM users WHERE id = ?`);
+  const stmt = db.prepare(`SELECT id, username, display_name, avatar_path, date_created FROM users WHERE id = ?`);
   return stmt.get(id);
+};
+
+export const updateUserAvatar = (id, avatarPath) => {
+  const stmt = db.prepare(`UPDATE users SET avatar_path = ? WHERE id = ?`);
+  stmt.run(avatarPath, id);
+  return getUserById(id);
+};
+
+export const getAllUsersPublic = () => {
+  const stmt = db.prepare(`SELECT id, username, display_name, avatar_path FROM users`);
+  return stmt.all();
 };
 
 // --- Track Operations ---
 export const upsertTrack = (track) => {
-  const existing = db.prepare(`SELECT id, date_modified, cover_art_path, release_type FROM tracks WHERE file_path = ?`).get(track.filePath);
+  const existing = db.prepare(`SELECT id, date_modified, cover_art_path, release_type, genre, year FROM tracks WHERE file_path = ?`).get(track.filePath);
   const coverArt = track.coverArtPath !== undefined ? track.coverArtPath : (existing ? existing.cover_art_path : null);
   const releaseType = track.releaseType || track.release_type || (existing ? existing.release_type : 'album') || 'album';
+  const genreVal = track.genre !== undefined ? track.genre : (existing ? existing.genre : null);
+  const yearVal = track.year !== undefined ? track.year : (existing ? existing.year : null);
 
   if (existing) {
     const stmt = db.prepare(`
       UPDATE tracks 
-      SET title = ?, artist = ?, album = ?, duration_seconds = ?, format = ?, file_size = ?, date_modified = ?, cover_art_path = ?, release_type = ?
+      SET title = ?, artist = ?, album = ?, duration_seconds = ?, format = ?, file_size = ?, date_modified = ?, cover_art_path = ?, release_type = ?, genre = ?, year = ?
       WHERE file_path = ?
     `);
     stmt.run(
@@ -75,13 +82,18 @@ export const upsertTrack = (track) => {
       track.dateModified,
       coverArt,
       releaseType,
+      genreVal,
+      yearVal,
       track.filePath
     );
     return existing.id;
   } else {
     const stmt = db.prepare(`
-      INSERT INTO tracks (file_path, title, artist, album, duration_seconds, format, file_size, date_modified, cover_art_path, release_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tracks (
+        file_path, title, artist, album, duration_seconds, format, file_size, date_modified, cover_art_path, release_type, genre, year,
+        original_title, original_artist, original_album, original_genre, original_year
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const info = stmt.run(
       track.filePath,
@@ -93,7 +105,14 @@ export const upsertTrack = (track) => {
       track.fileSize || 0,
       track.dateModified,
       coverArt,
-      releaseType
+      releaseType,
+      genreVal,
+      yearVal,
+      track.title,
+      track.artist,
+      track.album,
+      genreVal,
+      yearVal
     );
     return info.lastInsertRowid;
   }
@@ -308,14 +327,18 @@ export const getArtistImage = (artistName) => {
 };
 
 // --- Playlist Operations ---
-export const createPlaylist = (userId, name) => {
-  const stmt = db.prepare(`INSERT INTO playlists (user_id, name) VALUES (?, ?)`);
-  const info = stmt.run(userId, name);
+export const createPlaylist = (userId, name, coverPath = null) => {
+  const stmt = db.prepare(`INSERT INTO playlists (user_id, name, cover_path) VALUES (?, ?, ?)`);
+  const info = stmt.run(userId, name, coverPath);
   return info.lastInsertRowid;
 };
 
+export const updatePlaylistCover = (playlistId, userId, coverPath) => {
+  return db.prepare(`UPDATE playlists SET cover_path = ? WHERE id = ? AND user_id = ?`).run(coverPath, playlistId, userId);
+};
+
 export const getUserPlaylists = (userId) => {
-  return db.prepare(`
+  const playlists = db.prepare(`
     SELECT p.*, COUNT(pt.track_id) as track_count
     FROM playlists p
     LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
@@ -323,10 +346,39 @@ export const getUserPlaylists = (userId) => {
     GROUP BY p.id
     ORDER BY p.date_created DESC
   `).all(userId);
+
+  const stmtSample = db.prepare(`
+    SELECT t.id, t.cover_art_path 
+    FROM playlist_tracks pt
+    JOIN tracks t ON pt.track_id = t.id
+    WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
+    ORDER BY pt.position ASC
+    LIMIT 4
+  `);
+
+  return playlists.map((pl) => ({
+    ...pl,
+    sample_tracks: stmtSample.all(pl.id)
+  }));
 };
 
 export const getPlaylistById = (playlistId, userId) => {
-  return db.prepare(`SELECT * FROM playlists WHERE id = ? AND user_id = ?`).get(playlistId, userId);
+  const playlist = db.prepare(`SELECT * FROM playlists WHERE id = ? AND user_id = ?`).get(playlistId, userId);
+  if (!playlist) return null;
+
+  const samples = db.prepare(`
+    SELECT t.id, t.cover_art_path 
+    FROM playlist_tracks pt
+    JOIN tracks t ON pt.track_id = t.id
+    WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
+    ORDER BY pt.position ASC
+    LIMIT 4
+  `).all(playlistId);
+
+  return {
+    ...playlist,
+    sample_tracks: samples
+  };
 };
 
 export const updatePlaylistName = (playlistId, userId, newName) => {
@@ -462,4 +514,106 @@ export const getTransitionsForUser = (userId) => {
     SELECT * FROM song_transitions 
     WHERE user_id = ?
   `).all(userId);
+};
+
+// --- Single & Bulk Metadata Management ---
+export const updateTrackMetadata = (trackId, metadata) => {
+  const current = db.prepare(`SELECT * FROM tracks WHERE id = ?`).get(trackId);
+  if (!current) return null;
+
+  const title = metadata.title !== undefined ? metadata.title.trim() : current.title;
+  const artist = metadata.artist !== undefined ? metadata.artist.trim() : current.artist;
+  const album = metadata.album !== undefined ? metadata.album.trim() : current.album;
+  const genre = metadata.genre !== undefined ? (metadata.genre ? metadata.genre.trim() : null) : current.genre;
+  const year = metadata.year !== undefined ? (metadata.year ? parseInt(metadata.year, 10) : null) : current.year;
+  const language = metadata.language !== undefined ? (metadata.language ? metadata.language.trim() : null) : current.language;
+  const composer = metadata.composer !== undefined ? (metadata.composer ? metadata.composer.trim() : null) : current.composer;
+  const comment = metadata.comment !== undefined ? (metadata.comment ? metadata.comment.trim() : null) : current.comment;
+  const rating = metadata.rating !== undefined ? (metadata.rating ? parseInt(metadata.rating, 10) : null) : current.rating;
+  const tags = metadata.tags !== undefined ? (metadata.tags ? metadata.tags.trim() : null) : current.tags;
+
+  db.prepare(`
+    UPDATE tracks 
+    SET title = ?, artist = ?, album = ?, genre = ?, year = ?, language = ?, composer = ?, comment = ?, rating = ?, tags = ?, metadata_updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(title, artist, album, genre, year, language, composer, comment, rating, tags, trackId);
+
+  return getTrackById(trackId);
+};
+
+export const resetTrackMetadata = (trackId) => {
+  const current = db.prepare(`SELECT * FROM tracks WHERE id = ?`).get(trackId);
+  if (!current) return null;
+
+  const title = current.original_title || current.title;
+  const artist = current.original_artist || current.artist;
+  const album = current.original_album || current.album;
+  const genre = current.original_genre !== undefined ? current.original_genre : current.genre;
+  const year = current.original_year !== undefined ? current.original_year : current.year;
+
+  db.prepare(`
+    UPDATE tracks
+    SET title = ?, artist = ?, album = ?, genre = ?, year = ?, metadata_updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(title, artist, album, genre, year, trackId);
+
+  return getTrackById(trackId);
+};
+
+export const bulkUpdateTrackMetadata = (trackIds, updates) => {
+  if (!Array.isArray(trackIds) || trackIds.length === 0) return 0;
+
+  const setClauses = [];
+  const params = [];
+
+  if (updates.genre !== undefined) {
+    setClauses.push('genre = ?');
+    params.push(updates.genre ? updates.genre.trim() : null);
+  }
+  if (updates.year !== undefined) {
+    setClauses.push('year = ?');
+    params.push(updates.year ? parseInt(updates.year, 10) : null);
+  }
+  if (updates.artist !== undefined && updates.artist.trim()) {
+    setClauses.push('artist = ?');
+    params.push(updates.artist.trim());
+  }
+  if (updates.album !== undefined && updates.album.trim()) {
+    setClauses.push('album = ?');
+    params.push(updates.album.trim());
+  }
+
+  if (setClauses.length === 0) return 0;
+
+  setClauses.push('metadata_updated_at = CURRENT_TIMESTAMP');
+
+  const placeholders = trackIds.map(() => '?').join(',');
+  const sql = `UPDATE tracks SET ${setClauses.join(', ')} WHERE id IN (${placeholders})`;
+
+  const info = db.prepare(sql).run(...params, ...trackIds);
+  return info.changes;
+};
+
+export const getMissingMetadataTracks = () => {
+  return db.prepare(`
+    SELECT * FROM tracks 
+    WHERE genre IS NULL OR TRIM(genre) = '' OR year IS NULL
+  `).all();
+};
+
+export const logRecommendationAction = ({ userId, trackId, shelfId, action, algorithmVersion = 'v1' }) => {
+  if (!userId || !trackId) return;
+  db.prepare(`
+    INSERT INTO recommendation_logs (user_id, track_id, shelf_id, action, algorithm_version)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(userId, trackId, shelfId || 'recommendations', action, algorithmVersion);
+};
+
+export const updateRecommendationStats = (trackId) => {
+  if (!trackId) return;
+  db.prepare(`
+    UPDATE tracks 
+    SET last_recommended_at = CURRENT_TIMESTAMP, recommendation_count = COALESCE(recommendation_count, 0) + 1
+    WHERE id = ?
+  `).run(trackId);
 };

@@ -4,10 +4,12 @@
   "private": true,
   "description": "LocalTune - Personal LAN-Only Music Streaming Web App",
   "scripts": {
-    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install && npm --prefix mobile-client install",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\""
+    "dev:mobile": "npm --prefix mobile-client run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:mobile\""
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

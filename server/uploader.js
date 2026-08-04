@@ -5,7 +5,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { parseAudioFile, scanLibrary } from './scanner.js';
-import { upsertTrack, upsertArtistImage, getArtists, findTrackByTitleAndArtist } from './db.js';
+import { upsertTrack, upsertArtistImage, getArtists, findTrackByTitleAndArtist, getAllTracks, updateTrackMetadata, resetTrackMetadata } from './db.js';
+import { normalizeGenre } from './genreNormalizer.js';
 
 dotenv.config();
 
@@ -65,6 +66,48 @@ app.get('/api/artists', (req, res) => {
   try {
     const artists = getArtists();
     res.json({ artists });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/manage-tracks - Get all tracks for editing
+app.get('/api/manage-tracks', (req, res) => {
+  try {
+    const tracks = getAllTracks();
+    res.json({ tracks });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/manage-tracks/:id - Update track metadata from upload portal
+app.post('/api/manage-tracks/:id', (req, res) => {
+  try {
+    const trackId = parseInt(req.params.id, 10);
+    const { title, artist, album, genre, year } = req.body;
+    const normGenre = genre ? normalizeGenre(genre) : null;
+    const updated = updateTrackMetadata(trackId, {
+      title,
+      artist,
+      album,
+      genre: normGenre,
+      year: year ? parseInt(year, 10) : null
+    });
+    if (!updated) return res.status(404).json({ error: 'Track not found' });
+    res.json({ success: true, track: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/manage-tracks/:id/reset - Reset track metadata
+app.post('/api/manage-tracks/:id/reset', (req, res) => {
+  try {
+    const trackId = parseInt(req.params.id, 10);
+    const resetTrack = resetTrackMetadata(trackId);
+    if (!resetTrack) return res.status(404).json({ error: 'Track not found' });
+    res.json({ success: true, track: resetTrack });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -150,6 +193,8 @@ export const handleUploadTrack = async (req, res) => {
     const finalArtist = customArtist || parsed.artist || 'Unknown Artist';
     const finalAlbum = customAlbum || parsed.album || 'Unknown Album';
     const finalReleaseType = (req.body.releaseType || req.body.release_type || parsed.releaseType || 'album').toLowerCase();
+    const finalGenre = req.body.genre ? normalizeGenre(req.body.genre) : (parsed.genre || null);
+    const finalYear = req.body.year ? parseInt(req.body.year, 10) : (parsed.year || null);
     const ext = path.extname(audioPath).replace('.', '').toLowerCase();
 
     // Safety check: Prevent duplicate upload of the same song
@@ -172,6 +217,8 @@ export const handleUploadTrack = async (req, res) => {
       artist: finalArtist,
       album: finalAlbum,
       releaseType: finalReleaseType,
+      genre: finalGenre,
+      year: finalYear,
       durationSeconds: parsed.durationSeconds || 0,
       format: ext,
       fileSize: fileStats.size,
@@ -480,10 +527,32 @@ app.get('/', (req, res) => {
     <div class="tab-bar">
       <button class="tab-btn active" id="tabSongBtn" onclick="switchTab('song')">🎵 Upload Song</button>
       <button class="tab-btn" id="tabArtistBtn" onclick="switchTab('artist')">🎤 Add Artist Profile</button>
+      <button class="tab-btn" id="tabManageBtn" onclick="switchTab('manage')">✏️ Edit Songs</button>
     </div>
 
     <!-- Autocomplete Datalists -->
     <datalist id="existingArtistList"></datalist>
+    <datalist id="genreList">
+      <option value="Rock"></option>
+      <option value="Pop"></option>
+      <option value="Hip-Hop"></option>
+      <option value="Electronic"></option>
+      <option value="R&B"></option>
+      <option value="Jazz"></option>
+      <option value="Classical"></option>
+      <option value="Country"></option>
+      <option value="Indie"></option>
+      <option value="Metal"></option>
+      <option value="Lo-Fi"></option>
+      <option value="Bollywood"></option>
+      <option value="EDM"></option>
+      <option value="Folk"></option>
+      <option value="Punk"></option>
+      <option value="Blues"></option>
+      <option value="Soul"></option>
+      <option value="Ambient"></option>
+      <option value="Soundtrack"></option>
+    </datalist>
 
     <!-- SECTION 1: Upload Song Form -->
     <form id="uploadSongForm">
@@ -533,6 +602,19 @@ app.get('/', (req, res) => {
           <label>Album / EP Title</label>
           <input type="text" id="albumInput" name="album" placeholder="e.g. Parachutes or Kaleidoscope EP">
         </div>
+      </div>
+
+      <div class="grid-row" style="margin-top: 1rem;">
+        <div class="form-group" style="margin-bottom:0; width:100%;">
+          <label>Release Year (Optional)</label>
+          <input type="text" id="yearInput" name="year" placeholder="e.g. 2024">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label>Genres (Select Multiple ✓)</label>
+        <input type="hidden" id="genreInput" name="genre" value="">
+        <div id="uploadGenrePills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
       </div>
 
       <div class="form-group" style="margin-top: 1rem;">
@@ -592,6 +674,53 @@ app.get('/', (req, res) => {
       <button type="submit" id="submitArtistBtn" class="btn-submit">Save Artist Profile</button>
     </form>
 
+    <!-- SECTION 3: Edit Existing Songs Form -->
+    <div id="manageSongsForm" style="display: none;">
+      <div class="form-group">
+        <label>Search & Select Song to Edit</label>
+        <input type="text" id="searchTrackInput" placeholder="Type to filter songs..." oninput="filterTrackList()" style="margin-bottom: 0.5rem;">
+        <select id="trackSelect" size="5" style="width:100%; padding:0.5rem; background:#0f172a; border:1px solid var(--border); color:#fff; border-radius:0.5rem; outline:none; font-size:0.85rem;" onchange="loadSelectedTrackInfo()">
+          <option value="" disabled>Loading tracks...</option>
+        </select>
+      </div>
+
+      <div id="editFieldsContainer" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; margin-top: 1rem;">
+        <div class="form-group">
+          <label>Song Title</label>
+          <input type="text" id="editTitleInput" placeholder="Song Title">
+        </div>
+
+        <div class="grid-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Artist</label>
+            <input type="text" id="editArtistInput" list="existingArtistList" placeholder="Artist Name">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Album</label>
+            <input type="text" id="editAlbumInput" placeholder="Album Title">
+          </div>
+        </div>
+
+        <div class="grid-row" style="margin-top: 1rem;">
+          <div class="form-group" style="margin-bottom:0; width:100%;">
+            <label>Release Year</label>
+            <input type="text" id="editYearInput" placeholder="e.g. 2024">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 1rem;">
+          <label>Genres (Select Multiple ✓)</label>
+          <input type="hidden" id="editGenreInput" value="">
+          <div id="editGenrePills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <button type="button" id="saveEditBtn" onclick="saveTrackMetadata()" class="btn-submit" style="flex:2; margin-top:0;">Save Song Metadata</button>
+          <button type="button" id="resetEditBtn" onclick="resetTrackMetadata()" style="flex:1; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color: #ef4444; border-radius: 0.5rem; font-weight: 600; cursor: pointer; font-size: 0.85rem;">Reset Original</button>
+        </div>
+      </div>
+    </div>
+
     <div class="progress-bar-wrap" id="progressWrap">
       <div class="progress-bar-fill" id="progressFill"></div>
     </div>
@@ -627,19 +756,200 @@ app.get('/', (req, res) => {
     }
     loadArtists();
 
+    let allManageTracks = [];
+
     // Tab switcher
     function switchTab(mode) {
       document.getElementById('resultAlert').style.display = 'none';
-      if (mode === 'song') {
-        document.getElementById('tabSongBtn').className = 'tab-btn active';
-        document.getElementById('tabArtistBtn').className = 'tab-btn';
-        document.getElementById('uploadSongForm').style.display = 'block';
-        document.getElementById('uploadArtistForm').style.display = 'none';
-      } else {
-        document.getElementById('tabSongBtn').className = 'tab-btn';
-        document.getElementById('tabArtistBtn').className = 'tab-btn active';
-        document.getElementById('uploadSongForm').style.display = 'none';
-        document.getElementById('uploadArtistForm').style.display = 'block';
+      document.getElementById('tabSongBtn').className = mode === 'song' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById('tabArtistBtn').className = mode === 'artist' ? 'tab-btn active' : 'tab-btn';
+      document.getElementById('tabManageBtn').className = mode === 'manage' ? 'tab-btn active' : 'tab-btn';
+
+      document.getElementById('uploadSongForm').style.display = mode === 'song' ? 'block' : 'none';
+      document.getElementById('uploadArtistForm').style.display = mode === 'artist' ? 'block' : 'none';
+      document.getElementById('manageSongsForm').style.display = mode === 'manage' ? 'block' : 'none';
+
+      if (mode === 'manage') {
+        loadManageTracks();
+      }
+    }
+
+    async function loadManageTracks() {
+      try {
+        const res = await fetch('/api/manage-tracks');
+        if (res.ok) {
+          const data = await res.json();
+          allManageTracks = data.tracks || [];
+          filterTrackList();
+        }
+      } catch (e) {
+        console.error('Failed to load manage tracks:', e);
+      }
+    }
+
+    function filterTrackList() {
+      const query = (document.getElementById('searchTrackInput').value || '').toLowerCase();
+      const select = document.getElementById('trackSelect');
+      select.innerHTML = '';
+
+      const filtered = allManageTracks.filter(t => 
+        (t.title || '').toLowerCase().includes(query) ||
+        (t.artist || '').toLowerCase().includes(query) ||
+        (t.album || '').toLowerCase().includes(query) ||
+        (t.genre || '').toLowerCase().includes(query)
+      );
+
+      if (filtered.length === 0) {
+        const opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = 'No matching tracks found';
+        select.appendChild(opt);
+        document.getElementById('editFieldsContainer').style.display = 'none';
+        return;
+      }
+
+      filtered.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.title + ' — ' + t.artist + (t.genre ? ' [' + t.genre + ']' : '');
+        select.appendChild(opt);
+      });
+    }
+
+    const UPLOADER_GENRES = [
+      'Pop', 'Rock', 'Alternative Rock', 'Hip-Hop', 'Rap', 'R&B', 'EDM',
+      'House', 'Bollywood', 'Anime', 'Classical', 'Jazz', 'Metal',
+      'Country', 'Folk', 'Lo-fi', 'Synthwave'
+    ];
+
+    let uploadSelectedGenres = [];
+    let editSelectedGenres = [];
+
+    function renderPortalGenrePills(containerId, hiddenInputId, selectedArray) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+
+      UPLOADER_GENRES.forEach(g => {
+        const isSelected = selectedArray.some(sel => sel.toLowerCase() === g.toLowerCase());
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.style.cssText = 'display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:14px; font-size:12px; cursor:pointer; font-weight:500; transition:all 0.15s ease;' +
+          (isSelected
+            ? 'background:rgba(99,102,241,0.25); border:1px solid #6366f1; color:#a5b4fc;'
+            : 'background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); color:#94a3b8;');
+
+        const box = document.createElement('span');
+        box.style.cssText = 'width:12px; height:12px; border-radius:3px; display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:bold; color:#fff;' +
+          (isSelected ? 'background:#6366f1; border:1px solid #6366f1;' : 'border:1px solid rgba(255,255,255,0.3);');
+        box.textContent = isSelected ? '✓' : '';
+
+        const label = document.createElement('span');
+        label.textContent = g;
+
+        btn.appendChild(box);
+        btn.appendChild(label);
+
+        btn.onclick = () => {
+          const idx = selectedArray.findIndex(sel => sel.toLowerCase() === g.toLowerCase());
+          if (idx >= 0) selectedArray.splice(idx, 1);
+          else selectedArray.push(g);
+          document.getElementById(hiddenInputId).value = selectedArray.join(', ');
+          renderPortalGenrePills(containerId, hiddenInputId, selectedArray);
+        };
+
+        container.appendChild(btn);
+      });
+    }
+
+    setTimeout(() => {
+      renderPortalGenrePills('uploadGenrePills', 'genreInput', uploadSelectedGenres);
+    }, 100);
+
+    function loadSelectedTrackInfo() {
+      const select = document.getElementById('trackSelect');
+      const trackId = parseInt(select.value, 10);
+      const track = allManageTracks.find(t => t.id === trackId);
+      if (!track) return;
+
+      document.getElementById('editTitleInput').value = track.title || '';
+      document.getElementById('editArtistInput').value = track.artist || '';
+      document.getElementById('editAlbumInput').value = track.album || '';
+      document.getElementById('editGenreInput').value = track.genre || '';
+      document.getElementById('editYearInput').value = track.year || '';
+
+      editSelectedGenres = (track.genre || '').split(',').map(s => s.trim()).filter(Boolean);
+      renderPortalGenrePills('editGenrePills', 'editGenreInput', editSelectedGenres);
+
+      document.getElementById('editFieldsContainer').style.display = 'block';
+    }
+
+    async function saveTrackMetadata() {
+      const select = document.getElementById('trackSelect');
+      const trackId = parseInt(select.value, 10);
+      if (!trackId) return;
+
+      const title = document.getElementById('editTitleInput').value;
+      const artist = document.getElementById('editArtistInput').value;
+      const album = document.getElementById('editAlbumInput').value;
+      const genre = document.getElementById('editGenreInput').value;
+      const year = document.getElementById('editYearInput').value;
+
+      const resultAlert = document.getElementById('resultAlert');
+      resultAlert.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/manage-tracks/' + trackId, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, artist, album, genre, year })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          resultAlert.className = 'result-alert success';
+          resultAlert.innerHTML = '✅ Updated <strong>' + data.track.title + '</strong> by ' + data.track.artist + '!';
+          resultAlert.style.display = 'block';
+          await loadManageTracks();
+        } else {
+          resultAlert.className = 'result-alert error';
+          resultAlert.textContent = data.error || 'Failed to update track';
+          resultAlert.style.display = 'block';
+        }
+      } catch (e) {
+        resultAlert.className = 'result-alert error';
+        resultAlert.textContent = 'Failed to update track: ' + e.message;
+        resultAlert.style.display = 'block';
+      }
+    }
+
+    async function resetTrackMetadata() {
+      const select = document.getElementById('trackSelect');
+      const trackId = parseInt(select.value, 10);
+      if (!trackId) return;
+
+      const resultAlert = document.getElementById('resultAlert');
+      resultAlert.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/manage-tracks/' + trackId + '/reset', {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (res.ok) {
+          resultAlert.className = 'result-alert success';
+          resultAlert.innerHTML = '🔄 Reset metadata for <strong>' + data.track.title + '</strong>!';
+          resultAlert.style.display = 'block';
+          await loadManageTracks();
+          loadSelectedTrackInfo();
+        } else {
+          resultAlert.className = 'result-alert error';
+          resultAlert.textContent = data.error || 'Failed to reset track';
+          resultAlert.style.display = 'block';
+        }
+      } catch (e) {
+        resultAlert.className = 'result-alert error';
+        resultAlert.textContent = 'Failed to reset track: ' + e.message;
+        resultAlert.style.display = 'block';
       }
     }
 

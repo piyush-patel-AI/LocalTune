@@ -23,7 +23,7 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-export default function PlayerBar({ showQueue, setShowQueue }) {
+export default function PlayerBar({ showQueue, setShowQueue, onToggleNowPlaying }) {
   const {
     currentTrack,
     isPlaying,
@@ -58,12 +58,14 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
     setDragTime(parseFloat(e.target.value));
   };
 
-  const handleSeekMouseDown = () => {
+  const handleSeekMouseDown = (e) => {
+    e.stopPropagation();
     setIsDragging(true);
     setDragTime(currentTime);
   };
 
   const handleSeekMouseUp = (e) => {
+    e.stopPropagation();
     const newTime = parseFloat(e.target.value);
     setIsDragging(false);
     seek(newTime);
@@ -75,8 +77,14 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
     else setRepeat('off');
   };
 
+  const handleBarClick = (e) => {
+    if (onToggleNowPlaying) {
+      onToggleNowPlaying(e);
+    }
+  };
+
   return (
-    <div className="player-bar">
+    <div className="player-bar" onClick={handleBarClick} style={{ cursor: 'pointer' }}>
       {/* Left: Track Details & Animated VU Meter & Format Badge */}
       <div className="player-left">
         {currentTrack && currentTrack.cover_art_path ? (
@@ -120,7 +128,10 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
         <div className="player-track-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <button
             className={`fav-toggle-btn ${isFav ? 'is-fav' : ''}`}
-            onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              currentTrack && toggleFavorite(currentTrack.id);
+            }}
             disabled={!currentTrack}
             title={currentTrack ? (isFav ? 'Remove from favorites' : 'Add to favorites') : 'No active track'}
             style={{ opacity: currentTrack ? 1 : 0.4 }}
@@ -132,10 +143,13 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
             />
           </button>
 
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
             <button
               className="player-add-btn"
-              onClick={() => currentTrack && setShowAddMenu(!showAddMenu)}
+              onClick={(e) => {
+                e.stopPropagation();
+                currentTrack && setShowAddMenu(!showAddMenu);
+              }}
               disabled={!currentTrack}
               title={currentTrack ? "Add track to Playlist or Queue" : "No active track"}
               style={{ opacity: currentTrack ? 1 : 0.4 }}
@@ -145,11 +159,12 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
 
             {showAddMenu && currentTrack && (
               <>
-                <div className="popover-backdrop" onClick={() => setShowAddMenu(false)} />
+                <div className="popover-backdrop" onClick={(e) => { e.stopPropagation(); setShowAddMenu(false); }} />
                 <div className="player-add-popover">
                   <button
                     className="player-popover-item"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       addToQueue(currentTrack);
                       setShowAddMenu(false);
                       setToastMsg('Added to Queue!');
@@ -161,7 +176,8 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
                   </button>
                   <button
                     className="player-popover-item"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setShowAddMenu(false);
                       setShowPlaylistModal(true);
                     }}
@@ -186,20 +202,20 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
 
       {/* Center: Transport & Progress Scrub Bar */}
       <div className="player-center">
-        <div className="player-controls">
+        <div className="player-controls" onClick={(e) => e.stopPropagation()}>
           <button
             className={`control-btn ${shuffle ? 'active' : ''}`}
-            onClick={setShuffle}
+            onClick={(e) => { e.stopPropagation(); setShuffle(); }}
             title="Shuffle"
           >
             <IconShuffle size={18} color={shuffle ? 'var(--accent-primary)' : 'var(--text-secondary)'} />
           </button>
 
-          <button className="control-btn" onClick={prevTrack} disabled={!currentTrack} title="Previous">
+          <button className="control-btn" onClick={(e) => { e.stopPropagation(); prevTrack(); }} disabled={!currentTrack} title="Previous">
             <IconSkipBack size={18} />
           </button>
 
-          <button className="play-main-btn" onClick={togglePlay} title={isPlaying ? 'Pause' : 'Play'}>
+          <button className="play-main-btn" onClick={(e) => { e.stopPropagation(); togglePlay(); }} title={isPlaying ? 'Pause' : 'Play'}>
             {isPlaying ? (
               <IconPause size={18} color="#111" fill="#111" />
             ) : (
@@ -207,13 +223,13 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
             )}
           </button>
 
-          <button className="control-btn" onClick={nextTrack} disabled={!currentTrack} title="Next">
+          <button className="control-btn" onClick={(e) => { e.stopPropagation(); nextTrack(); }} disabled={!currentTrack} title="Next">
             <IconSkipForward size={18} />
           </button>
 
           <button
             className={`control-btn ${repeat !== 'off' ? 'active' : ''}`}
-            onClick={cycleRepeat}
+            onClick={(e) => { e.stopPropagation(); cycleRepeat(); }}
             title={`Repeat: ${repeat}`}
           >
             {repeat === 'one' ? (
@@ -224,7 +240,7 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
           </button>
         </div>
 
-        <div className="scrub-container">
+        <div className="scrub-container" onClick={(e) => e.stopPropagation()}>
           <span className="time-stamp">{formatTime(displayTime)}</span>
           <div className="scrub-bar-wrapper">
             <input
@@ -250,7 +266,7 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
       </div>
 
       {/* Right: Volume & Queue Panel Toggle */}
-      <div className="player-right">
+      <div className="player-right" onClick={(e) => e.stopPropagation()}>
         <div className="volume-container">
           <IconVolume size={18} color="var(--text-muted)" />
           <input
@@ -266,7 +282,7 @@ export default function PlayerBar({ showQueue, setShowQueue }) {
 
         <button
           className={`control-btn ${showQueue ? 'active' : ''}`}
-          onClick={() => setShowQueue(!showQueue)}
+          onClick={(e) => { e.stopPropagation(); setShowQueue(!showQueue); }}
           title="Play Queue"
         >
           <IconQueue size={18} color={showQueue ? 'var(--accent-primary)' : 'var(--text-secondary)'} />

@@ -1,0 +1,73 @@
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  date_created DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tracks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  artist TEXT NOT NULL,
+  album TEXT NOT NULL,
+  duration_seconds INTEGER DEFAULT 0,
+  format TEXT NOT NULL,
+  file_size INTEGER DEFAULT 0,
+  release_type TEXT DEFAULT 'album',
+  date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
+  date_modified DATETIME NOT NULL,
+  cover_art_path TEXT
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  cover_path TEXT,
+  date_created DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS playlist_tracks (
+  playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+  track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (playlist_id, track_id)
+);
+
+CREATE TABLE IF NOT EXISTS favorites (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, track_id)
+);
+
+CREATE TABLE IF NOT EXISTS artist_images (
+  artist_name TEXT PRIMARY KEY,
+  image_path TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS play_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  listened_seconds REAL NOT NULL,
+  duration_seconds REAL NOT NULL,
+  completion_ratio REAL NOT NULL,
+  is_skip BOOLEAN DEFAULT 0,
+  is_replay BOOLEAN DEFAULT 0,
+  hour_of_day INTEGER NOT NULL,
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS song_transitions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  to_track_id INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+  transition_count INTEGER DEFAULT 1,
+  last_transition_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, from_track_id, to_track_id)
+);

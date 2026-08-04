@@ -39,6 +39,9 @@ const walkDirectory = (dir, fileList = []) => {
   return fileList;
 };
 
+import { normalizeGenre } from './genreNormalizer.js';
+import { getMissingMetadataTracks, updateTrackMetadata } from './db.js';
+
 // Parse single audio file safely with try/catch
 export const parseAudioFile = async (filePath) => {
   try {
@@ -52,6 +55,8 @@ export const parseAudioFile = async (filePath) => {
     let album = 'Unknown Album';
     let releaseType = 'album';
     let durationSeconds = 0;
+    let genre = null;
+    let year = null;
 
     try {
       const metadata = await parseFile(filePath);
@@ -64,6 +69,15 @@ export const parseAudioFile = async (filePath) => {
         }
         if (metadata.common.album && metadata.common.album.trim()) {
           album = metadata.common.album.trim();
+        }
+        if (metadata.common.genre) {
+          const rawGenre = Array.isArray(metadata.common.genre)
+            ? metadata.common.genre.join(', ')
+            : metadata.common.genre;
+          genre = normalizeGenre(rawGenre);
+        }
+        if (metadata.common.year) {
+          year = parseInt(metadata.common.year, 10) || null;
         }
         if (metadata.common.releasetype && typeof metadata.common.releasetype === 'string') {
           const rt = metadata.common.releasetype.toLowerCase();
@@ -90,6 +104,8 @@ export const parseAudioFile = async (filePath) => {
       album,
       releaseType,
       durationSeconds,
+      genre,
+      year,
       format: formatStr,
       fileSize: stats.size,
       dateModified: stats.mtime.toISOString()
@@ -98,6 +114,32 @@ export const parseAudioFile = async (filePath) => {
     console.error(`[Scanner Error] Failed reading stats for file '${filePath}':`, err.message);
     return null;
   }
+};
+
+// Rescan Metadata Only (for tracks missing genre or year)
+export const scanMissingMetadata = async () => {
+  const missingTracks = getMissingMetadataTracks();
+  console.log(`[Scanner] Found ${missingTracks.length} tracks with missing genre/year metadata to rescan.`);
+
+  let updatedCount = 0;
+  for (const track of missingTracks) {
+    if (!fs.existsSync(track.file_path)) continue;
+    try {
+      const parsed = await parseAudioFile(track.file_path);
+      if (parsed && (parsed.genre || parsed.year)) {
+        updateTrackMetadata(track.id, {
+          genre: parsed.genre || track.genre,
+          year: parsed.year || track.year
+        });
+        updatedCount++;
+      }
+    } catch (e) {
+      console.warn(`[Scanner] Rescan missing metadata failed for track #${track.id}:`, e.message);
+    }
+  }
+
+  console.log(`[Scanner] Rescanned missing metadata for ${updatedCount} tracks.`);
+  return { scannedCount: missingTracks.length, updatedCount };
 };
 
 // Perform complete library scan and reconciliation
