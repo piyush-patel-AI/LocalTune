@@ -72,17 +72,25 @@ export const PlayerProvider = ({ children }) => {
   const lastSavedTimeRef = useRef(initialPosition);
 
   // Keep refs in sync to avoid stale closures in event handlers
+  const isPlayingRef = useRef(isPlaying);
   const queueRef = useRef(queue);
   const queueIndexRef = useRef(queueIndex);
   const repeatRef = useRef(repeat);
   const shuffleRef = useRef(shuffle);
   const currentTrackRef = useRef(currentTrack);
+  const favoritesMapRef = useRef(favoritesMap);
+  const currentTimeRef = useRef(currentTime);
+  const durationRef = useRef(duration);
 
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { queueRef.current = queue; }, [queue]);
   useEffect(() => { queueIndexRef.current = queueIndex; }, [queueIndex]);
   useEffect(() => { repeatRef.current = repeat; }, [repeat]);
   useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
+  useEffect(() => { favoritesMapRef.current = favoritesMap; }, [favoritesMap]);
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
 
   // Save playback state & update dynamic ambient colors on track change
   useEffect(() => {
