@@ -48,7 +48,11 @@ body {
   font-family: var(--font-sans);
   min-height: 100vh;
   overflow-x: hidden;
-  padding-bottom: 140px;
+  padding-bottom: 150px;
+}
+
+.mobile-content {
+  padding-bottom: 150px;
 }
 
 /* Master Mobile Container & Dynamic Ambient Canvas */
@@ -427,6 +431,10 @@ body {
   display: flex;
   gap: 0.95rem;
   overflow-x: auto;
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
   padding-bottom: 0.5rem;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -514,8 +522,13 @@ body {
   display: flex;
   gap: 1.1rem;
   overflow-x: auto;
+  margin-left: -1.25rem;
+  margin-right: -1.25rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
   padding-bottom: 0.5rem;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .artist-circle-list::-webkit-scrollbar {
@@ -1525,16 +1538,19 @@ body {
 
 .album-count-badge {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
-  padding: 2px 7px;
-  border-radius: 8px;
+  top: 8px;
+  left: 8px;
+  background: rgba(14, 18, 26, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
   font-size: 0.68rem;
   font-weight: 700;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.02em;
 }
 
 .album-card-info {

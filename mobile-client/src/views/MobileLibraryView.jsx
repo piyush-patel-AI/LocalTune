@@ -228,7 +228,7 @@ export default function MobileLibraryView() {
 
           <div style={{ minWidth: 0, flex: 1 }}>
             <h1 className="explore-title" style={{ fontSize: '1.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedAlbum.name}</h1>
-            <p className="explore-subtitle" style={{ fontSize: '0.8rem' }}>{selectedAlbum.artist} • {selectedAlbum.tracks.length} songs</p>
+            <p className="explore-subtitle" style={{ fontSize: '0.8rem' }}>{selectedAlbum.artist} • {selectedAlbum.tracks.length} {selectedAlbum.tracks.length === 1 ? 'song' : 'songs'}</p>
             <button
               className="btn-primary"
               style={{ marginTop: '0.6rem', padding: '0.35rem 1rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
@@ -315,7 +315,7 @@ export default function MobileLibraryView() {
           </div>
           <div>
             <h1 className="explore-title" style={{ fontSize: '1.35rem' }}>{selectedArtist.artist}</h1>
-            <p className="explore-subtitle">{artistTracks.length} songs • {artistAlbums.length} albums</p>
+            <p className="explore-subtitle">{artistTracks.length} {artistTracks.length === 1 ? 'song' : 'songs'} • {artistAlbums.length} {artistAlbums.length === 1 ? 'album' : 'albums'}</p>
           </div>
         </div>
 
@@ -416,7 +416,7 @@ export default function MobileLibraryView() {
               {selectedPlaylist.name}
             </h1>
             <p className="explore-subtitle" style={{ fontSize: '0.8rem' }}>
-              {selectedPlaylist.tracks?.length || 0} songs
+              {selectedPlaylist.tracks?.length || 0} {(selectedPlaylist.tracks?.length || 0) === 1 ? 'song' : 'songs'}
             </p>
             {selectedPlaylist.tracks && selectedPlaylist.tracks.length > 0 && (
               <button
@@ -526,7 +526,7 @@ export default function MobileLibraryView() {
               </div>
               <div>
                 <h2 className="liked-hero-title">Liked Songs</h2>
-                <p className="liked-hero-sub">{likedTracks.length} saved songs</p>
+                <p className="liked-hero-sub">{likedTracks.length} saved {likedTracks.length === 1 ? 'song' : 'songs'}</p>
               </div>
             </div>
             <div className="hero-play-fab" style={{ position: 'relative', inset: 'auto' }}>
@@ -592,7 +592,7 @@ export default function MobileLibraryView() {
                   <PlaylistCover playlist={pl} size={48} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <h3 className="playlist-card-name">{pl.name}</h3>
-                    <p className="playlist-card-count">{pl.track_count || pl.tracks?.length || 0} songs</p>
+                    <p className="playlist-card-count">{(pl.track_count || pl.tracks?.length || 0)} {(pl.track_count || pl.tracks?.length) === 1 ? 'song' : 'songs'}</p>
                   </div>
                 </div>
               ))}
@@ -617,7 +617,7 @@ export default function MobileLibraryView() {
         <section className="section-container" style={{ marginTop: '1.25rem' }}>
           <div className="section-title-row">
             <h2 className="section-title">Albums</h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{albums.length} albums</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{albums.length} {albums.length === 1 ? 'album' : 'albums'}</span>
           </div>
 
           <div className="horizontal-card-list">
@@ -650,7 +650,7 @@ export default function MobileLibraryView() {
                     <IconDisc size={32} color="var(--accent-primary)" />
                   </div>
                   {alb.tracks && alb.tracks.length > 0 && (
-                    <span className="album-count-badge" style={{ fontSize: '0.62rem', padding: '1px 6px' }}>{alb.tracks.length} tracks</span>
+                    <span className="album-count-badge" style={{ fontSize: '0.62rem', padding: '1px 6px' }}>{alb.tracks.length} {alb.tracks.length === 1 ? 'track' : 'tracks'}</span>
                   )}
                   <div
                     className="media-card-play-hover"

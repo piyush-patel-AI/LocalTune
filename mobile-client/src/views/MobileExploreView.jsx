@@ -304,7 +304,7 @@ export default function MobileExploreView() {
       <section className="section-container">
         <div className="section-title-row">
           <h2 className="section-title">Full Song Catalog</h2>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{allTracks.length} tracks</span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{allTracks.length} {allTracks.length === 1 ? 'track' : 'tracks'}</span>
         </div>
 
         {loading ? (

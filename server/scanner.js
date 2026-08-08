@@ -65,7 +65,7 @@ export const parseAudioFile = async (filePath) => {
           title = metadata.common.title.trim();
         }
         if (metadata.common.artist && metadata.common.artist.trim()) {
-          artist = metadata.common.artist.trim();
+          artist = metadata.common.artist.trim().replace(/\bMicheal\b/g, 'Michael');
         }
         if (metadata.common.album && metadata.common.album.trim()) {
           album = metadata.common.album.trim();
