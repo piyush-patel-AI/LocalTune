@@ -8,7 +8,7 @@ router.get('/', (req, res) => {
   try {
     const totalTracks = db.prepare('SELECT COUNT(*) AS count FROM tracks').get()?.count || 0;
     const totalArtists = db.prepare('SELECT COUNT(DISTINCT artist) AS count FROM tracks').get()?.count || 0;
-    const totalAlbums = db.prepare('SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ""').get()?.count || 0;
+    const totalAlbums = db.prepare("SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ''").get()?.count || 0;
 
     res.json({
       totalTracks,
