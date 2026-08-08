@@ -316,15 +316,28 @@ export function IconBug({ size = 20, color = "currentColor" }) {
   );
 }
 
-export function IconChecklist({ size = 20, color = "currentColor" }) {
+export function IconGrid({ size = 18, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m3 17 2 2 4-4"></path>
-      <path d="m3 7 2 2 4-4"></path>
-      <path d="M13 6h8"></path>
-      <path d="M13 12h8"></path>
-      <path d="M13 18h8"></path>
+      <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+      <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+      <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+      <rect x="3" y="14" width="7" height="7" rx="1"></rect>
     </svg>
   );
 }
+
+export function IconList({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"></line>
+      <line x1="8" y1="12" x2="21" y2="12"></line>
+      <line x1="8" y1="18" x2="21" y2="18"></line>
+      <line x1="3" y1="6" x2="3.01" y2="6"></line>
+      <line x1="3" y1="12" x2="3.01" y2="12"></line>
+      <line x1="3" y1="18" x2="3.01" y2="18"></line>
+    </svg>
+  );
+}
+
 
