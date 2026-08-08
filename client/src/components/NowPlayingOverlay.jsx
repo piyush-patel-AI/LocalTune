@@ -54,11 +54,30 @@ export default function NowPlayingOverlay({ onClose }) {
   const [dragTime, setDragTime] = useState(0);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
+  const [recommendations, setRecommendations] = useState([]);
 
   const isFav = currentTrack ? !!favoritesMap[currentTrack.id] : false;
   const displayTime = isDragging ? dragTime : currentTime;
   const progressPercent = duration ? (displayTime / duration) * 100 : 0;
+
+  useEffect(() => {
+    fetchRecommendations();
+  }, [currentTrack?.id, queue.length]);
+
+  const fetchRecommendations = async () => {
+    try {
+      const res = await fetch('/api/tracks/recommendations', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const rawList = data.recommendations || data.tracks || [];
+        const queueIds = new Set(queue.map((t) => t.id));
+        const filtered = rawList.filter((t) => !queueIds.has(t.id)).slice(0, 8);
+        setRecommendations(filtered);
+      }
+    } catch (e) {
+      console.error('Error fetching overlay queue recommendations:', e);
+    }
+  };
 
   // Handle smooth closing animation
   const handleClose = () => {
@@ -317,6 +336,82 @@ export default function NowPlayingOverlay({ onClose }) {
                   );
                 })
               )}
+
+              {/* Recommended to Add to Queue Section */}
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-primary)' }}>
+                    Recommended to Add to Queue
+                  </span>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Personalized</span>
+                </div>
+
+                {recommendations.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {recommendations.map((track) => (
+                      <div
+                        key={track.id}
+                        className="np-queue-item"
+                        style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', padding: '0.45rem 0.6rem' }}
+                      >
+                        <div
+                          className="np-queue-art-wrapper"
+                          onClick={() => playTrack(track, [...queue, track])}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {track.cover_art_path ? (
+                            <img
+                              src={`/api/tracks/${track.id}/art`}
+                              alt={track.title}
+                              className="np-queue-art"
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="np-queue-art-fallback">
+                              <IconMusic size={14} color="var(--accent-primary)" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div
+                          className="np-queue-meta"
+                          onClick={() => playTrack(track, [...queue, track])}
+                          style={{ cursor: 'pointer', flex: 1 }}
+                        >
+                          <div className="np-queue-song-title" style={{ fontSize: '0.82rem' }}>{track.title}</div>
+                          <div className="np-queue-artist" style={{ fontSize: '0.74rem' }}>{track.artist}</div>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToQueue(track);
+                          }}
+                          title="Add to queue"
+                          style={{
+                            background: 'rgba(245, 158, 11, 0.18)',
+                            border: '1px solid rgba(245, 158, 11, 0.4)',
+                            color: 'var(--accent-primary)',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <IconPlus size={15} color="var(--accent-primary)" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>All recommendations added!</div>
+                )}
+              </div>
             </div>
           </div>
         </section>
