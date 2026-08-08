@@ -3,13 +3,71 @@ import { usePlayer } from '../context/PlayerContext';
 import { IconFlame, IconMusic, IconPlay, IconHeart, IconMoreVertical, IconSparkles } from '../components/Icons';
 import TrackActionSheet from '../components/TrackActionSheet';
 
-const VIBE_CARDS = [
-  { name: 'Late Night Vinyl', mode: 'Relax', sub: 'Analog Warmth & Chill', gradient: 'linear-gradient(135deg, rgba(49, 46, 129, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Melancholy Dreams', mode: 'Relax', sub: 'Atmospheric Soundscapes', gradient: 'linear-gradient(135deg, rgba(12, 74, 110, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Deep Focus Work', mode: 'Focus', sub: 'Ambient Instrumental', gradient: 'linear-gradient(135deg, rgba(6, 78, 59, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Pure Energy Boost', mode: 'Energy', sub: 'Upbeat High Fidelity', gradient: 'linear-gradient(135deg, rgba(124, 45, 18, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Workout Heat', mode: 'Workout', sub: 'High Tempo Cardio', gradient: 'linear-gradient(135deg, rgba(190, 18, 60, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Retro Throwback', mode: 'Throwback', sub: 'Classic Library Cuts', gradient: 'linear-gradient(135deg, rgba(109, 40, 217, 0.85), rgba(15, 23, 42, 0.95))' }
+const MOOD_CARDS = [
+  {
+    id: 'pop',
+    name: 'Pop & Dance',
+    desc: 'Energetic beats & catchy hooks',
+    keywords: ['pop', 'dance', 'electro pop', 'synthpop', 'chart', 'disco'],
+    gradient: 'linear-gradient(135deg, rgba(236, 72, 153, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🎤'
+  },
+  {
+    id: 'hiphop',
+    name: 'Hip-Hop & Rap',
+    desc: 'Heavy basslines & sharp flows',
+    keywords: ['hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'urban', 'boom bap'],
+    gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🔥'
+  },
+  {
+    id: 'rock',
+    name: 'Rock & Alt',
+    desc: 'Guitar riffs & raw energy',
+    keywords: ['rock', 'alternative', 'alt', 'indie rock', 'punk', 'metal', 'hard rock'],
+    gradient: 'linear-gradient(135deg, rgba(220, 38, 38, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🎸'
+  },
+  {
+    id: 'chill',
+    name: 'Chill & Acoustic',
+    desc: 'Unwind with soft acoustic cuts',
+    keywords: ['chill', 'acoustic', 'ambient', 'lo-fi', 'lofi', 'folk', 'lounge', 'relax'],
+    gradient: 'linear-gradient(135deg, rgba(14, 165, 233, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🌙'
+  },
+  {
+    id: 'electronic',
+    name: 'Electronic & EDM',
+    desc: 'Synthesizers & driving rhythms',
+    keywords: ['electronic', 'edm', 'house', 'techno', 'trance', 'electro', 'dubstep', 'dance'],
+    gradient: 'linear-gradient(135deg, rgba(139, 92, 246, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '⚡'
+  },
+  {
+    id: 'rnb',
+    name: 'R&B & Soul',
+    desc: 'Smooth vocals & groovy rhythms',
+    keywords: ['r&b', 'rnb', 'soul', 'funk', 'neo soul', 'gospel'],
+    gradient: 'linear-gradient(135deg, rgba(168, 85, 247, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🎷'
+  },
+  {
+    id: 'focus',
+    name: 'Focus & Classical',
+    desc: 'Deep concentration soundscapes',
+    keywords: ['focus', 'classical', 'piano', 'instrumental', 'study', 'soundtrack', 'score'],
+    gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🎧'
+  },
+  {
+    id: 'indie',
+    name: 'Indie & Folk',
+    desc: 'Atmospheric & bedroom pop',
+    keywords: ['indie', 'folk', 'singer-songwriter', 'alternative indie', 'bedroom pop'],
+    gradient: 'linear-gradient(135deg, rgba(20, 184, 166, 0.85), rgba(15, 23, 42, 0.95))',
+    icon: '🌱'
+  }
 ];
 
 export default function MobileExploreView() {
@@ -17,7 +75,8 @@ export default function MobileExploreView() {
   const [allTracks, setAllTracks] = useState([]);
   const [recommendedTracks, setRecommendedTracks] = useState([]);
   const [selectedActionTrack, setSelectedActionTrack] = useState(null);
-  const [activeVibe, setActiveVibe] = useState(null);
+  const [activeMood, setActiveMood] = useState(null);
+  const [activeMoodCount, setActiveMoodCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,27 +107,36 @@ export default function MobileExploreView() {
     }
   };
 
-  const handleVibeClick = async (vibe) => {
-    setActiveVibe(vibe.name);
-    try {
-      const res = await fetch(`/api/tracks/recommendations?mode=${vibe.mode}`, { credentials: 'include' });
-      let vibeTracks = [];
-      if (res.ok) {
-        const data = await res.json();
-        vibeTracks = data.recommendations || data.tracks || [];
-      }
-      if (!vibeTracks || vibeTracks.length === 0) {
-        vibeTracks = allTracks;
-      }
-      if (vibeTracks.length > 0) {
-        playTrack(vibeTracks[0], vibeTracks);
-      }
-    } catch (e) {
-      console.error('Error triggering vibe mix:', e);
-      if (allTracks.length > 0) playTrack(allTracks[0], allTracks);
+  const handleMoodClick = (mood) => {
+    setActiveMood(mood.name);
+
+    // Filter tracks strictly based on genre & keywords
+    const keywords = mood.keywords;
+    let moodTracks = allTracks.filter((t) => {
+      const g = (t.genre || '').toLowerCase();
+      const title = (t.title || '').toLowerCase();
+      const album = (t.album || '').toLowerCase();
+      return keywords.some((kw) => g.includes(kw) || title.includes(kw) || album.includes(kw));
+    });
+
+    // Fallback if metadata has no explicit genre match: partition tracks deterministically by mood slot
+    if (!moodTracks || moodTracks.length === 0) {
+      const moodIndex = MOOD_CARDS.findIndex((m) => m.id === mood.id);
+      moodTracks = allTracks.filter((_, idx) => (idx % MOOD_CARDS.length) === moodIndex);
+    }
+    if (!moodTracks || moodTracks.length === 0) {
+      moodTracks = allTracks;
+    }
+
+    setActiveMoodCount(moodTracks.length);
+
+    // Immediately start playback of genre track & build queue
+    if (moodTracks.length > 0) {
+      playTrack(moodTracks[0], moodTracks);
     }
   };
 
+  // Most Recommended stays completely independent from Mood selection
   const mostRecommended = recommendedTracks.length > 0 ? recommendedTracks.slice(0, 10) : allTracks.slice(0, 10);
 
   return (
@@ -77,36 +145,36 @@ export default function MobileExploreView() {
       <div className="explore-banner" style={{ margin: '0.75rem 1.25rem 1.5rem 1.25rem' }}>
         <div className="banner-icon-chip">
           <IconSparkles size={16} color="var(--accent-primary)" />
-          <span>CURATED MUSIC VIBES</span>
+          <span>MOOD & GENRE RADIO</span>
         </div>
         <h1 className="explore-title">Explore Catalog</h1>
-        <p className="explore-subtitle">Personalized recommendations and vibe mixes tuned to your listening taste.</p>
+        <p className="explore-subtitle">Select a mood to queue songs by genre, or browse top recommended songs for you.</p>
       </div>
 
-      {/* Music Vibes Section */}
+      {/* Mood & Genre Section */}
       <section className="section-container">
         <div className="section-title-row">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h2 className="section-title">Music Vibes</h2>
-            {activeVibe && (
+            <h2 className="section-title">Browse by Mood & Genre</h2>
+            {activeMood && (
               <span style={{ fontSize: '0.72rem', background: 'var(--accent-primary)', color: '#000000', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-pill)', fontWeight: 800 }}>
-                ▶ {activeVibe}
+                ▶ {activeMood} ({activeMoodCount} queued)
               </span>
             )}
           </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Tap to play</span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Tap to queue genre</span>
         </div>
 
         <div className="vibe-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-          {VIBE_CARDS.map((vibe, idx) => {
+          {MOOD_CARDS.map((mood, idx) => {
             const sampleTrack = allTracks[idx % Math.max(1, allTracks.length)];
-            const isActive = activeVibe === vibe.name;
+            const isActive = activeMood === mood.name;
             return (
               <div
-                key={vibe.name}
+                key={mood.id}
                 className={`vibe-card ${isActive ? 'active' : ''}`}
                 style={{
-                  background: vibe.gradient,
+                  background: mood.gradient,
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: 'var(--radius-md)',
@@ -116,7 +184,7 @@ export default function MobileExploreView() {
                   boxShadow: isActive ? '0 0 15px rgba(245, 158, 11, 0.4)' : 'none',
                   transition: 'all 0.25s ease'
                 }}
-                onClick={() => handleVibeClick(vibe)}
+                onClick={() => handleMoodClick(mood)}
               >
                 {sampleTrack && sampleTrack.cover_art_path && (
                   <img
@@ -137,12 +205,12 @@ export default function MobileExploreView() {
                 <div style={{ position: 'relative', zIndex: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span className="vibe-card-title" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', color: '#ffffff' }}>
-                      {vibe.name}
+                      {mood.icon} {mood.name}
                     </span>
                     <IconFlame size={16} color={isActive ? 'var(--accent-primary)' : 'rgba(255,255,255,0.6)'} />
                   </div>
                   <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.75)', marginTop: '0.3rem' }}>
-                    {vibe.sub}
+                    {mood.desc}
                   </span>
                 </div>
               </div>
@@ -151,7 +219,7 @@ export default function MobileExploreView() {
         </div>
       </section>
 
-      {/* Most Recommended Songs Section */}
+      {/* Most Recommended Songs Section (Independent) */}
       <section className="section-container">
         <div className="section-title-row">
           <div>
