@@ -1,6 +1,14 @@
 import { useState, useRef } from 'react';
 import BottomSheet from './BottomSheet';
 import { useAuth } from '../context/AuthContext';
+import {
+  IconUser,
+  IconMusic,
+  IconSparkles,
+  IconShield,
+  IconCamera,
+  IconLogOut
+} from './Icons';
 
 export default function UserProfileModal({ onClose }) {
   const { user, logout, uploadAvatar } = useAuth();
@@ -30,7 +38,7 @@ export default function UserProfileModal({ onClose }) {
 
   return (
     <BottomSheet onClose={onClose}>
-      <div className="profile-header-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div className="profile-header-group">
         <input
           type="file"
           ref={fileInputRef}
@@ -39,117 +47,90 @@ export default function UserProfileModal({ onClose }) {
           style={{ display: 'none' }}
         />
 
+        {/* Avatar with glowing ring and camera hover overlay */}
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="profile-large-avatar"
-          style={{
-            position: 'relative',
-            cursor: 'pointer',
-            overflow: 'hidden',
-            background: 'var(--accent-primary)',
-            color: '#000000',
-            fontWeight: 800,
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '2rem',
-            border: '3px solid rgba(255, 255, 255, 0.2)',
-            marginBottom: '0.75rem'
-          }}
+          className="profile-avatar-container"
           title="Click to upload profile picture"
         >
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={displayName}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          ) : (
-            initial
-          )}
+          <div className="profile-large-avatar">
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              initial
+            )}
 
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background: 'rgba(0, 0, 0, 0.45)',
-              opacity: uploading ? 1 : 0,
-              transition: 'opacity 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              fontSize: '0.8rem'
-            }}
-          >
-            {uploading ? '...' : '📷'}
+            <div className="profile-avatar-overlay">
+              <IconCamera size={22} color="#ffffff" />
+            </div>
           </div>
         </div>
 
+        {/* Change Picture Action Pill */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          style={{
-            background: 'rgba(245, 158, 11, 0.15)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            color: 'var(--accent-primary)',
-            borderRadius: 'var(--radius-pill)',
-            padding: '0.25rem 0.75rem',
-            fontSize: '0.78rem',
-            fontWeight: 700,
-            cursor: 'pointer',
-            marginBottom: '0.75rem'
-          }}
+          className="change-avatar-btn"
         >
-          {uploading ? 'Uploading Picture...' : '📷 Change Profile Picture'}
+          <IconCamera size={14} color="var(--accent-primary)" />
+          <span>{uploading ? 'Uploading Picture...' : 'Change Profile Picture'}</span>
         </button>
 
         <h2 className="profile-name">{displayName}</h2>
         <span className="profile-badge">@{user ? user.username : 'user'}</span>
       </div>
 
-      <div className="profile-info-list" style={{ marginTop: '1rem' }}>
+      {/* Info Card List */}
+      <div className="profile-info-card">
         <div className="profile-info-row">
-          <span className="info-label">Username</span>
-          <span className="info-val">{user?.username || 'Guest'}</span>
+          <div className="info-label-group">
+            <IconUser size={16} color="var(--accent-primary)" />
+            <span className="info-label">Username</span>
+          </div>
+          <span className="info-val">@{user?.username || 'Guest'}</span>
         </div>
 
         <div className="profile-info-row">
-          <span className="info-label">Display Name</span>
+          <div className="info-label-group">
+            <IconSparkles size={16} color="var(--accent-primary)" />
+            <span className="info-label">Display Name</span>
+          </div>
           <span className="info-val">{displayName}</span>
         </div>
 
         <div className="profile-info-row">
-          <span className="info-label">Audio Quality</span>
-          <span className="info-val">High Quality (320kbps MP3/FLAC)</span>
+          <div className="info-label-group">
+            <IconMusic size={16} color="var(--accent-primary)" />
+            <span className="info-label">Audio Quality</span>
+          </div>
+          <span className="info-pill-badge">Hi-Fi 320kbps</span>
         </div>
 
-        <div className="profile-info-row">
-          <span className="info-label">Playback Engine</span>
-          <span className="info-val">HTML5 WebAudio & MediaSession</span>
+        <div className="profile-info-row" style={{ borderBottom: 'none' }}>
+          <div className="info-label-group">
+            <IconShield size={16} color="var(--accent-primary)" />
+            <span className="info-label">Playback Engine</span>
+          </div>
+          <span className="info-val" style={{ fontSize: '0.78rem' }}>HTML5 & MediaSession</span>
         </div>
       </div>
 
+      {/* Footer Actions */}
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
         <button
-          className="rescan-action-btn"
+          className="profile-signout-btn"
           onClick={handleLogout}
-          style={{
-            flex: 1,
-            background: 'rgba(239, 68, 68, 0.15)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#fca5a5'
-          }}
         >
+          <IconLogOut size={16} color="#ef4444" />
           Sign Out
         </button>
         <button
-          className="rescan-action-btn"
+          className="profile-done-btn"
           onClick={onClose}
-          style={{ flex: 1 }}
         >
           Done
         </button>
