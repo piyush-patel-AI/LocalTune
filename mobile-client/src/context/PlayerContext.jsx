@@ -155,7 +155,7 @@ export function PlayerProvider({ children }) {
     if (!initialHydratedRef.current && currentTrack) {
       initialHydratedRef.current = true;
       const audio = audioRef.current;
-      audio.src = `/stream/${currentTrack.id}`;
+      audio.src = `/stream/${currentTrack.id}?ngrok-skip-browser-warning=69420`;
       audio.currentTime = currentTime;
     }
   }, [currentTrack]);
@@ -292,7 +292,7 @@ export function PlayerProvider({ children }) {
     });
 
     const audio = audioRef.current;
-    audio.src = `/stream/${track.id}`;
+    audio.src = `/stream/${track.id}?ngrok-skip-browser-warning=69420`;
     audio.load();
     audio.play().catch((err) => console.error('Audio playback error:', err));
 

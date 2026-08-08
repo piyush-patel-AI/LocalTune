@@ -43,6 +43,12 @@ app.use(cors({
   credentials: true
 }));
 
+// Set Ngrok skip browser warning header on all responses
+app.use((req, res, next) => {
+  res.setHeader('ngrok-skip-browser-warning', '69420');
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

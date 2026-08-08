@@ -119,7 +119,7 @@ export const PlayerProvider = ({ children }) => {
   // Restore audio source & seek position on initial mount
   useEffect(() => {
     if (currentTrack && audioRef.current) {
-      audioRef.current.src = `/stream/${currentTrack.id}`;
+      audioRef.current.src = `/stream/${currentTrack.id}?ngrok-skip-browser-warning=69420`;
     }
   }, []);
 
@@ -397,7 +397,7 @@ export const PlayerProvider = ({ children }) => {
     setCurrentTrack(track);
     const audio = audioRef.current;
     if (audio) {
-      const streamUrl = `/stream/${track.id}`;
+      const streamUrl = `/stream/${track.id}?ngrok-skip-browser-warning=69420`;
       try {
         audio.pause();
         audio.removeAttribute('src');
