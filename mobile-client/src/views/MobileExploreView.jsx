@@ -279,11 +279,11 @@ export default function MobileExploreView() {
                     <h3 className="spotlight-title">{spot.title}</h3>
                     <p className="spotlight-sub">{spot.sub}</p>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#ffffff', opacity: 0.9, fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#ffffff', opacity: 0.9, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'calc(100% - 44px)' }}>
                       {sampleTrack ? `${sampleTrack.title} • ${sampleTrack.artist}` : 'Curated Mix'}
                     </span>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', flexShrink: 0 }}>
                       <IconPlay size={16} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
                     </div>
                   </div>

@@ -612,7 +612,7 @@ export default function MobileLibraryView() {
       {/* Main Content Area (Grid vs. List View rendering) */}
 
       {/* Liked Songs Hero / Track List */}
-      {(activeTab === 'all' || activeTab === 'liked') && (
+      {activeTab === 'liked' && (
         <section className="section-container" style={{ marginBottom: '1.25rem' }}>
           <div
             className="liked-songs-hero-banner"
