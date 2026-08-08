@@ -15,7 +15,7 @@ import {
 const CATEGORIES = ['All', 'Chill', 'Energy', 'Focus', 'Workout', 'Late Night', 'Acoustic'];
 
 export default function MobileHomeView() {
-  const { currentTrack, isPlaying, playTrack, togglePlay, recentlyPlayed, favoritesMap, toggleFavorite } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlay, recentlyPlayed, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
   const [allTracks, setAllTracks] = useState([]);
   const [recommendedTracks, setRecommendedTracks] = useState([]);
@@ -220,12 +220,18 @@ export default function MobileHomeView() {
         <section className="section-container">
           <div className="section-title-row">
             <h2 className="section-title">Favorite Artists</h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>From Library</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Personalized</span>
           </div>
 
           <div className="artist-circle-list">
             {topArtists.map((art, idx) => (
-              <div key={`${art.artist}-${idx}`} className="artist-circle-item">
+              <div
+                key={`${art.artist}-${idx}`}
+                className="artist-circle-item"
+                onClick={() => navigateToArtist(art)}
+                style={{ cursor: 'pointer' }}
+                title={`View ${art.artist}`}
+              >
                 <div className="artist-avatar-ring">
                   {art.artist_image_path ? (
                     <img

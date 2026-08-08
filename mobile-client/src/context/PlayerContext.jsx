@@ -95,6 +95,36 @@ export function PlayerProvider({ children }) {
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
 
+  // Settings & Navigation State
+  const [selectedArtistForView, setSelectedArtistForView] = useState(null);
+  const [ambientBgEnabled, setAmbientBgEnabled] = useState(() => {
+    return localStorage.getItem('localTune_ambientBgEnabled') !== 'false';
+  });
+  const [crossfade, setCrossfade] = useState(() => {
+    return parseInt(localStorage.getItem('localTune_crossfade') || '0', 10);
+  });
+  const [normalizeVolume, setNormalizeVolume] = useState(() => {
+    return localStorage.getItem('localTune_normalizeVolume') !== 'false';
+  });
+  const [autoplay, setAutoplay] = useState(() => {
+    return localStorage.getItem('localTune_autoplay') !== 'false';
+  });
+  const [recommendationMode, setRecommendationMode] = useState(() => {
+    return localStorage.getItem('localTune_recMode') || 'Default';
+  });
+  const [discoveryMode, setDiscoveryMode] = useState(() => {
+    return localStorage.getItem('localTune_discoveryMode') === 'true';
+  });
+  const [audioQuality, setAudioQuality] = useState(() => {
+    return localStorage.getItem('localTune_audioQuality') || 'High';
+  });
+
+  const navigateToArtist = (artistData) => {
+    if (!artistData) return;
+    const artistObj = typeof artistData === 'string' ? { artist: artistData } : artistData;
+    setSelectedArtistForView(artistObj);
+  };
+
   const audioRef = useRef(new Audio());
   const initialHydratedRef = useRef(false);
 
@@ -164,12 +194,17 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     let isCancelled = false;
 
+    if (!ambientBgEnabled) {
+      applyAmbientColorsToDOM(getDefaultAmbientColors());
+      return;
+    }
+
     if (currentTrack) {
       localStorage.setItem('localTune_currentTrack', JSON.stringify(currentTrack));
       const artUrl = currentTrack.coverUrl || currentTrack.cover_art_url || `/api/tracks/${currentTrack.id}/art`;
       
       extractColorsFromAlbumArt(artUrl).then((colors) => {
-        if (!isCancelled) {
+        if (!isCancelled && ambientBgEnabled) {
           applyAmbientColorsToDOM(colors);
         }
       });
@@ -181,7 +216,35 @@ export function PlayerProvider({ children }) {
     return () => {
       isCancelled = true;
     };
-  }, [currentTrack]);
+  }, [currentTrack, ambientBgEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_ambientBgEnabled', ambientBgEnabled ? 'true' : 'false');
+  }, [ambientBgEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_crossfade', crossfade.toString());
+  }, [crossfade]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_normalizeVolume', normalizeVolume ? 'true' : 'false');
+  }, [normalizeVolume]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_autoplay', autoplay ? 'true' : 'false');
+  }, [autoplay]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_recMode', recommendationMode);
+  }, [recommendationMode]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_discoveryMode', discoveryMode ? 'true' : 'false');
+  }, [discoveryMode]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_audioQuality', audioQuality);
+  }, [audioQuality]);
 
   useEffect(() => {
     localStorage.setItem('localTune_queue', JSON.stringify(queue));
@@ -311,8 +374,6 @@ export function PlayerProvider({ children }) {
       audio.play().catch((err) => console.error('Playback error:', err));
     }
   };
-
-  const [autoplay, setAutoplay] = useState(true);
 
   const fetchAutoplayTracks = async () => {
     try {
@@ -575,6 +636,21 @@ export function PlayerProvider({ children }) {
         repeat: repeatMode,
         autoplay,
         setAutoplay,
+        selectedArtistForView,
+        setSelectedArtistForView,
+        navigateToArtist,
+        ambientBgEnabled,
+        setAmbientBgEnabled,
+        crossfade,
+        setCrossfade,
+        normalizeVolume,
+        setNormalizeVolume,
+        recommendationMode,
+        setRecommendationMode,
+        discoveryMode,
+        setDiscoveryMode,
+        audioQuality,
+        setAudioQuality,
         isRepeating: repeatMode !== 'off',
         isNowPlayingOpen,
         isQueueOpen,

@@ -4,17 +4,20 @@ import { IconFlame, IconMusic, IconPlay, IconHeart, IconMoreVertical, IconSparkl
 import TrackActionSheet from '../components/TrackActionSheet';
 
 const VIBE_CARDS = [
-  { name: 'Late Night Vinyl', sub: 'Analog Warmth & Chill', gradient: 'linear-gradient(135deg, rgba(49, 46, 129, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Melancholy Dreams', sub: 'Atmospheric Soundscapes', gradient: 'linear-gradient(135deg, rgba(12, 74, 110, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Deep Focus Work', sub: 'Ambient Electronic', gradient: 'linear-gradient(135deg, rgba(6, 78, 59, 0.85), rgba(15, 23, 42, 0.95))' },
-  { name: 'Pure Energy Boost', sub: 'Upbeat High Fidelity', gradient: 'linear-gradient(135deg, rgba(124, 45, 18, 0.85), rgba(15, 23, 42, 0.95))' }
+  { name: 'Late Night Vinyl', mode: 'Relax', sub: 'Analog Warmth & Chill', gradient: 'linear-gradient(135deg, rgba(49, 46, 129, 0.85), rgba(15, 23, 42, 0.95))' },
+  { name: 'Melancholy Dreams', mode: 'Relax', sub: 'Atmospheric Soundscapes', gradient: 'linear-gradient(135deg, rgba(12, 74, 110, 0.85), rgba(15, 23, 42, 0.95))' },
+  { name: 'Deep Focus Work', mode: 'Focus', sub: 'Ambient Instrumental', gradient: 'linear-gradient(135deg, rgba(6, 78, 59, 0.85), rgba(15, 23, 42, 0.95))' },
+  { name: 'Pure Energy Boost', mode: 'Energy', sub: 'Upbeat High Fidelity', gradient: 'linear-gradient(135deg, rgba(124, 45, 18, 0.85), rgba(15, 23, 42, 0.95))' },
+  { name: 'Workout Heat', mode: 'Workout', sub: 'High Tempo Cardio', gradient: 'linear-gradient(135deg, rgba(190, 18, 60, 0.85), rgba(15, 23, 42, 0.95))' },
+  { name: 'Retro Throwback', mode: 'Throwback', sub: 'Classic Library Cuts', gradient: 'linear-gradient(135deg, rgba(109, 40, 217, 0.85), rgba(15, 23, 42, 0.95))' }
 ];
 
 export default function MobileExploreView() {
-  const { playTrack, favoritesMap, toggleFavorite } = usePlayer();
+  const { playTrack, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
   const [allTracks, setAllTracks] = useState([]);
-  const [selectedHits, setSelectedHits] = useState([]);
+  const [recommendedTracks, setRecommendedTracks] = useState([]);
   const [selectedActionTrack, setSelectedActionTrack] = useState(null);
+  const [activeVibe, setActiveVibe] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export default function MobileExploreView() {
 
       if (recsRes.ok) {
         const recsData = await recsRes.json();
-        setSelectedHits(recsData.recommendations || []);
+        setRecommendedTracks(recsData.recommendations || recsData.tracks || []);
       }
     } catch (err) {
       console.error('Error fetching explore data:', err);
@@ -45,10 +48,31 @@ export default function MobileExploreView() {
     }
   };
 
-  const featuredList = selectedHits.length > 0 ? selectedHits.slice(0, 8) : allTracks.slice(0, 8);
+  const handleVibeClick = async (vibe) => {
+    setActiveVibe(vibe.name);
+    try {
+      const res = await fetch(`/api/tracks/recommendations?mode=${vibe.mode}`, { credentials: 'include' });
+      let vibeTracks = [];
+      if (res.ok) {
+        const data = await res.json();
+        vibeTracks = data.recommendations || data.tracks || [];
+      }
+      if (!vibeTracks || vibeTracks.length === 0) {
+        vibeTracks = allTracks;
+      }
+      if (vibeTracks.length > 0) {
+        playTrack(vibeTracks[0], vibeTracks);
+      }
+    } catch (e) {
+      console.error('Error triggering vibe mix:', e);
+      if (allTracks.length > 0) playTrack(allTracks[0], allTracks);
+    }
+  };
+
+  const mostRecommended = recommendedTracks.length > 0 ? recommendedTracks.slice(0, 10) : allTracks.slice(0, 10);
 
   return (
-    <div className="mobile-explore animate-fade-in" style={{ padding: '0 0 2rem 0' }}>
+    <div className="mobile-explore animate-fade-in" style={{ padding: '0 0 2.5rem 0' }}>
       {/* Explore Hero Banner */}
       <div className="explore-banner" style={{ margin: '0.75rem 1.25rem 1.5rem 1.25rem' }}>
         <div className="banner-icon-chip">
@@ -56,33 +80,43 @@ export default function MobileExploreView() {
           <span>CURATED MUSIC VIBES</span>
         </div>
         <h1 className="explore-title">Explore Catalog</h1>
-        <p className="explore-subtitle">Discover curated vibe mixes sampled directly from your high-fidelity music library.</p>
+        <p className="explore-subtitle">Personalized recommendations and vibe mixes tuned to your listening taste.</p>
       </div>
 
-      {/* Vibe & Mood Cards (Sampled Album Art Texture & Dark Glass Gradients) */}
+      {/* Music Vibes Section */}
       <section className="section-container">
         <div className="section-title-row">
-          <h2 className="section-title">Music Vibes</h2>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Sampled</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <h2 className="section-title">Music Vibes</h2>
+            {activeVibe && (
+              <span style={{ fontSize: '0.72rem', background: 'var(--accent-primary)', color: '#000000', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-pill)', fontWeight: 800 }}>
+                ▶ {activeVibe}
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Tap to play</span>
         </div>
 
-        <div className="vibe-grid">
+        <div className="vibe-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
           {VIBE_CARDS.map((vibe, idx) => {
             const sampleTrack = allTracks[idx % Math.max(1, allTracks.length)];
+            const isActive = activeVibe === vibe.name;
             return (
               <div
                 key={vibe.name}
-                className="vibe-card"
-                style={{ background: vibe.gradient, position: 'relative', overflow: 'hidden' }}
-                onClick={() => {
-                  const keyword = vibe.name.split(' ')[0].toLowerCase();
-                  const filtered = allTracks.filter((t) =>
-                    (t.genre && t.genre.toLowerCase().includes(keyword)) ||
-                    (t.title && t.title.toLowerCase().includes(keyword))
-                  );
-                  if (filtered.length > 0) playTrack(filtered[0], filtered);
-                  else if (allTracks.length > 0) playTrack(allTracks[0], allTracks);
+                className={`vibe-card ${isActive ? 'active' : ''}`}
+                style={{
+                  background: vibe.gradient,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  cursor: 'pointer',
+                  border: isActive ? '2px solid var(--accent-primary)' : '1px solid var(--glass-border)',
+                  boxShadow: isActive ? '0 0 15px rgba(245, 158, 11, 0.4)' : 'none',
+                  transition: 'all 0.25s ease'
                 }}
+                onClick={() => handleVibeClick(vibe)}
               >
                 {sampleTrack && sampleTrack.cover_art_path && (
                   <img
@@ -101,8 +135,15 @@ export default function MobileExploreView() {
                   />
                 )}
                 <div style={{ position: 'relative', zIndex: 2 }}>
-                  <span className="vibe-card-title">{vibe.name}</span>
-                  <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', marginTop: '0.2rem' }}>{vibe.sub}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span className="vibe-card-title" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', color: '#ffffff' }}>
+                      {vibe.name}
+                    </span>
+                    <IconFlame size={16} color={isActive ? 'var(--accent-primary)' : 'rgba(255,255,255,0.6)'} />
+                  </div>
+                  <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.75)', marginTop: '0.3rem' }}>
+                    {vibe.sub}
+                  </span>
                 </div>
               </div>
             );
@@ -110,41 +151,84 @@ export default function MobileExploreView() {
         </div>
       </section>
 
-      {/* Selected Hits & Recommended Carousel */}
+      {/* Most Recommended Songs Section */}
       <section className="section-container">
         <div className="section-title-row">
-          <h2 className="section-title">Selected Hits</h2>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Top Picks</span>
+          <div>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              Most Recommended For You
+            </h2>
+          </div>
+          <span style={{ fontSize: '0.74rem', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-primary)', padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>
+            🔥 Highest Rec Score
+          </span>
         </div>
 
-        <div className="horizontal-card-list">
-          {featuredList.map((track) => (
-            <div
-              key={track.id}
-              className="media-card"
-              onClick={() => playTrack(track, featuredList)}
-            >
-              <div className="media-card-art-box">
-                {track.cover_art_path ? (
-                  <img
-                    src={`/api/tracks/${track.id}/art`}
-                    alt={track.title}
-                    className="media-card-art"
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                ) : (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.05)' }}>
-                    <IconMusic size={36} color="var(--accent-primary)" />
+        <div className="horizontal-card-list" style={{ display: 'flex', gap: '0.85rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+          {mostRecommended.map((track, idx) => {
+            const matchScore = track.recommendationScore ? Math.round(track.recommendationScore * 100) : (99 - idx * 2);
+            return (
+              <div
+                key={track.id}
+                className="media-card"
+                style={{ flexShrink: 0, width: '140px', cursor: 'pointer' }}
+                onClick={() => playTrack(track, mostRecommended)}
+              >
+                <div className="media-card-art-box" style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', aspectRatio: '1/1' }}>
+                  {track.cover_art_path ? (
+                    <img
+                      src={`/api/tracks/${track.id}/art`}
+                      alt={track.title}
+                      className="media-card-art"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.05)' }}>
+                      <IconMusic size={36} color="var(--accent-primary)" />
+                    </div>
+                  )}
+
+                  {/* Rec Score Badge */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '6px',
+                    left: '6px',
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(6px)',
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-pill)',
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                    color: 'var(--accent-primary)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)'
+                  }}>
+                    {matchScore}% Match
                   </div>
-                )}
-                <div className="media-card-play-hover">
-                  <IconPlay size={20} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
+
+                  <div className="media-card-play-hover">
+                    <IconPlay size={20} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '0.5rem' }}>
+                  <span className="media-card-title" style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {track.title}
+                  </span>
+                  <span
+                    className="media-card-sub"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateToArtist(track.artist);
+                    }}
+                    style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                  >
+                    {track.artist}
+                  </span>
                 </div>
               </div>
-              <span className="media-card-title">{track.title}</span>
-              <span className="media-card-sub">{track.artist}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -156,7 +240,7 @@ export default function MobileExploreView() {
         </div>
 
         {loading ? (
-          <div style={{ color: 'var(--text-muted)', padding: '1rem 0' }}>Loading catalog...</div>
+          <div style={{ color: 'var(--text-muted)', padding: '1rem 0', textAlign: 'center' }}>Loading catalog...</div>
         ) : (
           <div className="quick-picks-list">
             {allTracks.map((track) => {
@@ -166,6 +250,7 @@ export default function MobileExploreView() {
                   key={track.id}
                   className="quick-pick-row"
                   onClick={() => playTrack(track, allTracks)}
+                  style={{ cursor: 'pointer' }}
                 >
                   <div className="row-main-info">
                     {track.cover_art_path ? (
@@ -181,8 +266,17 @@ export default function MobileExploreView() {
                       </div>
                     )}
                     <div className="row-text">
-                      <span className="row-title">{track.title}</span>
-                      <span className="row-artist">{track.artist} • {track.album || 'Single'}</span>
+                      <span className="row-title" style={{ fontWeight: 700, color: '#ffffff' }}>{track.title}</span>
+                      <span
+                        className="row-artist"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigateToArtist(track.artist);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {track.artist} • {track.album || 'Single'}
+                      </span>
                     </div>
                   </div>
 

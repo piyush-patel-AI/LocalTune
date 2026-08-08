@@ -16,7 +16,7 @@ import {
 } from '../components/Icons';
 
 export default function MobileLibraryView() {
-  const { playTrack, favoritesMap } = usePlayer();
+  const { playTrack, favoritesMap, selectedArtistForView, setSelectedArtistForView } = usePlayer();
   const [activeTab, setActiveTab] = useState('all'); // all | playlists | albums | artists | liked
   const [playlists, setPlaylists] = useState([]);
   const [artists, setArtists] = useState([]);
@@ -28,6 +28,16 @@ export default function MobileLibraryView() {
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+
+  useEffect(() => {
+    if (selectedArtistForView) {
+      if (typeof selectedArtistForView === 'string') {
+        setSelectedArtist({ artist: selectedArtistForView });
+      } else {
+        setSelectedArtist(selectedArtistForView);
+      }
+    }
+  }, [selectedArtistForView]);
 
   useEffect(() => {
     fetchLibraryData();
@@ -255,13 +265,20 @@ export default function MobileLibraryView() {
   // Sub-view: Artist Detail View
   if (selectedArtist) {
     const tracksList = Array.isArray(allTracks) ? allTracks : (allTracks?.tracks || []);
-    const artistTracks = tracksList.filter((t) => t.artist === selectedArtist.artist);
+    const artistNameLower = (selectedArtist.artist || '').toLowerCase();
+    const artistTracks = tracksList.filter((t) =>
+      t.artist === selectedArtist.artist ||
+      (t.artist && t.artist.toLowerCase().includes(artistNameLower))
+    );
     const artistAlbums = Array.from(new Set(artistTracks.map((t) => t.album || 'Unknown Album')));
 
     return (
       <div className="mobile-library animate-fade-in" style={{ padding: '1.25rem' }}>
         <button
-          onClick={() => setSelectedArtist(null)}
+          onClick={() => {
+            setSelectedArtist(null);
+            if (setSelectedArtistForView) setSelectedArtistForView(null);
+          }}
           style={{
             background: 'rgba(255, 255, 255, 0.08)',
             border: '1px solid var(--glass-border-hover)',

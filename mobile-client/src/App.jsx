@@ -33,13 +33,20 @@ function AppContent() {
     openNowPlaying,
     favoritesMap,
     toggleFavorite,
-    openQueue
+    openQueue,
+    selectedArtistForView
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('home');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(false);
+
+  useEffect(() => {
+    if (selectedArtistForView) {
+      setActiveTab('library');
+    }
+  }, [selectedArtistForView]);
 
   if (loading) {
     return (
