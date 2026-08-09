@@ -24,6 +24,13 @@ class LocalTuneNativeBridge {
     // Attach to global window object
     if (typeof window !== 'undefined') {
       window.LocalTuneBridge = this;
+      window.localTuneBridge = {
+        play: () => this.playback.play(),
+        pause: () => this.playback.pause(),
+        next: () => this.playback.next(),
+        prev: () => this.playback.prev(),
+        toggle: () => this.playback.toggle()
+      };
     }
 
     // Emit bridge.ready event for Native Android wrapper
