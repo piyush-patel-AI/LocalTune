@@ -1642,6 +1642,9 @@ body {
   padding-bottom: 0.75rem;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 .quick-filter-bar::-webkit-scrollbar {
@@ -1688,6 +1691,9 @@ body {
   padding-bottom: 0.5rem;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
 }
 
 .spotlight-carousel::-webkit-scrollbar {

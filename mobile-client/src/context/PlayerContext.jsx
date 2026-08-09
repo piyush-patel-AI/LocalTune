@@ -666,9 +666,15 @@ export function PlayerProvider({ children }) {
         toggleRepeat,
         seekTrack,
         toggleFavorite,
-        openNowPlaying: () => setIsNowPlayingOpen(true),
+        openNowPlaying: () => {
+          try { window.history.pushState({ localTuneModal: 'nowplaying' }, ''); } catch (e) {}
+          setIsNowPlayingOpen(true);
+        },
         closeNowPlaying: () => setIsNowPlayingOpen(false),
-        openQueue: () => setIsQueueOpen(true),
+        openQueue: () => {
+          try { window.history.pushState({ localTuneModal: 'queue' }, ''); } catch (e) {}
+          setIsQueueOpen(true);
+        },
         closeQueue: () => setIsQueueOpen(false),
         setVolume
       }}

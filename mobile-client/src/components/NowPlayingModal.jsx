@@ -51,9 +51,10 @@ export default function NowPlayingModal() {
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
   const [isAddToPlaylistOpen, setIsAddToPlaylistOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [dragY, setDragY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
+  const overlayRef = useRef(null);
   const startYRef = useRef(0);
+  const currentYRef = useRef(0);
+  const isDraggingRef = useRef(false);
 
   if (!isNowPlayingOpen || !currentTrack) return null;
 
@@ -72,38 +73,49 @@ export default function NowPlayingModal() {
   };
 
   const handleStart = (e) => {
-    if (e.target.closest('button, input, a')) return;
+    if (e.target.closest('button, input, a, range')) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-    setIsDragging(true);
+    currentYRef.current = 0;
+    isDraggingRef.current = true;
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = 'none';
+    }
   };
 
   const handleMove = (e) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const deltaY = clientY - startYRef.current;
     if (deltaY > 0) {
-      setDragY(deltaY);
+      currentYRef.current = deltaY;
+      if (overlayRef.current) {
+        overlayRef.current.style.transform = `translate3d(0, ${deltaY}px, 0)`;
+      }
     }
   };
 
   const handleEnd = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    if (dragY > 120) {
-      setDragY(500);
-      setTimeout(() => {
-        closeNowPlaying();
-        setDragY(0);
-      }, 150);
-    } else {
-      setDragY(0);
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      if (currentYRef.current > 120) {
+        overlayRef.current.style.transform = 'translate3d(0, 100vh, 0)';
+        setTimeout(() => {
+          closeNowPlaying();
+          if (overlayRef.current) overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
+        }, 180);
+      } else {
+        overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
+      }
     }
   };
 
   return (
     <>
       <div
+        ref={overlayRef}
         className="now-playing-overlay"
         onTouchStart={handleStart}
         onTouchMove={handleMove}
@@ -111,10 +123,6 @@ export default function NowPlayingModal() {
         onMouseDown={handleStart}
         onMouseMove={handleMove}
         onMouseUp={handleEnd}
-        style={{
-          transform: `translateY(${dragY}px)`,
-          transition: isDragging ? 'none' : 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
-        }}
       >
         {/* Background Ambient Blur */}
         {currentTrack.cover_art_path && (

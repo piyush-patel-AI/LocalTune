@@ -31,10 +31,15 @@ function AppContent() {
     isPlaying,
     togglePlay,
     openNowPlaying,
+    closeNowPlaying,
+    isNowPlayingOpen,
+    openQueue,
+    closeQueue,
+    isQueueOpen,
     favoritesMap,
     toggleFavorite,
-    openQueue,
-    selectedArtistForView
+    selectedArtistForView,
+    setSelectedArtistForView
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('home');
@@ -47,6 +52,87 @@ function AppContent() {
       setActiveTab('library');
     }
   }, [selectedArtistForView]);
+
+  // Intercept Mobile Browser & Android Hardware Back Button
+  useEffect(() => {
+    if (!window.history.state || !window.history.state.localTuneRoot) {
+      try { window.history.replaceState({ localTuneRoot: true }, ''); } catch (e) {}
+    }
+
+    const handlePopState = () => {
+      // 1. Now Playing Modal
+      if (isNowPlayingOpen) {
+        closeNowPlaying();
+        return;
+      }
+      // 2. Playing Queue Modal
+      if (isQueueOpen) {
+        closeQueue();
+        return;
+      }
+      // 3. Search Modal
+      if (showSearchModal) {
+        setShowSearchModal(false);
+        return;
+      }
+      // 4. User Profile Modal
+      if (showProfileModal) {
+        setShowProfileModal(false);
+        return;
+      }
+      // 5. Add to Playlist Modal
+      if (showAddToPlaylistModal) {
+        setShowAddToPlaylistModal(false);
+        return;
+      }
+      // 6. Selected Artist Subview
+      if (selectedArtistForView) {
+        setSelectedArtistForView(null);
+        return;
+      }
+      // 7. Non-Home Navigation Tab
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [
+    isNowPlayingOpen,
+    isQueueOpen,
+    showSearchModal,
+    showProfileModal,
+    showAddToPlaylistModal,
+    selectedArtistForView,
+    activeTab,
+    closeNowPlaying,
+    closeQueue,
+    setSelectedArtistForView
+  ]);
+
+  const handleNavTabClick = (tab) => {
+    if (activeTab !== tab) {
+      try { window.history.pushState({ localTuneTab: tab }, ''); } catch (e) {}
+      setActiveTab(tab);
+    }
+  };
+
+  const handleOpenSearch = () => {
+    try { window.history.pushState({ localTuneModal: 'search' }, ''); } catch (e) {}
+    setShowSearchModal(true);
+  };
+
+  const handleOpenProfile = () => {
+    try { window.history.pushState({ localTuneModal: 'profile' }, ''); } catch (e) {}
+    setShowProfileModal(true);
+  };
+
+  const handleOpenAddToPlaylist = () => {
+    try { window.history.pushState({ localTuneModal: 'addtoplaylist' }, ''); } catch (e) {}
+    setShowAddToPlaylistModal(true);
+  };
 
   if (loading) {
     return (
@@ -85,7 +171,7 @@ function AppContent() {
           <button
             className="icon-btn"
             title="Search Catalog"
-            onClick={() => setShowSearchModal(true)}
+            onClick={handleOpenSearch}
           >
             <IconSearch size={20} />
           </button>
@@ -93,7 +179,7 @@ function AppContent() {
           <div
             className="user-avatar"
             title="User Profile"
-            onClick={() => setShowProfileModal(true)}
+            onClick={handleOpenProfile}
             style={{ cursor: 'pointer', overflow: 'hidden', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             {user?.avatarUrl ? (
@@ -142,7 +228,7 @@ function AppContent() {
           <div className="mini-controls" onClick={(e) => e.stopPropagation()}>
             <button
               className="mini-btn"
-              onClick={() => setShowAddToPlaylistModal(true)}
+              onClick={handleOpenAddToPlaylist}
               title="Add to Playlist"
             >
               <IconPlus size={20} color="var(--accent-primary)" />
@@ -202,7 +288,7 @@ function AppContent() {
       <nav className="bottom-nav-bar">
         <button
           className={`nav-tab-item ${activeTab === 'home' ? 'active' : ''}`}
-          onClick={() => setActiveTab('home')}
+          onClick={() => handleNavTabClick('home')}
         >
           <IconHome size={20} color={activeTab === 'home' ? '#ffffff' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Home</span>
@@ -210,7 +296,7 @@ function AppContent() {
 
         <button
           className={`nav-tab-item ${activeTab === 'explore' ? 'active' : ''}`}
-          onClick={() => setActiveTab('explore')}
+          onClick={() => handleNavTabClick('explore')}
         >
           <IconExplore size={20} color={activeTab === 'explore' ? '#ffffff' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Explore</span>
@@ -218,7 +304,7 @@ function AppContent() {
 
         <button
           className={`nav-tab-item ${activeTab === 'library' ? 'active' : ''}`}
-          onClick={() => setActiveTab('library')}
+          onClick={() => handleNavTabClick('library')}
         >
           <IconLibrary size={20} color={activeTab === 'library' ? '#ffffff' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Library</span>
@@ -226,7 +312,7 @@ function AppContent() {
 
         <button
           className={`nav-tab-item ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+          onClick={() => handleNavTabClick('settings')}
         >
           <IconMusic size={20} color={activeTab === 'settings' ? '#ffffff' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Settings</span>
