@@ -29,7 +29,8 @@ class LocalTuneNativeBridge {
         pause: () => this.playback.pause(),
         next: () => this.playback.next(),
         prev: () => this.playback.prev(),
-        toggle: () => this.playback.toggle()
+        toggle: () => this.playback.toggle(),
+        seek: (seconds) => this.playback.seek(seconds)
       };
     }
 
