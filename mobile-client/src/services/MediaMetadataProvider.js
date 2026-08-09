@@ -5,11 +5,14 @@
 
 export function getArtworkUrl(track, requestedSize = 512) {
   if (!track) return '';
-  if (track.coverUrl) return track.coverUrl;
-  if (track.cover_art_url) return track.cover_art_url;
-  
-  // Return standard cover art endpoint with optional size parameter & ngrok bypass
-  return `/api/tracks/${track.id}/art?size=${requestedSize}&ngrok-skip-browser-warning=69420`;
+  let url = track.coverUrl || track.cover_art_url || `/api/tracks/${track.id}/art?size=${requestedSize}&ngrok-skip-browser-warning=69420`;
+
+  if (typeof window !== 'undefined' && !url.startsWith('http://') && !url.startsWith('https://')) {
+    try {
+      url = new URL(url, window.location.href).href;
+    } catch (e) {}
+  }
+  return url;
 }
 
 export function getMultiSizeArtwork(track) {
