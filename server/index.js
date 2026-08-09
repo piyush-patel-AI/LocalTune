@@ -13,6 +13,7 @@ import playlistsRoutes from './routes/playlists.js';
 import favoritesRoutes from './routes/favorites.js';
 import streamRoutes from './routes/stream.js';
 import statsRoutes from './routes/stats.js';
+import { getTrackById } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { uploadFieldsMiddleware, handleUploadTrack } from './uploader.js';
 
@@ -28,16 +29,19 @@ const PORT = process.env.PORT || 5000;
 try {
   const assetLogo = path.join(__dirname, '../Assets/logo.png');
   const publicDir = path.join(__dirname, '../client/public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
+  }
   if (fs.existsSync(assetLogo)) {
-    if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
     fs.copyFileSync(assetLogo, path.join(publicDir, 'logo.png'));
     fs.copyFileSync(assetLogo, path.join(publicDir, 'favicon.png'));
     console.log('[LocalTune Server] Synced logo.png & favicon.png to client/public');
   }
-} catch (err) {
-  console.error('[Logo Sync Error]', err);
+} catch (e) {
+  console.warn('[LocalTune Server] Could not sync logo asset:', e.message);
 }
 
+// CORS setup
 app.use(cors({
   origin: true,
   credentials: true
@@ -54,7 +58,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Session middleware
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'localtune_dev_secret_key_change_in_prod',
+  secret: process.env.SESSION_SECRET || 'localtune_super_secret_key_2026',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -75,6 +79,34 @@ app.get('/api/logo', (req, res) => {
   } else {
     res.status(404).send('Logo not found');
   }
+});
+
+// Public Track Artwork Endpoint for Native Mobile Apps & System Widgets
+app.get('/api/tracks/:id/art', (req, res) => {
+  res.setHeader('ngrok-skip-browser-warning', '69420');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+
+  const trackId = parseInt(req.params.id, 10);
+  const logoPath = path.join(__dirname, '../Assets/logo.png');
+
+  if (isNaN(trackId)) {
+    return fs.existsSync(logoPath) ? res.sendFile(logoPath) : res.status(400).send('Invalid ID');
+  }
+
+  try {
+    const track = getTrackById(trackId);
+    if (track && track.cover_art_path && fs.existsSync(track.cover_art_path)) {
+      return res.sendFile(track.cover_art_path);
+    }
+  } catch (e) {
+    console.error('Error serving artwork:', e);
+  }
+
+  if (fs.existsSync(logoPath)) {
+    return res.sendFile(logoPath);
+  }
+  return res.status(404).send('Artwork not found');
 });
 
 app.get('/api/health', (req, res) => {

@@ -529,12 +529,18 @@ export function PlayerProvider({ children }) {
     const controller = {
       play: () => {
         if (audioRef.current && currentTrackRef.current) {
-          audioRef.current.play().then(() => {
-            setIsPlaying(true);
-            LocalTuneEvents.emit('playback.started', { track: currentTrackRef.current });
-          }).catch(err => {
-            LocalTuneEvents.emit('bridge.error', { message: err.message, type: 'PLAY_FAILED' });
-          });
+          const promise = audioRef.current.play();
+          if (promise !== undefined) {
+            promise.then(() => {
+              setIsPlaying(true);
+              LocalTuneEvents.emit('playback.started', { track: currentTrackRef.current });
+            }).catch(err => {
+              console.warn('[Bridge Play Retry] audio.play() promise rejected, re-loading track stream:', err);
+              if (currentTrackRef.current) {
+                playTrack(currentTrackRef.current, null, false);
+              }
+            });
+          }
         }
       },
       pause: () => {
