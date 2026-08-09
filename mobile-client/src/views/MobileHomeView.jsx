@@ -300,12 +300,14 @@ export default function MobileHomeView() {
                               src={`/api/tracks/${track.id}/art`}
                               alt={track.title}
                               className="tile-art"
-                              onError={(e) => { e.target.style.display = 'none'; }}
+                              onError={(e) => { e.target.src = '/logo.png'; }}
                             />
                           ) : (
-                            <div className="tile-art-fallback">
-                              <IconMusic size={isHeroTile ? 36 : 22} color="var(--accent-primary)" />
-                            </div>
+                            <img
+                              src="/logo.png"
+                              alt={track.title}
+                              className="tile-art"
+                            />
                           )}
                           <div className="tile-gradient-overlay">
                             <span className="tile-overlay-text">{track.title}</span>
@@ -375,12 +377,14 @@ export default function MobileHomeView() {
                         src={`/api/tracks/${track.id}/art`}
                         alt={track.title}
                         className="row-art"
-                        onError={(e) => { e.target.style.display = 'none'; }}
+                        onError={(e) => { e.target.src = '/logo.png'; }}
                       />
                     ) : (
-                      <div className="row-art-fallback">
-                        <IconMusic size={20} color="var(--accent-primary)" />
-                      </div>
+                      <img
+                        src="/logo.png"
+                        alt={track.title}
+                        className="row-art"
+                      />
                     )}
                     <div className="row-text">
                       <span className="row-title">{track.title}</span>
