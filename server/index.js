@@ -81,6 +81,37 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'LocalTune server is running' });
 });
 
+let currentPlaybackState = {
+  title: "LocalTune",
+  artist: "Streaming Music",
+  album: "LocalTune",
+  artUrl: "/api/logo",
+  isPlaying: false,
+  position: 0,
+  duration: 0,
+  updatedAt: Date.now()
+};
+
+app.get('/api/playback-state', (req, res) => {
+  res.setHeader('ngrok-skip-browser-warning', '69420');
+  res.json(currentPlaybackState);
+});
+
+app.post('/api/playback-state', (req, res) => {
+  const { title, artist, album, artUrl, isPlaying, position, duration } = req.body || {};
+  currentPlaybackState = {
+    title: title || currentPlaybackState.title,
+    artist: artist || currentPlaybackState.artist,
+    album: album || currentPlaybackState.album,
+    artUrl: artUrl || currentPlaybackState.artUrl,
+    isPlaying: typeof isPlaying === 'boolean' ? isPlaying : currentPlaybackState.isPlaying,
+    position: typeof position === 'number' ? position : currentPlaybackState.position,
+    duration: typeof duration === 'number' ? duration : currentPlaybackState.duration,
+    updatedAt: Date.now()
+  };
+  res.json({ success: true, state: currentPlaybackState });
+});
+
 // Protected API routes
 app.use('/api/scan', requireAuth, scanRoutes);
 app.use('/api/tracks', requireAuth, tracksRoutes);
