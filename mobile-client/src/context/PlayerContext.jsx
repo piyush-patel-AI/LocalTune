@@ -366,12 +366,18 @@ export function PlayerProvider({ children }) {
 
   const togglePlay = () => {
     const audio = audioRef.current;
-    if (!currentTrack) return;
+    if (!currentTrack || !audio) return;
 
-    if (isPlaying) {
+    if (!audio.paused) {
       audio.pause();
+      setIsPlaying(false);
     } else {
-      audio.play().catch((err) => console.error('Playback error:', err));
+      audio.play().then(() => {
+        setIsPlaying(true);
+      }).catch((err) => {
+        console.error('Playback error:', err);
+        setIsPlaying(false);
+      });
     }
   };
 
