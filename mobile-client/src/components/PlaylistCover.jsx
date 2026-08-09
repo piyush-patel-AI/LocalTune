@@ -1,3 +1,4 @@
+import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import { IconDisc } from './Icons';
 
 export default function PlaylistCover({ playlist, tracks = [], size = 48, className = '' }) {
@@ -40,11 +41,11 @@ export default function PlaylistCover({ playlist, tracks = [], size = 48, classN
         {artworkTracks.slice(0, 4).map((t, idx) => (
           <img
             key={t.id || idx}
-            src={`/api/tracks/${t.id}/art`}
+            src={getArtworkUrl(t, 256)}
             alt=""
             className="playlist-art-tile"
             onError={(e) => {
-              e.target.style.display = 'none';
+              e.target.src = '/logo.png';
             }}
           />
         ))}
@@ -60,9 +61,10 @@ export default function PlaylistCover({ playlist, tracks = [], size = 48, classN
         style={{ width: `${size}px`, height: `${size}px`, borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}
       >
         <img
-          src={`/api/tracks/${artworkTracks[0].id}/art`}
-          alt={playlist.name}
+          src={getArtworkUrl(artworkTracks[0], 256)}
+          alt={playlist?.name || ''}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={(e) => { e.target.src = '/logo.png'; }}
         />
       </div>
     );

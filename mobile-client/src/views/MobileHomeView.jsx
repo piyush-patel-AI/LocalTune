@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import TrackActionSheet from '../components/TrackActionSheet';
+import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import {
   IconChevronRight,
   IconMoreVertical,
@@ -148,18 +149,12 @@ export default function MobileHomeView() {
 
           <div className="hero-content-flex" style={{ alignItems: 'center' }}>
             <div className="hero-art-wrapper" style={{ width: '64px', height: '64px', flexShrink: 0 }}>
-              {heroTrack.cover_art_path ? (
-                <img
-                  src={`/api/tracks/${heroTrack.id}/art`}
-                  alt={heroTrack.title}
-                  className="hero-art-img"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              ) : (
-                <div className="hero-art-fallback">
-                  <IconMusic size={26} color="var(--accent-primary)" />
-                </div>
-              )}
+              <img
+                src={getArtworkUrl(heroTrack, 256)}
+                alt={heroTrack.title}
+                className="hero-art-img"
+                onError={(e) => { e.target.src = '/logo.png'; }}
+              />
               <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
                 {currentTrack && currentTrack.id === heroTrack.id && isPlaying ? (
                   <IconPause size={14} color="#000000" fill="#000000" />
@@ -192,18 +187,12 @@ export default function MobileHomeView() {
               onClick={() => playTrack(track, madeForYouList)}
             >
               <div className="media-card-art-box">
-                {track.cover_art_path ? (
-                  <img
-                    src={`/api/tracks/${track.id}/art`}
-                    alt={track.title}
-                    className="media-card-art"
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                ) : (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.05)' }}>
-                    <IconMusic size={32} color="var(--accent-primary)" />
-                  </div>
-                )}
+                <img
+                  src={getArtworkUrl(track, 256)}
+                  alt={track.title}
+                  className="media-card-art"
+                  onError={(e) => { e.target.src = '/logo.png'; }}
+                />
                 <div className="media-card-play-hover">
                   <IconPlay size={18} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
                 </div>
@@ -295,20 +284,12 @@ export default function MobileHomeView() {
                             }
                           }}
                         >
-                          {track.cover_art_path ? (
-                            <img
-                              src={`/api/tracks/${track.id}/art`}
-                              alt={track.title}
-                              className="tile-art"
-                              onError={(e) => { e.target.src = '/logo.png'; }}
-                            />
-                          ) : (
-                            <img
-                              src="/logo.png"
-                              alt={track.title}
-                              className="tile-art"
-                            />
-                          )}
+                          <img
+                            src={getArtworkUrl(track, 256)}
+                            alt={track.title}
+                            className="tile-art"
+                            onError={(e) => { e.target.src = '/logo.png'; }}
+                          />
                           <div className="tile-gradient-overlay">
                             <span className="tile-overlay-text">{track.title}</span>
                           </div>
@@ -372,20 +353,12 @@ export default function MobileHomeView() {
                   onClick={() => playTrack(track, quickPickTracks)}
                 >
                   <div className="row-main-info">
-                    {track.cover_art_path ? (
-                      <img
-                        src={`/api/tracks/${track.id}/art`}
-                        alt={track.title}
-                        className="row-art"
-                        onError={(e) => { e.target.src = '/logo.png'; }}
-                      />
-                    ) : (
-                      <img
-                        src="/logo.png"
-                        alt={track.title}
-                        className="row-art"
-                      />
-                    )}
+                    <img
+                      src={getArtworkUrl(track, 256)}
+                      alt={track.title}
+                      className="row-art"
+                      onError={(e) => { e.target.src = '/logo.png'; }}
+                    />
                     <div className="row-text">
                       <span className="row-title">{track.title}</span>
                       <span className="row-artist">{track.artist}</span>

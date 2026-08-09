@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
+import { getArtworkUrl } from './services/MediaMetadataProvider';
 import MobileHomeView from './views/MobileHomeView';
 import MobileExploreView from './views/MobileExploreView';
 import MobileLibraryView from './views/MobileLibraryView';
@@ -207,18 +208,12 @@ function AppContent() {
       {currentTrack && (
         <div className="floating-mini-player" onClick={openNowPlaying}>
           <div className="mini-info-group">
-            {currentTrack.cover_art_path ? (
-              <img
-                src={`/api/tracks/${currentTrack.id}/art`}
-                alt={currentTrack.title}
-                className="mini-art"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <div className="mini-art-fallback">
-                <IconMusic size={20} color="var(--accent-primary)" />
-              </div>
-            )}
+            <img
+              src={getArtworkUrl(currentTrack, 128)}
+              alt={currentTrack.title}
+              className="mini-art"
+              onError={(e) => { e.target.src = '/logo.png'; }}
+            />
             <div className="mini-text">
               <span className="mini-title">{currentTrack.title}</span>
               <span className="mini-artist">{currentTrack.artist}</span>

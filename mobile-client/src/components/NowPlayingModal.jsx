@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import AddToPlaylistModal from './AddToPlaylistModal';
 import {
   IconChevronDown,
@@ -181,10 +182,10 @@ export default function NowPlayingModal() {
             <div className="now-playing-art-container">
               {currentTrack.cover_art_path ? (
                 <img
-                  src={`/api/tracks/${currentTrack.id}/art`}
+                  src={getArtworkUrl(currentTrack, 512)}
                   alt={currentTrack.title}
                   className="now-playing-art-img"
-                  onError={(e) => { e.target.style.display = 'none'; }}
+                  onError={(e) => { e.target.src = '/logo.png'; }}
                 />
               ) : (
                 <div className="now-playing-art-fallback">

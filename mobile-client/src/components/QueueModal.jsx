@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import BottomSheet from './BottomSheet';
 import { IconMusic, IconPlus, IconPlay, IconTrash } from './Icons';
 
@@ -124,18 +125,12 @@ export default function QueueModal() {
                   onClick={() => playTrack(track, queue)}
                 >
                   <div className="row-main-info">
-                    {track.cover_art_path ? (
-                      <img
-                        src={`/api/tracks/${track.id}/art`}
-                        alt={track.title}
-                        className="row-art"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="row-art-fallback">
-                        <IconMusic size={20} color="var(--text-secondary)" />
-                      </div>
-                    )}
+                    <img
+                      src={getArtworkUrl(track, 128)}
+                      alt={track.title}
+                      className="row-art"
+                      onError={(e) => { e.target.src = '/logo.png'; }}
+                    />
                     <div className="row-text">
                       <span className="row-title">{track.title}</span>
                       <span className="row-artist">{track.artist}</span>
