@@ -23,6 +23,22 @@ export function getMultiSizeArtwork(track) {
 }
 
 export function updateMediaSessionMetadata(track) {
+  // Native Android WebView MediaSession Bridge
+  if (window.AndroidMediaBridge && typeof window.AndroidMediaBridge.updateMetadata === 'function') {
+    try {
+      if (track) {
+        window.AndroidMediaBridge.updateMetadata(
+          track.title || 'Unknown Title',
+          track.artist || 'Unknown Artist',
+          track.album || 'LocalTune',
+          getArtworkUrl(track, 512)
+        );
+      } else {
+        window.AndroidMediaBridge.clearMetadata();
+      }
+    } catch (e) {}
+  }
+
   if (!('mediaSession' in navigator)) return;
 
   if (!track) {
@@ -70,10 +86,17 @@ export function setupMediaSessionActionHandlers(actions = {}) {
 }
 
 export function updateMediaSessionPositionState(positionData = {}) {
+  const { duration = 0, playbackRate = 1, position = 0, isPlaying = true } = positionData;
+
+  if (window.AndroidMediaBridge && typeof window.AndroidMediaBridge.updatePlaybackState === 'function') {
+    try {
+      window.AndroidMediaBridge.updatePlaybackState(isPlaying, position, duration);
+    } catch (e) {}
+  }
+
   if (!('mediaSession' in navigator) || typeof navigator.mediaSession.setPositionState !== 'function') return;
 
   try {
-    const { duration = 0, playbackRate = 1, position = 0 } = positionData;
     if (duration > 0 && position >= 0 && position <= duration) {
       navigator.mediaSession.setPositionState({
         duration: Math.max(0, duration),
