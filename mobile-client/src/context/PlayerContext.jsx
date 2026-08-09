@@ -171,14 +171,15 @@ export function PlayerProvider({ children }) {
     LocalTuneEvents.emit('playback.trackChanged', { track: currentTrack });
   }, [currentTrack]);
 
-  // Sync MediaSession position state on time update
+  // Sync MediaSession position state on time update & play/pause state change
   useEffect(() => {
     MediaMetadataProvider.updateMediaSessionPositionState({
       duration,
       playbackRate: 1,
-      position: currentTime
+      position: currentTime,
+      isPlaying
     });
-  }, [currentTime, duration]);
+  }, [currentTime, duration, isPlaying]);
 
   // Restore audio source and time on initial mount if stored
   useEffect(() => {

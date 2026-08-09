@@ -57,11 +57,13 @@ export function updateMediaSessionMetadata(track) {
   if (window.AndroidMediaBridge && typeof window.AndroidMediaBridge.updateMetadata === 'function') {
     try {
       if (track) {
+        const dur = track.duration_seconds || track.duration || 0;
         window.AndroidMediaBridge.updateMetadata(
           track.title || 'Unknown Title',
           track.artist || 'Unknown Artist',
           track.album || 'LocalTune',
-          getArtworkUrl(track, 512)
+          getArtworkUrl(track, 512),
+          dur
         );
       } else {
         window.AndroidMediaBridge.clearMetadata();
