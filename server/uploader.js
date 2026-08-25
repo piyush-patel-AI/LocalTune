@@ -21,6 +21,7 @@ import { normalizeGenre } from './genreNormalizer.js';
 import {
   isB2Configured,
   uploadToB2,
+  uploadToB2Verified,
   buildAudioKey,
   buildArtworkKey,
   buildArtistKey,
@@ -66,9 +67,9 @@ const AUDIO_MIME = {
 };
 
 /** Persist an image buffer either to B2 (returns key) or local disk (returns abs path). */
-async function saveImageBuffer(buffer, mimetype, b2Key, localDir, localName) {
+async function saveImageBuffer(buffer, mimetype, b2Key, localDir, localName, cid) {
   if (isB2Configured()) {
-    await uploadToB2(b2Key, buffer, mimetype || 'image/jpeg');
+    await uploadToB2Verified(b2Key, buffer, mimetype || 'image/jpeg', cid);
     return b2Key;
   }
   const ext = extFromMime(mimetype);
@@ -131,6 +132,10 @@ uploaderRouter.post('/api/manage-tracks/:id/reset', async (req, res) => {
 
 // POST /upload-artist - Create/Update Artist Profile without uploading a song
 uploaderRouter.post('/upload-artist', upload.single('artistImage'), async (req, res) => {
+  const cid = `upa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const log = (...args) => console.log(`[UploadArtist][${cid}]`, ...args);
+  const logErr = (...args) => console.error(`[UploadArtist][${cid}]`, ...args);
+
   try {
     const artistName = req.body.artistName ? req.body.artistName.trim() : '';
     if (!artistName) {
@@ -142,6 +147,8 @@ uploaderRouter.post('/upload-artist', upload.single('artistImage'), async (req, 
       return res.status(400).json({ error: 'Artist profile image is required' });
     }
 
+    log('request received artist=%s file=%s size=%d', artistName, artistImgFile.originalname, artistImgFile.size);
+
     let imagePath;
     try {
       imagePath = await saveImageBuffer(
@@ -149,14 +156,16 @@ uploaderRouter.post('/upload-artist', upload.single('artistImage'), async (req, 
         artistImgFile.mimetype,
         buildArtistKey(artistName, extFromMime(artistImgFile.mimetype)),
         ARTISTS_DIR,
-        `artist_${Date.now()}-${Math.round(Math.random() * 1e4)}`
+        `artist_${Date.now()}-${Math.round(Math.random() * 1e4)}`,
+        cid
       );
     } catch (upErr) {
-      console.error('Failed storing artist image:', upErr);
-      return res.status(502).json({ error: 'Failed to store artist image in object storage.' });
+      logErr('stage=b2_artist_img_upload FAILED error=%s', upErr.message);
+      return res.status(502).json({ error: 'Failed to store artist image in object storage.', stage: 'b2_artist_img_upload', detail: upErr.message });
     }
 
     await upsertArtistImage(artistName, imagePath, isB2Configured() ? imagePath : null);
+    log('complete artist=%s', artistName);
 
     return res.json({
       success: true,
@@ -168,7 +177,7 @@ uploaderRouter.post('/upload-artist', upload.single('artistImage'), async (req, 
     });
 
   } catch (err) {
-    console.error('Upload artist error:', err);
+    logErr('unhandled error error=%s', err.message);
     return res.status(500).json({ error: 'Failed to save artist profile: ' + err.message });
   }
 });
@@ -180,6 +189,12 @@ export const uploadFieldsMiddleware = upload.fields([
 ]);
 
 export const handleUploadTrack = async (req, res) => {
+  // Correlation id — every log line in this request carries this tag.
+  const cid = `upl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const log = (...args) => console.log(`[Upload][${cid}]`, ...args);
+  const logErr = (...args) => console.error(`[Upload][${cid}]`, ...args);
+
+  const t0 = Date.now();
   try {
     if (!req.files || !req.files.audioFile || req.files.audioFile.length === 0) {
       return res.status(400).json({ error: 'Audio file is required' });
@@ -189,8 +204,13 @@ export const handleUploadTrack = async (req, res) => {
     const coverArtFile = req.files.coverArt ? req.files.coverArt[0] : null;
     const artistImgFile = req.files.artistImage ? req.files.artistImage[0] : null;
 
-    // Parse audio metadata directly from the in-memory buffer
+    log('request received filename=%s size=%d bytes type=%s', audioFile.originalname, audioFile.size, audioFile.mimetype);
+
+    // ── Stage 1: Parse audio metadata ──
+    log('stage=parse_meta start');
     const parsed = await parseAudioBuffer(audioFile.buffer, audioFile.originalname);
+    log('stage=parse_meta ok title=%s artist=%s album=%s duration=%s',
+      parsed.title, parsed.artist, parsed.album, parsed.durationSeconds);
 
     // Custom metadata overrides from form input if provided
     const customTitle = req.body.title ? req.body.title.trim() : '';
@@ -221,10 +241,12 @@ export const handleUploadTrack = async (req, res) => {
     const finalYear = req.body.year ? parseInt(req.body.year, 10) : (parsed.year || null);
     const ext = path.extname(audioFile.originalname).replace('.', '').toLowerCase();
 
-    // Duplicate detection matches on normalized title + artist and is therefore
-    // independent of where the media lives (legacy PC path or B2 key).
+    log('resolved title=%s artist=%s album=%s genre=%s year=%s ext=%s', finalTitle, finalArtist, finalAlbum, finalGenre, finalYear, ext);
+
+    // ── Stage 2: Duplicate detection ──
     const existingDuplicate = await findTrackByTitleAndArtist(finalTitle, finalArtist);
     const forceNewRecord = req.body.allowDuplicate === 'true';
+    log('stage=dedup existing_id=%s force_new=%s', existingDuplicate?.id ?? 'none', forceNewRecord);
 
     let coverArtRef = null;
     let artistImgRef = null;
@@ -239,17 +261,24 @@ export const handleUploadTrack = async (req, res) => {
       const contentType = AUDIO_MIME[`.${ext}`] || 'application/octet-stream';
 
       if (existingDuplicate && !forceNewRecord) {
-        // ADOPT MODE: this is a re-upload of a track we already know.
-        // Bytes go to B2 first (so the row never references a missing object),
-        // then rekeyTrack swaps file_path/b2_key ON THE EXISTING ROW — the
-        // track id survives, and with it every playlist entry, favorite,
-        // play log, transition and recommendation stat. No INSERT happens.
-        await uploadToB2(audioKey, audioFile.buffer, contentType);
+        // ── ADOPT MODE ──
+        log('stage=b2_audio_upload mode=adopt key=%s', audioKey);
+        try {
+          await uploadToB2Verified(audioKey, audioFile.buffer, contentType, cid);
+        } catch (b2Err) {
+          logErr('stage=b2_audio_upload FAILED key=%s error=%s', audioKey, b2Err.message);
+          return res.status(502).json({
+            error: 'B2 audio upload failed',
+            stage: 'b2_audio_upload',
+            detail: b2Err.message
+          });
+        }
+
+        log('stage=db_rekey old_path=%s new_key=%s', existingDuplicate.file_path, audioKey);
         await rekeyTrack(existingDuplicate.file_path, audioKey, audioFile.size, new Date().toISOString());
         newTrackId = existingDuplicate.id;
         adoptedExisting = true;
 
-        // Only form fields explicitly provided override curated metadata.
         const patch = {};
         if (req.body.title && req.body.title.trim()) patch.title = req.body.title.trim();
         if (req.body.artist && req.body.artist.trim()) patch.artist = req.body.artist.trim();
@@ -260,12 +289,16 @@ export const handleUploadTrack = async (req, res) => {
           await updateTrackMetadata(newTrackId, patch);
         }
 
-        // Cover art links to the SAME existing track id
         const artBufferAdopt = coverArtFile ? coverArtFile.buffer : (parsed.embeddedArt ? parsed.embeddedArt.data : null);
         const artMimeAdopt = coverArtFile ? coverArtFile.mimetype : (parsed.embeddedArt ? parsed.embeddedArt.mime : null);
         if (artBufferAdopt) {
           const artKey = buildArtworkKey(newTrackId, extFromMime(artMimeAdopt));
-          await uploadToB2(artKey, artBufferAdopt, artMimeAdopt || 'image/jpeg');
+          log('stage=b2_artwork_upload key=%s', artKey);
+          try {
+            await uploadToB2Verified(artKey, artBufferAdopt, artMimeAdopt || 'image/jpeg', cid);
+          } catch (b2Err) {
+            logErr('stage=b2_artwork_upload FAILED key=%s error=%s (non-fatal, continuing)', artKey, b2Err.message);
+          }
           await setTrackArtwork(newTrackId, artKey, artKey);
           coverArtRef = artKey;
         }
@@ -273,17 +306,32 @@ export const handleUploadTrack = async (req, res) => {
         const primaryArtistAdopt = req.body.artist ? req.body.artist.trim() : parsed.artist;
         if (primaryArtistAdopt && artistImgFile) {
           const imgKey = buildArtistKey(primaryArtistAdopt, extFromMime(artistImgFile.mimetype));
-          await uploadToB2(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg');
+          log('stage=b2_artist_img_upload key=%s', imgKey);
+          try {
+            await uploadToB2Verified(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg', cid);
+          } catch (b2Err) {
+            logErr('stage=b2_artist_img_upload FAILED key=%s error=%s (non-fatal, continuing)', imgKey, b2Err.message);
+          }
           await upsertArtistImage(primaryArtistAdopt, imgKey, imgKey);
           artistImgRef = imgKey;
         }
       } else {
-        // NEW record (or an intentional second copy via allowDuplicate=true)
+        // ── NEW RECORD ──
+        // 1. Upload audio bytes to B2 (must succeed before any DB write)
+        log('stage=b2_audio_upload mode=new key=%s', audioKey);
+        try {
+          await uploadToB2Verified(audioKey, audioFile.buffer, contentType, cid);
+        } catch (b2Err) {
+          logErr('stage=b2_audio_upload FAILED key=%s error=%s', audioKey, b2Err.message);
+          return res.status(502).json({
+            error: 'B2 audio upload failed',
+            stage: 'b2_audio_upload',
+            detail: b2Err.message
+          });
+        }
 
-        // 1. Upload audio bytes to B2
-        await uploadToB2(audioKey, audioFile.buffer, contentType);
-
-        // 2. Index the track with its B2 object key as identity
+        // 2. Index the track — only after B2 upload + verification succeeded
+        log('stage=db_insert start key=%s', audioKey);
         newTrackId = await upsertTrack({
           filePath: audioKey,
           title: finalTitle,
@@ -297,24 +345,35 @@ export const handleUploadTrack = async (req, res) => {
           fileSize: audioFile.size,
           dateModified: new Date().toISOString()
         });
+        log('stage=db_insert ok track_id=%d', newTrackId);
 
         // 3. Cover art: explicit upload wins over embedded tag art
         const artBuffer = coverArtFile ? coverArtFile.buffer : (parsed.embeddedArt ? parsed.embeddedArt.data : null);
         const artMime = coverArtFile ? coverArtFile.mimetype : (parsed.embeddedArt ? parsed.embeddedArt.mime : null);
         if (artBuffer) {
           const artKey = buildArtworkKey(newTrackId, extFromMime(artMime));
-          await uploadToB2(artKey, artBuffer, artMime || 'image/jpeg');
-          await setTrackArtwork(newTrackId, artKey, artKey);
-          coverArtRef = artKey;
+          log('stage=b2_artwork_upload key=%s', artKey);
+          try {
+            await uploadToB2Verified(artKey, artBuffer, artMime || 'image/jpeg', cid);
+            await setTrackArtwork(newTrackId, artKey, artKey);
+            coverArtRef = artKey;
+          } catch (b2Err) {
+            logErr('stage=b2_artwork_upload FAILED key=%s error=%s (non-fatal, track already saved)', artKey, b2Err.message);
+          }
         }
 
         // 4. Primary artist image
         const primaryArtist = req.body.artist ? req.body.artist.trim() : parsed.artist;
         if (primaryArtist && artistImgFile) {
           const imgKey = buildArtistKey(primaryArtist, extFromMime(artistImgFile.mimetype));
-          await uploadToB2(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg');
-          await upsertArtistImage(primaryArtist, imgKey, imgKey);
-          artistImgRef = imgKey;
+          log('stage=b2_artist_img_upload key=%s', imgKey);
+          try {
+            await uploadToB2Verified(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg', cid);
+            await upsertArtistImage(primaryArtist, imgKey, imgKey);
+            artistImgRef = imgKey;
+          } catch (b2Err) {
+            logErr('stage=b2_artist_img_upload FAILED key=%s error=%s (non-fatal, track already saved)', imgKey, b2Err.message);
+          }
         }
       }
 
@@ -367,6 +426,9 @@ export const handleUploadTrack = async (req, res) => {
     // Trigger background reconciliation scan
     scanLibrary(MUSIC_DIR).catch(err => console.error('Post-upload scan error:', err));
 
+    const elapsed = Date.now() - t0;
+    log('complete track_id=%d adopted=%s elapsed=%dms', newTrackId, adoptedExisting, elapsed);
+
     return res.json({
       success: true,
       message: adoptedExisting
@@ -385,7 +447,9 @@ export const handleUploadTrack = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Upload endpoint error:', err);
+    const elapsed = Date.now() - t0;
+    logErr('unhandled error elapsed=%dms error=%s', elapsed, err.message);
+    logErr(err.stack);
     return res.status(500).json({ error: 'Failed to upload song: ' + err.message });
   }
 };

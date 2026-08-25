@@ -37,15 +37,53 @@ export const s3 = new S3Client({
   }
 });
 
-/** Upload a Buffer or readable stream to B2. Returns the key on success. */
-export async function uploadToB2(key, body, contentType) {
+/**
+ * Upload a Buffer or readable stream to B2. Returns the key on success.
+ * @param {string} key         B2 object key
+ * @param {Buffer} body        data to upload
+ * @param {string} contentType MIME type
+ * @param {string} [cid]       optional correlation id for structured logging
+ */
+export async function uploadToB2(key, body, contentType, cid) {
+  const tag = cid ? `[B2][${cid}]` : '[B2]';
+  const size = Buffer.isBuffer(body) ? body.length : null;
+  console.log(`${tag} upload start key=${key} size=${size} content_type=${contentType}`);
+
+  const t0 = Date.now();
   await s3.send(new PutObjectCommand({
     Bucket: B2_BUCKET_NAME,
     Key: key,
     Body: body,
     ContentType: contentType
   }));
-  console.log(`[B2] Uploaded: ${key}`);
+  const elapsed = Date.now() - t0;
+  console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms`);
+  return key;
+}
+
+/**
+ * Upload + verify: uploads the object, then performs a HeadObject to confirm
+ * it exists and has the expected size. Throws on verification failure.
+ */
+export async function uploadToB2Verified(key, body, contentType, cid) {
+  const expectedSize = Buffer.isBuffer(body) ? body.length : null;
+  await uploadToB2(key, body, contentType, cid);
+
+  const tag = cid ? `[B2][${cid}]` : '[B2]';
+  try {
+    const head = await s3.send(new HeadObjectCommand({ Bucket: B2_BUCKET_NAME, Key: key }));
+    if (expectedSize != null && head.ContentLength != null && head.ContentLength !== expectedSize) {
+      const msg = `verification failed: expected size ${expectedSize}, got ${head.ContentLength}`;
+      console.error(`${tag} ${msg} key=${key}`);
+      throw new Error(msg);
+    }
+    console.log(`${tag} verified ok key=${key} size=${head.ContentLength}`);
+  } catch (err) {
+    if (err.message && err.message.startsWith('verification failed')) throw err;
+    const msg = `verification HEAD failed: ${err.message}`;
+    console.error(`${tag} ${msg} key=${key}`);
+    throw new Error(msg);
+  }
   return key;
 }
 

@@ -37,7 +37,7 @@ router.get('/:trackId', async (req, res) => {
     return res.status(400).json({ error: 'Invalid track ID.' });
   }
 
-  const track = getTrackById(trackId);
+  const track = await getTrackById(trackId);
   if (!track) {
     return res.status(404).json({ error: 'Track not found.' });
   }
