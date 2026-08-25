@@ -3,32 +3,15 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { getUserByUsername, getUserById, createUser, updateUserAvatar, getAllUsersPublic } from '../db.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { isB2Configured, uploadToB2, buildAvatarKey, extFromMime } from '../b2.js';
+import { serveStoredImage } from '../mediaServe.js';
 
 const router = express.Router();
 
-// Avatar storage configuration
-const avatarStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '../music/avatars');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg';
-    const userId = req.session ? req.session.userId : 'guest';
-    cb(null, `avatar_${userId}_${Date.now()}${ext}`);
-  }
-});
-
+// Avatars are held in memory and pushed to B2 (or local disk as fallback)
 const uploadAvatar = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
@@ -45,9 +28,9 @@ const formatUserObj = (u) => {
 };
 
 // GET /api/users/public (public user list for Login screen)
-router.get('/users/public', (req, res) => {
+router.get('/users/public', async (req, res) => {
   try {
-    const users = getAllUsersPublic();
+    const users = await getAllUsersPublic();
     res.json({
       users: users.map(formatUserObj)
     });
@@ -58,20 +41,26 @@ router.get('/users/public', (req, res) => {
 });
 
 // GET /api/users/:id/avatar (Serve avatar image)
-router.get('/users/:id/avatar', (req, res) => {
+router.get('/users/:id/avatar', async (req, res) => {
   const userId = parseInt(req.params.id, 10);
   if (!userId) return res.status(404).send('Invalid user ID');
 
-  const user = getUserById(userId);
-  if (!user || !user.avatar_path || !fs.existsSync(user.avatar_path)) {
+  const user = await getUserById(userId);
+  if (!user || !user.avatar_path) {
     return res.status(404).send('Avatar not found');
   }
 
-  res.sendFile(path.resolve(user.avatar_path));
+  try {
+    // B2 object key -> 302 redirect; legacy local path -> sendFile
+    return await serveStoredImage(res, user.avatar_path);
+  } catch (err) {
+    console.error('Error serving avatar:', err);
+    return res.status(500).send('Failed to serve avatar');
+  }
 });
 
 // POST /api/users/avatar (Upload user PFP)
-router.post('/users/avatar', uploadAvatar.single('avatar'), (req, res) => {
+router.post('/users/avatar', uploadAvatar.single('avatar'), async (req, res) => {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -81,7 +70,23 @@ router.post('/users/avatar', uploadAvatar.single('avatar'), (req, res) => {
   }
 
   try {
-    const updatedUser = updateUserAvatar(req.session.userId, req.file.path);
+    const userId = req.session.userId;
+    let avatarRef;
+
+    if (isB2Configured()) {
+      const key = buildAvatarKey(userId, extFromMime(req.file.mimetype));
+      await uploadToB2(key, req.file.buffer, req.file.mimetype || 'image/jpeg');
+      avatarRef = key;
+    } else {
+      // Local dev fallback
+      const dir = path.resolve('music/avatars');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const ext = path.extname(req.file.originalname) || extFromMime(req.file.mimetype);
+      avatarRef = path.join(dir, `avatar_${userId}_${Date.now()}${ext}`);
+      fs.writeFileSync(avatarRef, req.file.buffer);
+    }
+
+    const updatedUser = await updateUserAvatar(userId, avatarRef);
     return res.json({
       success: true,
       user: formatUserObj(updatedUser)
@@ -93,7 +98,7 @@ router.post('/users/avatar', uploadAvatar.single('avatar'), (req, res) => {
 });
 
 // POST /api/register
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   const { username, password, displayName } = req.body;
 
   if (!username || !password) {
@@ -108,33 +113,33 @@ router.post('/register', (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 4 characters.' });
   }
 
-  const existingUser = getUserByUsername(trimmedUsername);
+  const existingUser = await getUserByUsername(trimmedUsername);
   if (existingUser) {
     return res.status(400).json({ error: 'Username is already taken.' });
   }
 
   const passwordHash = bcrypt.hashSync(password, 10);
   const userDisplayName = displayName && displayName.trim() ? displayName.trim() : trimmedUsername;
-  const newUserId = createUser(trimmedUsername, passwordHash, userDisplayName);
+  const newUserId = await createUser(trimmedUsername, passwordHash, userDisplayName);
 
   req.session.userId = newUserId;
   req.session.username = trimmedUsername;
 
-  const newUser = getUserById(newUserId);
+  const newUser = await getUserById(newUserId);
   return res.status(201).json({
     user: formatUserObj(newUser)
   });
 });
 
 // POST /api/login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
 
-  const user = getUserByUsername(username.trim());
+  const user = await getUserByUsername(username.trim());
   if (!user) {
     return res.status(401).json({ error: 'Invalid username or password.' });
   }
@@ -165,11 +170,11 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/me (check auth state cleanly without 401 console errors)
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   if (!req.session || !req.session.userId) {
     return res.json({ user: null });
   }
-  const user = getUserById(req.session.userId);
+  const user = await getUserById(req.session.userId);
   if (!user) {
     return res.json({ user: null });
   }

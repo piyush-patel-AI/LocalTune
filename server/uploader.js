@@ -4,9 +4,28 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { parseAudioFile, scanLibrary } from './scanner.js';
-import { upsertTrack, upsertArtistImage, getArtists, findTrackByTitleAndArtist, getAllTracks, updateTrackMetadata, resetTrackMetadata } from './db.js';
+import { parseAudioBuffer, scanLibrary } from './scanner.js';
+import {
+  upsertTrack,
+  upsertArtistImage,
+  getArtists,
+  findTrackByTitleAndArtist,
+  getAllTracks,
+  updateTrackMetadata,
+  resetTrackMetadata,
+  setTrackArtwork,
+  rekeyTrack,
+  initDatabase
+} from './db.js';
 import { normalizeGenre } from './genreNormalizer.js';
+import {
+  isB2Configured,
+  uploadToB2,
+  buildAudioKey,
+  buildArtworkKey,
+  buildArtistKey,
+  extFromMime
+} from './b2.js';
 
 dotenv.config();
 
@@ -19,52 +38,45 @@ const MUSIC_DIR = process.env.MUSIC_DIR || path.join(__dirname, 'music');
 const ARTWORKS_DIR = path.join(MUSIC_DIR, 'artworks');
 const ARTISTS_DIR = path.join(MUSIC_DIR, 'artists');
 
-// Ensure directories exist
-if (!fs.existsSync(MUSIC_DIR)) {
-  fs.mkdirSync(MUSIC_DIR, { recursive: true });
-}
-if (!fs.existsSync(ARTWORKS_DIR)) {
-  fs.mkdirSync(ARTWORKS_DIR, { recursive: true });
-}
-if (!fs.existsSync(ARTISTS_DIR)) {
-  fs.mkdirSync(ARTISTS_DIR, { recursive: true });
+// Local fallback directories (only used when B2 is not configured)
+if (!isB2Configured()) {
+  if (!fs.existsSync(MUSIC_DIR)) fs.mkdirSync(MUSIC_DIR, { recursive: true });
+  if (!fs.existsSync(ARTWORKS_DIR)) fs.mkdirSync(ARTWORKS_DIR, { recursive: true });
+  if (!fs.existsSync(ARTISTS_DIR)) fs.mkdirSync(ARTISTS_DIR, { recursive: true });
 }
 
-// Multer storage configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (file.fieldname === 'coverArt') {
-      cb(null, ARTWORKS_DIR);
-    } else if (file.fieldname === 'artistImage') {
-      cb(null, ARTISTS_DIR);
-    } else {
-      cb(null, MUSIC_DIR);
-    }
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const cleanName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e4);
-    cb(null, `${cleanName}_${uniqueSuffix}${ext}`);
-  }
-});
-
+// Keep files in memory — they are streamed straight to Backblaze B2.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB max per file
 });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static uploaded artworks if requested
-app.use('/artworks', express.static(ARTWORKS_DIR));
-app.use('/artists', express.static(ARTISTS_DIR));
+const AUDIO_MIME = {
+  '.mp3': 'audio/mpeg',
+  '.flac': 'audio/flac',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4'
+};
+
+/** Persist an image buffer either to B2 (returns key) or local disk (returns abs path). */
+async function saveImageBuffer(buffer, mimetype, b2Key, localDir, localName) {
+  if (isB2Configured()) {
+    await uploadToB2(b2Key, buffer, mimetype || 'image/jpeg');
+    return b2Key;
+  }
+  const ext = extFromMime(mimetype);
+  const localPath = path.join(localDir, `${localName}${ext}`);
+  fs.writeFileSync(localPath, buffer);
+  return localPath;
+}
 
 // GET /api/artists - List all registered artists for autocomplete
-app.get('/api/artists', (req, res) => {
+app.get('/api/artists', async (req, res) => {
   try {
-    const artists = getArtists();
+    const artists = await getArtists();
     res.json({ artists });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -72,9 +84,9 @@ app.get('/api/artists', (req, res) => {
 });
 
 // GET /api/manage-tracks - Get all tracks for editing
-app.get('/api/manage-tracks', (req, res) => {
+app.get('/api/manage-tracks', async (req, res) => {
   try {
-    const tracks = getAllTracks();
+    const tracks = await getAllTracks();
     res.json({ tracks });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -82,12 +94,12 @@ app.get('/api/manage-tracks', (req, res) => {
 });
 
 // POST /api/manage-tracks/:id - Update track metadata from upload portal
-app.post('/api/manage-tracks/:id', (req, res) => {
+app.post('/api/manage-tracks/:id', async (req, res) => {
   try {
     const trackId = parseInt(req.params.id, 10);
     const { title, artist, album, genre, year } = req.body;
     const normGenre = genre ? normalizeGenre(genre) : null;
-    const updated = updateTrackMetadata(trackId, {
+    const updated = await updateTrackMetadata(trackId, {
       title,
       artist,
       album,
@@ -102,10 +114,10 @@ app.post('/api/manage-tracks/:id', (req, res) => {
 });
 
 // POST /api/manage-tracks/:id/reset - Reset track metadata
-app.post('/api/manage-tracks/:id/reset', (req, res) => {
+app.post('/api/manage-tracks/:id/reset', async (req, res) => {
   try {
     const trackId = parseInt(req.params.id, 10);
-    const resetTrack = resetTrackMetadata(trackId);
+    const resetTrack = await resetTrackMetadata(trackId);
     if (!resetTrack) return res.status(404).json({ error: 'Track not found' });
     res.json({ success: true, track: resetTrack });
   } catch (err) {
@@ -126,15 +138,28 @@ app.post('/upload-artist', upload.single('artistImage'), async (req, res) => {
       return res.status(400).json({ error: 'Artist profile image is required' });
     }
 
-    const artistImgPath = artistImgFile.path;
-    upsertArtistImage(artistName, artistImgPath);
+    let imagePath;
+    try {
+      imagePath = await saveImageBuffer(
+        artistImgFile.buffer,
+        artistImgFile.mimetype,
+        buildArtistKey(artistName, extFromMime(artistImgFile.mimetype)),
+        ARTISTS_DIR,
+        `artist_${Date.now()}-${Math.round(Math.random() * 1e4)}`
+      );
+    } catch (upErr) {
+      console.error('Failed storing artist image:', upErr);
+      return res.status(502).json({ error: 'Failed to store artist image in object storage.' });
+    }
+
+    await upsertArtistImage(artistName, imagePath, isB2Configured() ? imagePath : null);
 
     return res.json({
       success: true,
       message: `Artist profile for "${artistName}" saved successfully!`,
       artist: {
         name: artistName,
-        imagePath: artistImgPath
+        imagePath: imagePath
       }
     });
 
@@ -160,13 +185,8 @@ export const handleUploadTrack = async (req, res) => {
     const coverArtFile = req.files.coverArt ? req.files.coverArt[0] : null;
     const artistImgFile = req.files.artistImage ? req.files.artistImage[0] : null;
 
-    const audioPath = audioFile.path;
-    const coverArtPath = coverArtFile ? coverArtFile.path : null;
-    const artistImgPath = artistImgFile ? artistImgFile.path : null;
-
-    // Parse audio metadata from file
-    const fileStats = fs.statSync(audioPath);
-    const parsed = await parseAudioFile(audioPath);
+    // Parse audio metadata directly from the in-memory buffer
+    const parsed = await parseAudioBuffer(audioFile.buffer, audioFile.originalname);
 
     // Custom metadata overrides from form input if provided
     const customTitle = req.body.title ? req.body.title.trim() : '';
@@ -195,41 +215,149 @@ export const handleUploadTrack = async (req, res) => {
     const finalReleaseType = (req.body.releaseType || req.body.release_type || parsed.releaseType || 'album').toLowerCase();
     const finalGenre = req.body.genre ? normalizeGenre(req.body.genre) : (parsed.genre || null);
     const finalYear = req.body.year ? parseInt(req.body.year, 10) : (parsed.year || null);
-    const ext = path.extname(audioPath).replace('.', '').toLowerCase();
+    const ext = path.extname(audioFile.originalname).replace('.', '').toLowerCase();
 
-    // Safety check: Prevent duplicate upload of the same song
-    const existingDuplicate = findTrackByTitleAndArtist(finalTitle, finalArtist);
-    if (existingDuplicate && req.body.allowDuplicate !== 'true') {
-      try {
-        if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-        if (coverArtPath && fs.existsSync(coverArtPath)) fs.unlinkSync(coverArtPath);
-      } catch (e) {
-        console.error('Error cleaning up duplicate temp file:', e);
+    // Duplicate detection matches on normalized title + artist and is therefore
+    // independent of where the media lives (legacy PC path or B2 key).
+    const existingDuplicate = await findTrackByTitleAndArtist(finalTitle, finalArtist);
+    const forceNewRecord = req.body.allowDuplicate === 'true';
+
+    let coverArtRef = null;
+    let artistImgRef = null;
+    let newTrackId;
+    let adoptedExisting = false;
+
+    if (isB2Configured()) {
+      // --- Backblaze B2 storage ---
+      const cleanName = path.basename(audioFile.originalname, path.extname(audioFile.originalname))
+        .replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const audioKey = buildAudioKey(finalArtist, finalAlbum, `${cleanName}.${ext}`);
+      const contentType = AUDIO_MIME[`.${ext}`] || 'application/octet-stream';
+
+      if (existingDuplicate && !forceNewRecord) {
+        // ADOPT MODE: this is a re-upload of a track we already know.
+        // Bytes go to B2 first (so the row never references a missing object),
+        // then rekeyTrack swaps file_path/b2_key ON THE EXISTING ROW — the
+        // track id survives, and with it every playlist entry, favorite,
+        // play log, transition and recommendation stat. No INSERT happens.
+        await uploadToB2(audioKey, audioFile.buffer, contentType);
+        await rekeyTrack(existingDuplicate.file_path, audioKey, audioFile.size, new Date().toISOString());
+        newTrackId = existingDuplicate.id;
+        adoptedExisting = true;
+
+        // Only form fields explicitly provided override curated metadata.
+        const patch = {};
+        if (req.body.title && req.body.title.trim()) patch.title = req.body.title.trim();
+        if (req.body.artist && req.body.artist.trim()) patch.artist = req.body.artist.trim();
+        if (req.body.album && req.body.album.trim()) patch.album = req.body.album.trim();
+        if (req.body.genre && req.body.genre.trim()) patch.genre = normalizeGenre(req.body.genre);
+        if (req.body.year) patch.year = parseInt(req.body.year, 10);
+        if (Object.keys(patch).length > 0) {
+          await updateTrackMetadata(newTrackId, patch);
+        }
+
+        // Cover art links to the SAME existing track id
+        const artBufferAdopt = coverArtFile ? coverArtFile.buffer : (parsed.embeddedArt ? parsed.embeddedArt.data : null);
+        const artMimeAdopt = coverArtFile ? coverArtFile.mimetype : (parsed.embeddedArt ? parsed.embeddedArt.mime : null);
+        if (artBufferAdopt) {
+          const artKey = buildArtworkKey(newTrackId, extFromMime(artMimeAdopt));
+          await uploadToB2(artKey, artBufferAdopt, artMimeAdopt || 'image/jpeg');
+          await setTrackArtwork(newTrackId, artKey, artKey);
+          coverArtRef = artKey;
+        }
+
+        const primaryArtistAdopt = req.body.artist ? req.body.artist.trim() : parsed.artist;
+        if (primaryArtistAdopt && artistImgFile) {
+          const imgKey = buildArtistKey(primaryArtistAdopt, extFromMime(artistImgFile.mimetype));
+          await uploadToB2(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg');
+          await upsertArtistImage(primaryArtistAdopt, imgKey, imgKey);
+          artistImgRef = imgKey;
+        }
+      } else {
+        // NEW record (or an intentional second copy via allowDuplicate=true)
+
+        // 1. Upload audio bytes to B2
+        await uploadToB2(audioKey, audioFile.buffer, contentType);
+
+        // 2. Index the track with its B2 object key as identity
+        newTrackId = await upsertTrack({
+          filePath: audioKey,
+          title: finalTitle,
+          artist: finalArtist,
+          album: finalAlbum,
+          releaseType: finalReleaseType,
+          genre: finalGenre,
+          year: finalYear,
+          durationSeconds: parsed.durationSeconds || 0,
+          format: ext,
+          fileSize: audioFile.size,
+          dateModified: new Date().toISOString()
+        });
+
+        // 3. Cover art: explicit upload wins over embedded tag art
+        const artBuffer = coverArtFile ? coverArtFile.buffer : (parsed.embeddedArt ? parsed.embeddedArt.data : null);
+        const artMime = coverArtFile ? coverArtFile.mimetype : (parsed.embeddedArt ? parsed.embeddedArt.mime : null);
+        if (artBuffer) {
+          const artKey = buildArtworkKey(newTrackId, extFromMime(artMime));
+          await uploadToB2(artKey, artBuffer, artMime || 'image/jpeg');
+          await setTrackArtwork(newTrackId, artKey, artKey);
+          coverArtRef = artKey;
+        }
+
+        // 4. Primary artist image
+        const primaryArtist = req.body.artist ? req.body.artist.trim() : parsed.artist;
+        if (primaryArtist && artistImgFile) {
+          const imgKey = buildArtistKey(primaryArtist, extFromMime(artistImgFile.mimetype));
+          await uploadToB2(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg');
+          await upsertArtistImage(primaryArtist, imgKey, imgKey);
+          artistImgRef = imgKey;
+        }
       }
-      return res.status(409).json({
-        error: `⚠️ "${finalTitle}" by ${finalArtist} is already in your LocalTune library! Upload blocked to prevent duplicates.`
+
+    } else {
+      // --- Local disk fallback (development without B2 credentials) ---
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e4);
+      const cleanName = path.basename(audioFile.originalname, path.extname(audioFile.originalname))
+        .replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      const audioLocal = path.join(MUSIC_DIR, `${cleanName}_${uniqueSuffix}.${ext}`);
+      fs.writeFileSync(audioLocal, audioFile.buffer);
+
+      let coverLocal = null;
+      if (coverArtFile) {
+        coverLocal = path.join(ARTWORKS_DIR, `cover_${uniqueSuffix}${path.extname(coverArtFile.originalname).toLowerCase() || '.jpg'}`);
+        fs.writeFileSync(coverLocal, coverArtFile.buffer);
+      }
+
+      let artistLocal = null;
+      const primaryArtist = req.body.artist ? req.body.artist.trim() : parsed.artist;
+      if (primaryArtist && artistImgFile) {
+        artistLocal = path.join(ARTISTS_DIR, `artist_${uniqueSuffix}${path.extname(artistImgFile.originalname).toLowerCase() || '.jpg'}`);
+        fs.writeFileSync(artistLocal, artistImgFile.buffer);
+      }
+
+      const trackId = await upsertTrack({
+        filePath: audioLocal,
+        title: finalTitle,
+        artist: finalArtist,
+        album: finalAlbum,
+        releaseType: finalReleaseType,
+        genre: finalGenre,
+        year: finalYear,
+        durationSeconds: parsed.durationSeconds || 0,
+        format: ext,
+        fileSize: audioFile.size,
+        dateModified: new Date().toISOString(),
+        coverArtPath: coverLocal
       });
-    }
+      newTrackId = trackId;
 
-    const trackId = upsertTrack({
-      filePath: audioPath,
-      title: finalTitle,
-      artist: finalArtist,
-      album: finalAlbum,
-      releaseType: finalReleaseType,
-      genre: finalGenre,
-      year: finalYear,
-      durationSeconds: parsed.durationSeconds || 0,
-      format: ext,
-      fileSize: fileStats.size,
-      dateModified: new Date(fileStats.mtime).toISOString(),
-      coverArtPath: coverArtPath
-    });
+      if (primaryArtist && artistLocal) {
+        await upsertArtistImage(primaryArtist, artistLocal);
+      }
 
-    // Save primary artist image if provided
-    const primaryArtist = req.body.artist ? req.body.artist.trim() : parsed.artist;
-    if (primaryArtist && artistImgPath) {
-      upsertArtistImage(primaryArtist, artistImgPath);
+      coverArtRef = coverLocal;
+      artistImgRef = artistLocal;
     }
 
     // Trigger background reconciliation scan
@@ -237,19 +365,21 @@ export const handleUploadTrack = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Song uploaded and indexed successfully!',
+      message: adoptedExisting
+        ? 'Song re-uploaded and attached to its existing library entry (track id preserved)!'
+        : 'Song uploaded and indexed successfully!',
+      adopted: adoptedExisting,
       track: {
-        id: trackId,
+        id: newTrackId,
         title: finalTitle,
         artist: finalArtist,
         album: finalAlbum,
         releaseType: finalReleaseType,
         format: ext,
-        coverArtPath: coverArtPath,
-        artistImagePath: artistImgPath
+        coverArtPath: coverArtRef,
+        artistImagePath: artistImgRef
       }
     });
-
   } catch (err) {
     console.error('Upload endpoint error:', err);
     return res.status(500).json({ error: 'Failed to upload song: ' + err.message });
@@ -1200,8 +1330,20 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.listen(UPLOAD_PORT, '0.0.0.0', () => {
-  console.log(`🚀 LocalTune Music Uploader running on http://0.0.0.0:${UPLOAD_PORT}`);
-});
+// Only start the standalone portal server when uploader.js is executed directly
+// (index.js imports these handlers without spawning a second listener).
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectRun) {
+  initDatabase()
+    .then(() => {
+      app.listen(UPLOAD_PORT, '0.0.0.0', () => {
+        console.log(`🚀 LocalTune Music Uploader running on http://0.0.0.0:${UPLOAD_PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error('Fatal: database initialization failed:', err);
+      process.exit(1);
+    });
+}
 
 export default app;

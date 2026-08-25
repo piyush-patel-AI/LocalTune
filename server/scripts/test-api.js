@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db, { createUser, getUserByUsername, upsertTrack } from '../db.js';
+import { createUser, getUserByUsername, upsertTrack } from '../db.js';
 import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,18 +13,18 @@ async function runVerification() {
   console.log('--- Phase 5 & 6 API Verification ---');
 
   // 1. Ensure test users exist
-  let userA = getUserByUsername('piyush_test');
+  let userA = await getUserByUsername('piyush_test');
   if (!userA) {
     const hash = bcrypt.hashSync('password123', 10);
-    createUser('piyush_test', hash, 'Piyush Test');
-    userA = getUserByUsername('piyush_test');
+    await createUser('piyush_test', hash, 'Piyush Test');
+    userA = await getUserByUsername('piyush_test');
   }
 
-  let userB = getUserByUsername('friend_test');
+  let userB = await getUserByUsername('friend_test');
   if (!userB) {
     const hash = bcrypt.hashSync('password123', 10);
-    createUser('friend_test', hash, 'Friend Test');
-    userB = getUserByUsername('friend_test');
+    await createUser('friend_test', hash, 'Friend Test');
+    userB = await getUserByUsername('friend_test');
   }
 
   // 2. Insert dummy track for streaming & library testing
@@ -34,7 +34,7 @@ async function runVerification() {
     fs.writeFileSync(dummyAudioPath, Buffer.alloc(2048, 'a'));
   }
 
-  const dummyTrackId = upsertTrack({
+  const dummyTrackId = await upsertTrack({
     filePath: dummyAudioPath,
     title: 'Test Song',
     artist: 'Test Artist',

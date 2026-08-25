@@ -21,7 +21,45 @@ LocalTune is a lightweight, self-hosted web application that recursively scans c
 
 ---
 
-## Setup & Running
+## ☁️ Cloud Deployment: Vercel + Render + Backblaze B2
+
+LocalTune can run entirely in the cloud. Render hosts the Node/Express API, auth, SQLite metadata and business logic; **Backblaze B2 stores all music/artwork bytes**, so Render never streams large audio files itself.
+
+### Architecture
+| Concern | Where it runs |
+|---|---|
+| React frontend | **Vercel** (`client/vercel.json` proxies `/api/*` and `/stream/*` to the backend) |
+| Express API, auth, SQLite, scanner, uploader | **Render** (Web Service) |
+| Audio, artwork, artist images, avatars | **Backblaze B2** object storage |
+
+- `tracks.file_path` stores a **B2 object key** like `music/Artist/Album/song.mp3`.
+- `GET /stream/:trackId` looks up the key in SQLite, authorizes the session, then **302-redirects to a time-limited presigned URL**. B2 handles HTTP Range / 206 seeking natively — the web player and Android WebView follow the redirect transparently.
+- Artwork / artist images / avatars are served via `302` redirects to B2 (presigned, or your CDN if `B2_PUBLIC_URL` is set).
+- Duplicate-cleanup and reconciliation delete B2 objects instead of using `fs.unlinkSync()`.
+- The scanner reconciles SQLite against the bucket contents and uploads embedded cover art to `artworks/<trackId>.<ext>`.
+
+### 1. Create the B2 bucket
+1. Sign up at [backblaze.com](https://www.backblaze.com/b2) → **Buckets → Create Bucket** (e.g. `localtune-media`, private).
+2. Note the **Endpoint** shown in *Bucket Details* (e.g. `https://s3.us-west-004.backblazeb2.com`).
+3. **Application Keys → Add Application Key** → copy the `keyID` and `applicationKey`.
+
+### 2. Deploy the backend on Render
+1. New → Web Service → point at this repo, root directory `server/`, build `npm install`, start `npm start`.
+2. Set environment variables (see `server/.env.example`): `B2_ACCOUNT_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET_NAME`, `B2_ENDPOINT`, `SESSION_SECRET`, and `NODE_ENV=production`.
+3. **Attach a Persistent Disk** (e.g. mount path `/var/data`) and set `DB_PATH=/var/data/localtune.db`, otherwise SQLite metadata is lost on every deploy.
+4. Seed your user from the Render Shell: `node scripts/create-user.js piyush "password" "Piyush Patel"`.
+
+### 3. Deploy the frontend on Vercel
+1. Import the repo on Vercel with root directory `client/`.
+2. Edit `client/vercel.json` and replace `https://YOUR-BACKEND.onrender.com` with your Render service URL. These rewrites keep every relative client URL (`/api/...`, `/stream/:id`) working unchanged — including the Android WebView build.
+
+### 4. Get music into B2
+- **Upload portal:** run the standalone uploader (`npm run uploader`) locally — audio/artwork go straight to B2 under `music/Artist/Album/…`, `artworks/<trackId>.<ext>` and `artists/<name>.<ext>`. Or `POST /api/upload` on the deployed API.
+- **Local library ingestion:** with B2 env vars configured on your dev machine, `POST /api/scan` walks your local `MUSIC_DIR`, uploads new files to B2, then reconciles the DB against the bucket.
+
+---
+
+## Setup & Running (Local Development)
 
 ### 1. Prerequisites
 - Node.js (v18 or higher)

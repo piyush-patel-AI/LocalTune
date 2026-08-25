@@ -13,9 +13,10 @@ import playlistsRoutes from './routes/playlists.js';
 import favoritesRoutes from './routes/favorites.js';
 import streamRoutes from './routes/stream.js';
 import statsRoutes from './routes/stats.js';
-import { getTrackById } from './db.js';
+import { getTrackById, initDatabase } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { uploadFieldsMiddleware, handleUploadTrack } from './uploader.js';
+import { serveStoredImage } from './mediaServe.js';
 
 dotenv.config();
 
@@ -56,6 +57,11 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Trust Render's reverse proxy so req.secure / cookies work behind TLS
+app.set('trust proxy', 1);
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Session middleware
 app.use(session({
   secret: process.env.SESSION_SECRET || 'localtune_super_secret_key_2026',
@@ -63,8 +69,11 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: false, // LAN HTTP access
-    sameSite: 'lax',
+    // Production (Vercel frontend + Render API are different origins):
+    // SameSite=None + Secure is required for the session cookie to be
+    // included in cross-origin fetches with credentials: 'include'.
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 }));
@@ -82,10 +91,9 @@ app.get('/api/logo', (req, res) => {
 });
 
 // Public Track Artwork Endpoint for Native Mobile Apps & System Widgets
-app.get('/api/tracks/:id/art', (req, res) => {
+app.get('/api/tracks/:id/art', async (req, res) => {
   res.setHeader('ngrok-skip-browser-warning', '69420');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
 
   const trackId = parseInt(req.params.id, 10);
   const logoPath = path.join(__dirname, '../Assets/logo.png');
@@ -95,9 +103,10 @@ app.get('/api/tracks/:id/art', (req, res) => {
   }
 
   try {
-    const track = getTrackById(trackId);
-    if (track && track.cover_art_path && fs.existsSync(track.cover_art_path)) {
-      return res.sendFile(track.cover_art_path);
+    const track = await getTrackById(trackId);
+    if (track && (track.artwork_b2_key || track.cover_art_path)) {
+      // B2 object key -> 302 redirect to CDN/presigned URL; legacy path -> sendFile
+      return await serveStoredImage(res, track.artwork_b2_key || track.cover_art_path, logoPath);
     }
   } catch (e) {
     console.error('Error serving artwork:', e);
@@ -168,6 +177,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[LocalTune Server] Running on http://0.0.0.0:${PORT}`);
-});
+// Initialize database (connection, schema, migrations) before accepting traffic
+initDatabase()
+  .then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[LocalTune Server] Running on http://0.0.0.0:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('[LocalTune Server] Fatal: database initialization failed:', err);
+    process.exit(1);
+  });

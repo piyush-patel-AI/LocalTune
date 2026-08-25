@@ -1,19 +1,17 @@
 import express from 'express';
-import db, { logPlayEvent } from '../db.js';
+import { getLibraryStats, logPlayEvent } from '../db.js';
 
 const router = express.Router();
 
 // GET /api/stats - Library overview counts
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const totalTracks = db.prepare('SELECT COUNT(*) AS count FROM tracks').get()?.count || 0;
-    const totalArtists = db.prepare('SELECT COUNT(DISTINCT artist) AS count FROM tracks').get()?.count || 0;
-    const totalAlbums = db.prepare("SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ''").get()?.count || 0;
+    const stats = await getLibraryStats();
 
     res.json({
-      totalTracks,
-      totalArtists,
-      totalAlbums
+      totalTracks: stats.totalTracks,
+      totalArtists: stats.totalArtists,
+      totalAlbums: stats.totalAlbums
     });
   } catch (err) {
     console.error('Error fetching library stats:', err);
@@ -22,7 +20,7 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/stats/listen
-router.post('/listen', (req, res) => {
+router.post('/listen', async (req, res) => {
   try {
     const userId = req.user ? req.user.id : (req.session && req.session.userId ? req.session.userId : 1);
     const { trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId } = req.body;
@@ -31,7 +29,7 @@ router.post('/listen', (req, res) => {
       return res.status(400).json({ error: 'trackId is required' });
     }
 
-    logPlayEvent({
+    await logPlayEvent({
       userId: userId || 1,
       trackId: parseInt(trackId, 10),
       listenedSeconds: parseFloat(listenedSeconds) || 0,

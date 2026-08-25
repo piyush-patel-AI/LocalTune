@@ -1,182 +1,290 @@
-import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { runMigrations } from './migrations/migrationManager.js';
+import { runMigrations, splitStatements } from './migrations/migrationManager.js';
+import { deleteFromB2, isLocalPath } from './b2.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'localtune.db');
-const db = new Database(dbPath);
+/**
+ * Async database client with two interchangeable backends:
+ *
+ *  - "turso": Turso Cloud via @tursodatabase/serverless (pure fetch, zero
+ *    native dependencies). Selected automatically when TURSO_DATABASE_URL is set.
+ *  - "local": better-sqlite3 wrapped in the same async surface. Used for
+ *    development and tests (and until Turso credentials are provisioned).
+ *
+ * Every operation below preserves the historical better-sqlite3 return shapes:
+ *   .get()  -> row object | undefined
+ *   .all()  -> array of row objects
+ *   .run()  -> { changes: number, lastInsertRowid: number }
+ * Explicit null returns (getPlaylistById / getPlaylistTracks / etc.) are kept.
+ */
 
-// Enable foreign key constraints
-db.pragma('foreign_keys = ON');
+let client = null;
+let initPromise = null;
 
-// Initialize schema & run versioned migrations
-const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-db.exec(schemaSql);
-
-// Run MigrationManager
-try {
-  runMigrations(db);
-} catch (migErr) {
-  console.error('[db.js] Error running migrations:', migErr.message);
+/** Turso Cloud backend (@tursodatabase/serverless). */
+async function createTursoClient(url, authToken) {
+  const { connect } = await import('@tursodatabase/serverless');
+  const conn = connect({ url, authToken });
+  const normInfo = (info) => ({
+    changes: Number(info?.changes ?? 0),
+    lastInsertRowid: info?.lastInsertRowid == null ? 0 : Number(info.lastInsertRowid)
+  });
+  return {
+    mode: 'turso',
+    all: async (sql, ...params) => await conn.all(sql, ...params),
+    get: async (sql, ...params) => await conn.get(sql, ...params),
+    run: async (sql, ...params) => normInfo(await conn.run(sql, ...params)),
+    exec: async (sql) => {
+      for (const stmt of splitStatements(sql)) await conn.exec(stmt);
+    },
+    batch: async (statements) => {
+      await conn.batch(
+        statements.map((s) => ({ sql: s.sql, args: s.args || [] })),
+        'write'
+      );
+      return { changes: 0, lastInsertRowid: 0 };
+    }
+  };
 }
 
-// Export db instance & prepared statement wrappers
-export default db;
+/** Local SQLite backend (better-sqlite3), identical semantics. */
+async function createLocalClient(dbPath) {
+  const { default: Database } = await import('better-sqlite3');
+  const sqlite = new Database(dbPath);
+  sqlite.pragma('foreign_keys = ON');
+  return {
+    mode: 'local',
+    all: async (sql, ...params) => sqlite.prepare(sql).all(...params),
+    get: async (sql, ...params) => sqlite.prepare(sql).get(...params),
+    run: async (sql, ...params) => {
+      const info = sqlite.prepare(sql).run(...params);
+      return { changes: Number(info.changes), lastInsertRowid: Number(info.lastInsertRowid) };
+    },
+    exec: async (sql) => { sqlite.exec(sql); },
+    batch: async (statements) => {
+      const tx = sqlite.transaction(() => {
+        for (const s of statements) sqlite.prepare(s.sql).run(...(s.args || []));
+      });
+      tx();
+      return { changes: 0, lastInsertRowid: 0 };
+    }
+  };
+}
+
+/**
+ * Initialize the database connection, schema and versioned migrations.
+ * Idempotent; safe to await multiple times. Also invoked lazily by every
+ * query helper, so importing modules never needs explicit bootstrapping.
+ */
+export async function initDatabase() {
+  if (!initPromise) {
+    initPromise = (async () => {
+      const url = process.env.TURSO_DATABASE_URL;
+      client = url
+        ? await createTursoClient(url, process.env.TURSO_AUTH_TOKEN)
+        : await createLocalClient(process.env.DB_PATH || path.join(__dirname, 'localtune.db'));
+
+      console.log(`[db.js] Database backend: ${client.mode === 'turso' ? 'Turso Cloud' : 'local SQLite'} (${client.mode})`);
+
+      try {
+        await client.exec('PRAGMA foreign_keys = ON');
+      } catch (e) {
+        console.warn('[db.js] PRAGMA foreign_keys unsupported on this backend:', e.message);
+      }
+
+      const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+      await client.exec(schemaSql);
+
+      try {
+        await runMigrations(client);
+      } catch (migErr) {
+        console.error('[db.js] Error running migrations:', migErr.message);
+      }
+
+      try {
+        const cleaned = await removeDuplicateTracks();
+        if (cleaned > 0) {
+          console.log(`[Database] Automatically cleaned up ${cleaned} duplicate track(s).`);
+        }
+      } catch (e) {
+        console.error('Duplicate cleanup error on startup:', e);
+      }
+
+      return client;
+    })();
+  }
+  return initPromise;
+}
+
+/** Resolve the active client, lazily initializing on first use. */
+async function q() {
+  if (!client) {
+    if (!initPromise) initDatabase();
+    await initPromise;
+  }
+  return client;
+}
+
+// --- Raw escape hatch (scripts/tests only; app code uses the wrappers) ---
+export const rawAll = async (sql, ...params) => (await q()).all(sql, ...params);
+export const rawGet = async (sql, ...params) => (await q()).get(sql, ...params);
+export const rawRun = async (sql, ...params) => (await q()).run(sql, ...params);
+export const rawExec = async (sql) => { await (await q()).exec(sql); };
+export const rawBatch = async (statements) => (await q()).batch(statements);
+export const getBackendMode = () => (client ? client.mode : null);
 
 // --- User Operations ---
-export const createUser = (username, passwordHash, displayName) => {
-  const stmt = db.prepare(`
-    INSERT INTO users (username, password_hash, display_name)
-    VALUES (?, ?, ?)
-  `);
-  const info = stmt.run(username, passwordHash, displayName);
+export const createUser = async (username, passwordHash, displayName) => {
+  const info = await (await q()).run(
+    `INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)`,
+    username, passwordHash, displayName
+  );
   return info.lastInsertRowid;
 };
 
-export const getUserByUsername = (username) => {
-  const stmt = db.prepare(`SELECT * FROM users WHERE username = ?`);
-  return stmt.get(username);
+export const getUserByUsername = async (username) => {
+  return (await q()).get(`SELECT * FROM users WHERE username = ?`, username);
 };
 
-export const getUserById = (id) => {
-  const stmt = db.prepare(`SELECT id, username, display_name, avatar_path, date_created FROM users WHERE id = ?`);
-  return stmt.get(id);
+export const getUserById = async (id) => {
+  return (await q()).get(
+    `SELECT id, username, display_name, avatar_path, date_created FROM users WHERE id = ?`,
+    id
+  );
 };
 
-export const updateUserAvatar = (id, avatarPath) => {
-  const stmt = db.prepare(`UPDATE users SET avatar_path = ? WHERE id = ?`);
-  stmt.run(avatarPath, id);
+export const updateUserAvatar = async (id, avatarPath) => {
+  await (await q()).run(`UPDATE users SET avatar_path = ? WHERE id = ?`, avatarPath, id);
   return getUserById(id);
 };
 
-export const getAllUsersPublic = () => {
-  const stmt = db.prepare(`SELECT id, username, display_name, avatar_path FROM users`);
-  return stmt.all();
+export const getAllUsersPublic = async () => {
+  return (await q()).all(`SELECT id, username, display_name, avatar_path FROM users`);
 };
 
 // --- Track Operations ---
-export const upsertTrack = (track) => {
-  const existing = db.prepare(`SELECT id, date_modified, cover_art_path, release_type, genre, year FROM tracks WHERE file_path = ?`).get(track.filePath);
+export const upsertTrack = async (track) => {
+  const c = await q();
+  const existing = await c.get(
+    `SELECT id, date_modified, cover_art_path, release_type, genre, year FROM tracks WHERE file_path = ?`,
+    track.filePath
+  );
   const coverArt = track.coverArtPath !== undefined ? track.coverArtPath : (existing ? existing.cover_art_path : null);
   const releaseType = track.releaseType || track.release_type || (existing ? existing.release_type : 'album') || 'album';
   const genreVal = track.genre !== undefined ? track.genre : (existing ? existing.genre : null);
   const yearVal = track.year !== undefined ? track.year : (existing ? existing.year : null);
+  const b2Key = track.b2Key !== undefined ? track.b2Key : (existing && !isLocalPath(track.filePath) ? track.filePath : (existing?.b2_key ?? null));
 
   if (existing) {
-    const stmt = db.prepare(`
-      UPDATE tracks 
-      SET title = ?, artist = ?, album = ?, duration_seconds = ?, format = ?, file_size = ?, date_modified = ?, cover_art_path = ?, release_type = ?, genre = ?, year = ?
-      WHERE file_path = ?
-    `);
-    stmt.run(
-      track.title,
-      track.artist,
-      track.album,
-      track.durationSeconds || 0,
-      track.format,
-      track.fileSize || 0,
-      track.dateModified,
-      coverArt,
-      releaseType,
-      genreVal,
-      yearVal,
+    await c.run(
+      `UPDATE tracks 
+       SET title = ?, artist = ?, album = ?, duration_seconds = ?, format = ?, file_size = ?, date_modified = ?, cover_art_path = ?, release_type = ?, genre = ?, year = ?, b2_key = ?
+       WHERE file_path = ?`,
+      track.title, track.artist, track.album,
+      track.durationSeconds || 0, track.format, track.fileSize || 0,
+      track.dateModified, coverArt, releaseType, genreVal, yearVal, b2Key,
       track.filePath
     );
     return existing.id;
-  } else {
-    const stmt = db.prepare(`
-      INSERT INTO tracks (
-        file_path, title, artist, album, duration_seconds, format, file_size, date_modified, cover_art_path, release_type, genre, year,
-        original_title, original_artist, original_album, original_genre, original_year
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const info = stmt.run(
-      track.filePath,
-      track.title,
-      track.artist,
-      track.album,
-      track.durationSeconds || 0,
-      track.format,
-      track.fileSize || 0,
-      track.dateModified,
-      coverArt,
-      releaseType,
-      genreVal,
-      yearVal,
-      track.title,
-      track.artist,
-      track.album,
-      genreVal,
-      yearVal
-    );
-    return info.lastInsertRowid;
   }
+
+  const info = await c.run(
+    `INSERT INTO tracks (
+      file_path, title, artist, album, duration_seconds, format, file_size, date_modified, cover_art_path, release_type, genre, year,
+      original_title, original_artist, original_album, original_genre, original_year, b2_key
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    track.filePath, track.title, track.artist, track.album,
+    track.durationSeconds || 0, track.format, track.fileSize || 0,
+    track.dateModified, coverArt, releaseType, genreVal, yearVal,
+    track.title, track.artist, track.album, genreVal, yearVal, b2Key
+  );
+  return info.lastInsertRowid;
 };
 
-export const updateTrackCoverArt = (trackId, coverArtPath) => {
-  return db.prepare(`UPDATE tracks SET cover_art_path = ? WHERE id = ?`).run(coverArtPath, trackId);
+export const updateTrackCoverArt = async (trackId, coverArtPath) => {
+  return (await q()).run(`UPDATE tracks SET cover_art_path = ? WHERE id = ?`, coverArtPath, trackId);
 };
 
-export const getTrackById = (id) => {
-  return db.prepare(`SELECT * FROM tracks WHERE id = ?`).get(id);
+/** Set cover_art_path + artwork_b2_key together after uploading artwork to B2. */
+export const setTrackArtwork = async (trackId, coverArtPath, artworkB2Key) => {
+  return (await q()).run(
+    `UPDATE tracks SET cover_art_path = ?, artwork_b2_key = ? WHERE id = ?`,
+    coverArtPath ?? null, artworkB2Key ?? null, trackId
+  );
 };
 
-export const getTrackByPath = (filePath) => {
-  return db.prepare(`SELECT * FROM tracks WHERE file_path = ?`).get(filePath);
+/**
+ * Migration helper: replace a legacy local-disk path with its B2 object key,
+ * preserving the row id (and therefore playlist/favorite/history references).
+ */
+export const rekeyTrack = async (oldFilePath, newKey, fileSize = null, dateModified = null) => {
+  return (await q()).run(
+    `UPDATE tracks 
+     SET file_path = ?, b2_key = ?, file_size = COALESCE(?, file_size), date_modified = COALESCE(?, date_modified)
+     WHERE file_path = ?`,
+    newKey, newKey, fileSize, dateModified, oldFilePath
+  );
 };
 
-export const findTrackByTitleAndArtist = (title, artist) => {
+export const getTrackById = async (id) => {
+  return (await q()).get(`SELECT * FROM tracks WHERE id = ?`, id);
+};
+
+export const getTrackByPath = async (filePath) => {
+  return (await q()).get(`SELECT * FROM tracks WHERE file_path = ?`, filePath);
+};
+
+export const findTrackByTitleAndArtist = async (title, artist) => {
   if (!title || !artist) return null;
-  const stmt = db.prepare(`
-    SELECT * FROM tracks 
-    WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) 
-      AND LOWER(TRIM(artist)) = LOWER(TRIM(?))
-  `);
-  return stmt.get(title, artist);
+  return (await q()).get(
+    `SELECT * FROM tracks 
+     WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) 
+       AND LOWER(TRIM(artist)) = LOWER(TRIM(?))`,
+    title, artist
+  );
 };
 
-export const removeDuplicateTracks = () => {
-  const duplicates = db.prepare(`
-    SELECT id, file_path FROM tracks 
+export const removeDuplicateTracks = async () => {
+  const c = await q();
+  const duplicates = await c.all(`
+    SELECT id, file_path, b2_key, artwork_b2_key FROM tracks 
     WHERE id NOT IN (
       SELECT MIN(id) 
       FROM tracks 
       GROUP BY LOWER(TRIM(title)), LOWER(TRIM(artist))
     )
-  `).all();
+  `);
 
-  const deleteStmt = db.prepare(`DELETE FROM tracks WHERE id = ?`);
   let removedCount = 0;
   for (const dup of duplicates) {
-    deleteStmt.run(dup.id);
-    try {
-      if (dup.file_path && fs.existsSync(dup.file_path)) {
-        fs.unlinkSync(dup.file_path);
-      }
-    } catch (e) {
-      console.error('Failed to remove duplicate file from disk:', dup.file_path, e);
-    }
+    await c.run(`DELETE FROM tracks WHERE id = ?`, dup.id);
     removedCount++;
+
+    // Remove the corresponding media object — B2 key or legacy local file
+    const audioKey = dup.b2_key || (!isLocalPath(dup.file_path) ? dup.file_path : null);
+    if (audioKey) {
+      await deleteFromB2(audioKey);
+    } else if (dup.file_path && isLocalPath(dup.file_path)) {
+      try {
+        if (fs.existsSync(dup.file_path)) fs.unlinkSync(dup.file_path);
+      } catch (e) {
+        console.error('Failed to remove duplicate file from disk:', dup.file_path, e.message);
+      }
+    }
+
+    if (dup.artwork_b2_key) {
+      await deleteFromB2(dup.artwork_b2_key);
+    }
   }
   return removedCount;
 };
 
-// Run duplicate cleanup automatically on initialization
-try {
-  const cleaned = removeDuplicateTracks();
-  if (cleaned > 0) {
-    console.log(`[Database] Automatically cleaned up ${cleaned} duplicate track(s).`);
-  }
-} catch (e) {
-  console.error('Duplicate cleanup error on startup:', e);
-}
-
-export const getAllTracks = (options = {}) => {
+export const getAllTracks = async (options = {}) => {
   const { search, artist, releaseType, sortBy = 'title', sortOrder = 'ASC' } = options;
   let sql = `SELECT * FROM tracks`;
   const params = [];
@@ -209,14 +317,14 @@ export const getAllTracks = (options = {}) => {
 
   sql += ` ORDER BY ${sortCol} ${order}`;
 
-  return db.prepare(sql).all(...params);
+  return (await q()).all(sql, ...params);
 };
 
-export const deleteTrackByPath = (filePath) => {
-  return db.prepare(`DELETE FROM tracks WHERE file_path = ?`).run(filePath);
+export const deleteTrackByPath = async (filePath) => {
+  return (await q()).run(`DELETE FROM tracks WHERE file_path = ?`, filePath);
 };
 
-export const getAlbums = (releaseTypeFilter = null) => {
+export const getAlbums = async (releaseTypeFilter = null) => {
   let sql = `
     SELECT 
       album, 
@@ -233,7 +341,7 @@ export const getAlbums = (releaseTypeFilter = null) => {
     params.push(releaseTypeFilter.trim());
   }
   sql += ` GROUP BY album, artist ORDER BY album ASC `;
-  return db.prepare(sql).all(...params);
+  return (await q()).all(sql, ...params);
 };
 
 export const splitArtistNames = (artistStr) => {
@@ -255,9 +363,10 @@ export const splitArtistNames = (artistStr) => {
   return unique;
 };
 
-export const getArtists = () => {
-  const tracks = db.prepare(`SELECT id, artist, album FROM tracks WHERE artist IS NOT NULL AND TRIM(artist) != ''`).all();
-  const artistImages = db.prepare(`SELECT artist_name, image_path FROM artist_images WHERE artist_name IS NOT NULL AND TRIM(artist_name) != ''`).all();
+export const getArtists = async () => {
+  const c = await q();
+  const tracks = await c.all(`SELECT id, artist, album FROM tracks WHERE artist IS NOT NULL AND TRIM(artist) != ''`);
+  const artistImages = await c.all(`SELECT artist_name, image_path FROM artist_images WHERE artist_name IS NOT NULL AND TRIM(artist_name) != ''`);
 
   const imageMap = new Map();
   for (const img of artistImages) {
@@ -310,215 +419,242 @@ export const getArtists = () => {
   })).sort((a, b) => a.artist.localeCompare(b.artist));
 };
 
-export const upsertArtistImage = (artistName, imagePath) => {
+export const upsertArtistImage = async (artistName, imagePath, b2Key = null) => {
   if (!artistName || !imagePath) return;
-  const stmt = db.prepare(`
-    INSERT INTO artist_images (artist_name, image_path)
-    VALUES (?, ?)
-    ON CONFLICT(artist_name) DO UPDATE SET image_path = excluded.image_path
-  `);
-  return stmt.run(artistName.trim(), imagePath);
+  return (await q()).run(
+    `INSERT INTO artist_images (artist_name, image_path, b2_key)
+     VALUES (?, ?, ?)
+     ON CONFLICT(artist_name) DO UPDATE SET 
+       image_path = excluded.image_path,
+       b2_key = excluded.b2_key`,
+    artistName.trim(), imagePath, b2Key
+  );
 };
 
-export const getArtistImage = (artistName) => {
+export const getArtistImage = async (artistName) => {
   if (!artistName) return null;
-  const stmt = db.prepare(`SELECT image_path FROM artist_images WHERE LOWER(artist_name) = LOWER(?)`);
-  return stmt.get(artistName.trim());
+  return (await q()).get(
+    `SELECT image_path FROM artist_images WHERE LOWER(artist_name) = LOWER(?)`,
+    artistName.trim()
+  );
 };
 
 // --- Playlist Operations ---
-export const createPlaylist = (userId, name, coverPath = null) => {
-  const stmt = db.prepare(`INSERT INTO playlists (user_id, name, cover_path) VALUES (?, ?, ?)`);
-  const info = stmt.run(userId, name, coverPath);
+export const createPlaylist = async (userId, name, coverPath = null) => {
+  const info = await (await q()).run(
+    `INSERT INTO playlists (user_id, name, cover_path) VALUES (?, ?, ?)`,
+    userId, name, coverPath
+  );
   return info.lastInsertRowid;
 };
 
-export const updatePlaylistCover = (playlistId, userId, coverPath) => {
-  return db.prepare(`UPDATE playlists SET cover_path = ? WHERE id = ? AND user_id = ?`).run(coverPath, playlistId, userId);
+export const updatePlaylistCover = async (playlistId, userId, coverPath) => {
+  return (await q()).run(
+    `UPDATE playlists SET cover_path = ? WHERE id = ? AND user_id = ?`,
+    coverPath, playlistId, userId
+  );
 };
 
-export const getUserPlaylists = (userId) => {
-  const playlists = db.prepare(`
+export const getUserPlaylists = async (userId) => {
+  const c = await q();
+  const playlists = await c.all(`
     SELECT p.*, COUNT(pt.track_id) as track_count
     FROM playlists p
     LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
     WHERE p.user_id = ?
     GROUP BY p.id
     ORDER BY p.date_created DESC
-  `).all(userId);
+  `, userId);
 
-  const stmtSample = db.prepare(`
-    SELECT t.id, t.cover_art_path 
-    FROM playlist_tracks pt
-    JOIN tracks t ON pt.track_id = t.id
-    WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
-    ORDER BY pt.position ASC
-    LIMIT 4
-  `);
-
-  return playlists.map((pl) => ({
+  return Promise.all(playlists.map(async (pl) => ({
     ...pl,
-    sample_tracks: stmtSample.all(pl.id)
-  }));
+    sample_tracks: await c.all(`
+      SELECT t.id, t.cover_art_path 
+      FROM playlist_tracks pt
+      JOIN tracks t ON pt.track_id = t.id
+      WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
+      ORDER BY pt.position ASC
+      LIMIT 4
+    `, pl.id)
+  })));
 };
 
-export const getPlaylistById = (playlistId, userId) => {
-  const playlist = db.prepare(`SELECT * FROM playlists WHERE id = ? AND user_id = ?`).get(playlistId, userId);
+export const getPlaylistById = async (playlistId, userId) => {
+  const c = await q();
+  const playlist = await c.get(
+    `SELECT * FROM playlists WHERE id = ? AND user_id = ?`,
+    playlistId, userId
+  );
   if (!playlist) return null;
 
-  const samples = db.prepare(`
+  const samples = await c.all(`
     SELECT t.id, t.cover_art_path 
     FROM playlist_tracks pt
     JOIN tracks t ON pt.track_id = t.id
     WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
     ORDER BY pt.position ASC
     LIMIT 4
-  `).all(playlistId);
+  `, playlistId);
 
-  return {
-    ...playlist,
-    sample_tracks: samples
-  };
+  return { ...playlist, sample_tracks: samples };
 };
 
-export const updatePlaylistName = (playlistId, userId, newName) => {
-  return db.prepare(`UPDATE playlists SET name = ? WHERE id = ? AND user_id = ?`).run(newName, playlistId, userId);
+export const updatePlaylistName = async (playlistId, userId, newName) => {
+  return (await q()).run(
+    `UPDATE playlists SET name = ? WHERE id = ? AND user_id = ?`,
+    newName, playlistId, userId
+  );
 };
 
-export const deletePlaylist = (playlistId, userId) => {
-  return db.prepare(`DELETE FROM playlists WHERE id = ? AND user_id = ?`).run(playlistId, userId);
+export const deletePlaylist = async (playlistId, userId) => {
+  return (await q()).run(
+    `DELETE FROM playlists WHERE id = ? AND user_id = ?`,
+    playlistId, userId
+  );
 };
 
-export const getPlaylistTracks = (playlistId, userId) => {
+export const getPlaylistTracks = async (playlistId, userId) => {
   // Check ownership first
-  const playlist = getPlaylistById(playlistId, userId);
+  const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return null;
 
-  return db.prepare(`
+  return (await q()).all(`
     SELECT t.*, pt.position 
     FROM playlist_tracks pt
     JOIN tracks t ON pt.track_id = t.id
     WHERE pt.playlist_id = ?
     ORDER BY pt.position ASC
-  `).all(playlistId);
+  `, playlistId);
 };
 
-export const addTrackToPlaylist = (playlistId, userId, trackId) => {
-  const playlist = getPlaylistById(playlistId, userId);
+export const addTrackToPlaylist = async (playlistId, userId, trackId) => {
+  const c = await q();
+  const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return false;
 
-  const maxPos = db.prepare(`
-    SELECT COALESCE(MAX(position), -1) as max_pos 
-    FROM playlist_tracks 
-    WHERE playlist_id = ?
-  `).get(playlistId).max_pos;
+  const maxPosRow = await c.get(
+    `SELECT COALESCE(MAX(position), -1) as max_pos FROM playlist_tracks WHERE playlist_id = ?`,
+    playlistId
+  );
 
-  db.prepare(`
-    INSERT INTO playlist_tracks (playlist_id, track_id, position)
-    VALUES (?, ?, ?)
-    ON CONFLICT(playlist_id, track_id) DO NOTHING
-  `).run(playlistId, trackId, maxPos + 1);
+  await c.run(
+    `INSERT INTO playlist_tracks (playlist_id, track_id, position)
+     VALUES (?, ?, ?)
+     ON CONFLICT(playlist_id, track_id) DO NOTHING`,
+    playlistId, trackId, maxPosRow.max_pos + 1
+  );
 
   return true;
 };
 
-export const removeTrackFromPlaylist = (playlistId, userId, trackId) => {
-  const playlist = getPlaylistById(playlistId, userId);
+export const removeTrackFromPlaylist = async (playlistId, userId, trackId) => {
+  const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return false;
 
-  db.prepare(`DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?`).run(playlistId, trackId);
+  await (await q()).run(
+    `DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?`,
+    playlistId, trackId
+  );
   return true;
 };
 
-export const reorderPlaylistTracks = (playlistId, userId, trackIds) => {
-  const playlist = getPlaylistById(playlistId, userId);
+export const reorderPlaylistTracks = async (playlistId, userId, trackIds) => {
+  const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return false;
 
-  const transaction = db.transaction(() => {
-    trackIds.forEach((trackId, index) => {
-      db.prepare(`
-        UPDATE playlist_tracks 
-        SET position = ? 
-        WHERE playlist_id = ? AND track_id = ?
-      `).run(index, playlistId, trackId);
-    });
-  });
+  // Atomic batch: all position updates commit together or not at all
+  await (await q()).batch(
+    trackIds.map((trackId, index) => ({
+      sql: `UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?`,
+      args: [index, playlistId, trackId]
+    }))
+  );
 
-  transaction();
   return true;
 };
 
 // --- Favorite Operations ---
-export const addFavorite = (userId, trackId) => {
-  return db.prepare(`
-    INSERT INTO favorites (user_id, track_id)
-    VALUES (?, ?)
-    ON CONFLICT(user_id, track_id) DO NOTHING
-  `).run(userId, trackId);
+export const addFavorite = async (userId, trackId) => {
+  return (await q()).run(
+    `INSERT INTO favorites (user_id, track_id)
+     VALUES (?, ?)
+     ON CONFLICT(user_id, track_id) DO NOTHING`,
+    userId, trackId
+  );
 };
 
-export const removeFavorite = (userId, trackId) => {
-  return db.prepare(`DELETE FROM favorites WHERE user_id = ? AND track_id = ?`).run(userId, trackId);
+export const removeFavorite = async (userId, trackId) => {
+  return (await q()).run(
+    `DELETE FROM favorites WHERE user_id = ? AND track_id = ?`,
+    userId, trackId
+  );
 };
 
-export const getUserFavorites = (userId) => {
-  return db.prepare(`
+export const getUserFavorites = async (userId) => {
+  return (await q()).all(`
     SELECT t.*, f.date_added as favorited_at
     FROM favorites f
     JOIN tracks t ON f.track_id = t.id
     WHERE f.user_id = ?
     ORDER BY f.date_added DESC
-  `).all(userId);
+  `, userId);
 };
 
-export const isFavorite = (userId, trackId) => {
-  const row = db.prepare(`SELECT 1 FROM favorites WHERE user_id = ? AND track_id = ?`).get(userId, trackId);
+export const isFavorite = async (userId, trackId) => {
+  const row = await (await q()).get(
+    `SELECT 1 FROM favorites WHERE user_id = ? AND track_id = ?`,
+    userId, trackId
+  );
   return !!row;
 };
 
 // --- Recommendation Telemetry & Data Operations ---
-export const logPlayEvent = ({ userId, trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId }) => {
+export const logPlayEvent = async ({ userId, trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId }) => {
+  const c = await q();
   const listened = parseFloat(listenedSeconds) || 0;
   const duration = parseFloat(durationSeconds) || 0;
   const completionRatio = duration > 0 ? Math.min(1.0, listened / duration) : 0;
   const isSkip = (listened < 15 && duration >= 20 && completionRatio < 0.3) ? 1 : 0;
   const hourOfDay = new Date().getHours();
 
-  db.prepare(`
-    INSERT INTO play_logs (user_id, track_id, listened_seconds, duration_seconds, completion_ratio, is_skip, is_replay, hour_of_day)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, trackId, listened, duration, completionRatio, isSkip, isReplay ? 1 : 0, hourOfDay);
+  await c.run(
+    `INSERT INTO play_logs (user_id, track_id, listened_seconds, duration_seconds, completion_ratio, is_skip, is_replay, hour_of_day)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    userId, trackId, listened, duration, completionRatio, isSkip, isReplay ? 1 : 0, hourOfDay
+  );
 
   if (previousTrackId && previousTrackId !== trackId) {
-    db.prepare(`
-      INSERT INTO song_transitions (user_id, from_track_id, to_track_id, transition_count, last_transition_time)
-      VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
-      ON CONFLICT(user_id, from_track_id, to_track_id) DO UPDATE SET
-        transition_count = transition_count + 1,
-        last_transition_time = CURRENT_TIMESTAMP
-    `).run(userId, previousTrackId, trackId);
+    await c.run(
+      `INSERT INTO song_transitions (user_id, from_track_id, to_track_id, transition_count, last_transition_time)
+       VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, from_track_id, to_track_id) DO UPDATE SET
+         transition_count = transition_count + 1,
+         last_transition_time = CURRENT_TIMESTAMP`,
+      userId, previousTrackId, trackId
+    );
   }
 };
 
-export const getPlayLogsForUser = (userId) => {
-  return db.prepare(`
+export const getPlayLogsForUser = async (userId) => {
+  return (await q()).all(`
     SELECT * FROM play_logs 
     WHERE user_id = ? 
     ORDER BY timestamp DESC 
     LIMIT 2000
-  `).all(userId);
+  `, userId);
 };
 
-export const getTransitionsForUser = (userId) => {
-  return db.prepare(`
+export const getTransitionsForUser = async (userId) => {
+  return (await q()).all(`
     SELECT * FROM song_transitions 
     WHERE user_id = ?
-  `).all(userId);
+  `, userId);
 };
 
 // --- Single & Bulk Metadata Management ---
-export const updateTrackMetadata = (trackId, metadata) => {
-  const current = db.prepare(`SELECT * FROM tracks WHERE id = ?`).get(trackId);
+export const updateTrackMetadata = async (trackId, metadata) => {
+  const c = await q();
+  const current = await c.get(`SELECT * FROM tracks WHERE id = ?`, trackId);
   if (!current) return null;
 
   const title = metadata.title !== undefined ? metadata.title.trim() : current.title;
@@ -532,17 +668,19 @@ export const updateTrackMetadata = (trackId, metadata) => {
   const rating = metadata.rating !== undefined ? (metadata.rating ? parseInt(metadata.rating, 10) : null) : current.rating;
   const tags = metadata.tags !== undefined ? (metadata.tags ? metadata.tags.trim() : null) : current.tags;
 
-  db.prepare(`
-    UPDATE tracks 
-    SET title = ?, artist = ?, album = ?, genre = ?, year = ?, language = ?, composer = ?, comment = ?, rating = ?, tags = ?, metadata_updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(title, artist, album, genre, year, language, composer, comment, rating, tags, trackId);
+  await c.run(
+    `UPDATE tracks 
+     SET title = ?, artist = ?, album = ?, genre = ?, year = ?, language = ?, composer = ?, comment = ?, rating = ?, tags = ?, metadata_updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    title, artist, album, genre, year, language, composer, comment, rating, tags, trackId
+  );
 
   return getTrackById(trackId);
 };
 
-export const resetTrackMetadata = (trackId) => {
-  const current = db.prepare(`SELECT * FROM tracks WHERE id = ?`).get(trackId);
+export const resetTrackMetadata = async (trackId) => {
+  const c = await q();
+  const current = await c.get(`SELECT * FROM tracks WHERE id = ?`, trackId);
   if (!current) return null;
 
   const title = current.original_title || current.title;
@@ -551,16 +689,18 @@ export const resetTrackMetadata = (trackId) => {
   const genre = current.original_genre !== undefined ? current.original_genre : current.genre;
   const year = current.original_year !== undefined ? current.original_year : current.year;
 
-  db.prepare(`
-    UPDATE tracks
-    SET title = ?, artist = ?, album = ?, genre = ?, year = ?, metadata_updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(title, artist, album, genre, year, trackId);
+  await c.run(
+    `UPDATE tracks
+     SET title = ?, artist = ?, album = ?, genre = ?, year = ?, metadata_updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    title, artist, album, genre, year, trackId
+  );
 
   return getTrackById(trackId);
 };
 
-export const bulkUpdateTrackMetadata = (trackIds, updates) => {
+export const bulkUpdateTrackMetadata = async (trackIds, updates) => {
+  const c = await q();
   if (!Array.isArray(trackIds) || trackIds.length === 0) return 0;
 
   const setClauses = [];
@@ -590,30 +730,57 @@ export const bulkUpdateTrackMetadata = (trackIds, updates) => {
   const placeholders = trackIds.map(() => '?').join(',');
   const sql = `UPDATE tracks SET ${setClauses.join(', ')} WHERE id IN (${placeholders})`;
 
-  const info = db.prepare(sql).run(...params, ...trackIds);
+  const info = await c.run(sql, ...params, ...trackIds);
   return info.changes;
 };
 
-export const getMissingMetadataTracks = () => {
-  return db.prepare(`
+export const getMissingMetadataTracks = async () => {
+  return (await q()).all(`
     SELECT * FROM tracks 
     WHERE genre IS NULL OR TRIM(genre) = '' OR year IS NULL
-  `).all();
+  `);
 };
 
-export const logRecommendationAction = ({ userId, trackId, shelfId, action, algorithmVersion = 'v1' }) => {
+export const logRecommendationAction = async ({ userId, trackId, shelfId, action, algorithmVersion = 'v1' }) => {
   if (!userId || !trackId) return;
-  db.prepare(`
-    INSERT INTO recommendation_logs (user_id, track_id, shelf_id, action, algorithm_version)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(userId, trackId, shelfId || 'recommendations', action, algorithmVersion);
+  await (await q()).run(
+    `INSERT INTO recommendation_logs (user_id, track_id, shelf_id, action, algorithm_version)
+     VALUES (?, ?, ?, ?, ?)`,
+    userId, trackId, shelfId || 'recommendations', action, algorithmVersion
+  );
 };
 
-export const updateRecommendationStats = (trackId) => {
+export const updateRecommendationStats = async (trackId) => {
   if (!trackId) return;
-  db.prepare(`
-    UPDATE tracks 
-    SET last_recommended_at = CURRENT_TIMESTAMP, recommendation_count = COALESCE(recommendation_count, 0) + 1
-    WHERE id = ?
-  `).run(trackId);
+  await (await q()).run(
+    `UPDATE tracks 
+     SET last_recommended_at = CURRENT_TIMESTAMP, recommendation_count = COALESCE(recommendation_count, 0) + 1
+     WHERE id = ?`,
+    trackId
+  );
+};
+
+// --- Aggregates formerly done with raw prepares outside db.js ---
+
+/** Library overview counts (routes/stats.js). */
+export const getLibraryStats = async () => {
+  const c = await q();
+  const [tracks, artists, albums] = await Promise.all([
+    c.get(`SELECT COUNT(*) AS count FROM tracks`),
+    c.get(`SELECT COUNT(DISTINCT artist) AS count FROM tracks`),
+    c.get(`SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ''`)
+  ]);
+  return {
+    totalTracks: tracks?.count || 0,
+    totalArtists: artists?.count || 0,
+    totalAlbums: albums?.count || 0
+  };
+};
+
+/** Scan info lookup for the library scanner (replaces raw prepares there). */
+export const getTrackScanInfoByPath = async (filePath) => {
+  return (await q()).get(
+    `SELECT id, date_modified, file_size FROM tracks WHERE file_path = ?`,
+    filePath
+  );
 };

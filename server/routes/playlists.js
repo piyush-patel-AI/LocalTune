@@ -43,32 +43,32 @@ const upload = multer({
 const router = express.Router();
 
 // GET /api/playlists — List user's playlists
-router.get('/', (req, res) => {
-  const playlists = getUserPlaylists(req.session.userId);
+router.get('/', async (req, res) => {
+  const playlists = await getUserPlaylists(req.session.userId);
   return res.json({ playlists });
 });
 
 // POST /api/playlists — Create playlist (with optional cover)
-router.post('/', upload.single('cover'), (req, res) => {
+router.post('/', upload.single('cover'), async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Playlist name is required.' });
   }
 
   const coverPath = req.file ? req.file.path : null;
-  const playlistId = createPlaylist(req.session.userId, name.trim(), coverPath);
-  const playlist = getPlaylistById(playlistId, req.session.userId);
+  const playlistId = await createPlaylist(req.session.userId, name.trim(), coverPath);
+  const playlist = await getPlaylistById(playlistId, req.session.userId);
   return res.status(201).json({ playlist });
 });
 
 // POST /api/playlists/:id/cover — Upload/update playlist cover
-router.post('/:id/cover', upload.single('cover'), (req, res) => {
+router.post('/:id/cover', upload.single('cover'), async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
     return res.status(400).json({ error: 'Invalid playlist ID.' });
   }
 
-  const playlist = getPlaylistById(playlistId, req.session.userId);
+  const playlist = await getPlaylistById(playlistId, req.session.userId);
   if (!playlist) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
@@ -86,19 +86,19 @@ router.post('/:id/cover', upload.single('cover'), (req, res) => {
     }
   }
 
-  updatePlaylistCover(playlistId, req.session.userId, req.file.path);
-  const updated = getPlaylistById(playlistId, req.session.userId);
+  await updatePlaylistCover(playlistId, req.session.userId, req.file.path);
+  const updated = await getPlaylistById(playlistId, req.session.userId);
   return res.json({ playlist: updated });
 });
 
 // GET /api/playlists/:id/cover — Serve custom playlist cover image
-router.get('/:id/cover', (req, res) => {
+router.get('/:id/cover', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
     return res.status(400).json({ error: 'Invalid playlist ID.' });
   }
 
-  const playlist = getPlaylistById(playlistId, req.session.userId);
+  const playlist = await getPlaylistById(playlistId, req.session.userId);
   if (!playlist || !playlist.cover_path) {
     return res.status(404).json({ error: 'Playlist cover not found.' });
   }
@@ -111,23 +111,23 @@ router.get('/:id/cover', (req, res) => {
 });
 
 // GET /api/playlists/:id — Get playlist metadata & tracks
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
     return res.status(400).json({ error: 'Invalid playlist ID.' });
   }
 
-  const playlist = getPlaylistById(playlistId, req.session.userId);
+  const playlist = await getPlaylistById(playlistId, req.session.userId);
   if (!playlist) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
-  const tracks = getPlaylistTracks(playlistId, req.session.userId) || [];
+  const tracks = (await getPlaylistTracks(playlistId, req.session.userId)) || [];
   return res.json({ playlist: { ...playlist, tracks }, tracks });
 });
 
 // PATCH /api/playlists/:id — Rename playlist
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const { name } = req.body;
 
@@ -138,40 +138,40 @@ router.patch('/:id', (req, res) => {
     return res.status(400).json({ error: 'New playlist name is required.' });
   }
 
-  const playlist = getPlaylistById(playlistId, req.session.userId);
+  const playlist = await getPlaylistById(playlistId, req.session.userId);
   if (!playlist) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
-  updatePlaylistName(playlistId, req.session.userId, name.trim());
-  const updated = getPlaylistById(playlistId, req.session.userId);
+  await updatePlaylistName(playlistId, req.session.userId, name.trim());
+  const updated = await getPlaylistById(playlistId, req.session.userId);
   return res.json({ playlist: updated });
 });
 
 // DELETE /api/playlists/:id — Delete playlist
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
     return res.status(400).json({ error: 'Invalid playlist ID.' });
   }
 
-  const playlist = getPlaylistById(playlistId, req.session.userId);
+  const playlist = await getPlaylistById(playlistId, req.session.userId);
   if (!playlist) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
-  deletePlaylist(playlistId, req.session.userId);
+  await deletePlaylist(playlistId, req.session.userId);
   return res.json({ success: true, message: 'Playlist deleted.' });
 });
 
 // GET /api/playlists/:id/tracks — Fetch tracks for a playlist
-router.get('/:id/tracks', (req, res) => {
+router.get('/:id/tracks', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
     return res.status(400).json({ error: 'Invalid playlist ID.' });
   }
 
-  const tracks = getPlaylistTracks(playlistId, req.session.userId);
+  const tracks = await getPlaylistTracks(playlistId, req.session.userId);
   if (tracks === null) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
@@ -180,7 +180,7 @@ router.get('/:id/tracks', (req, res) => {
 });
 
 // POST /api/playlists/:id/tracks — Add track to playlist
-router.post('/:id/tracks', (req, res) => {
+router.post('/:id/tracks', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const { trackId } = req.body;
 
@@ -188,17 +188,17 @@ router.post('/:id/tracks', (req, res) => {
     return res.status(400).json({ error: 'Invalid playlist ID or track ID.' });
   }
 
-  const success = addTrackToPlaylist(playlistId, req.session.userId, parseInt(trackId, 10));
+  const success = await addTrackToPlaylist(playlistId, req.session.userId, parseInt(trackId, 10));
   if (!success) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
-  const tracks = getPlaylistTracks(playlistId, req.session.userId);
+  const tracks = await getPlaylistTracks(playlistId, req.session.userId);
   return res.json({ success: true, tracks });
 });
 
 // DELETE /api/playlists/:id/tracks/:trackId — Remove track from playlist
-router.delete('/:id/tracks/:trackId', (req, res) => {
+router.delete('/:id/tracks/:trackId', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const trackId = parseInt(req.params.trackId, 10);
 
@@ -206,17 +206,17 @@ router.delete('/:id/tracks/:trackId', (req, res) => {
     return res.status(400).json({ error: 'Invalid playlist ID or track ID.' });
   }
 
-  const success = removeTrackFromPlaylist(playlistId, req.session.userId, trackId);
+  const success = await removeTrackFromPlaylist(playlistId, req.session.userId, trackId);
   if (!success) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
-  const tracks = getPlaylistTracks(playlistId, req.session.userId);
+  const tracks = await getPlaylistTracks(playlistId, req.session.userId);
   return res.json({ success: true, tracks });
 });
 
 // PATCH /api/playlists/:id/reorder — Reorder tracks in playlist
-router.patch('/:id/reorder', (req, res) => {
+router.patch('/:id/reorder', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const { trackIds } = req.body;
 
@@ -224,12 +224,12 @@ router.patch('/:id/reorder', (req, res) => {
     return res.status(400).json({ error: 'Invalid playlist ID or trackIds array.' });
   }
 
-  const success = reorderPlaylistTracks(playlistId, req.session.userId, trackIds.map(id => parseInt(id, 10)));
+  const success = await reorderPlaylistTracks(playlistId, req.session.userId, trackIds.map(id => parseInt(id, 10)));
   if (!success) {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
-  const tracks = getPlaylistTracks(playlistId, req.session.userId);
+  const tracks = await getPlaylistTracks(playlistId, req.session.userId);
   return res.json({ success: true, tracks });
 });
 

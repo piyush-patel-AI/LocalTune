@@ -21,6 +21,7 @@ import {
 } from '../recommendationEngine.js';
 import { scanMissingMetadata } from '../scanner.js';
 import { normalizeGenre } from '../genreNormalizer.js';
+import { serveStoredImage } from '../mediaServe.js';
 
 const router = express.Router();
 
@@ -30,10 +31,10 @@ function getActiveUserId(req) {
 }
 
 // Helper to build user's favorites map
-function getFavoritesMap(userId) {
+async function getFavoritesMap(userId) {
   const favoritesMap = {};
   if (userId) {
-    const favs = getUserFavorites(userId);
+    const favs = await getUserFavorites(userId);
     favs.forEach((f) => {
       favoritesMap[f.id] = true;
     });
@@ -42,14 +43,14 @@ function getFavoritesMap(userId) {
 }
 
 // GET /api/tracks/recommendations/shelves
-router.get('/recommendations/shelves', (req, res) => {
+router.get('/recommendations/shelves', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
     const currentTrackId = req.query.currentTrackId ? parseInt(req.query.currentTrackId, 10) : null;
-    const allTracks = getAllTracks({});
-    const favoritesMap = getFavoritesMap(userId);
+    const allTracks = await getAllTracks({});
+    const favoritesMap = await getFavoritesMap(userId);
 
-    const shelves = generateShelves({
+    const shelves = await generateShelves({
       allTracks,
       favoritesMap,
       userId,
@@ -64,12 +65,12 @@ router.get('/recommendations/shelves', (req, res) => {
 });
 
 // GET /api/tracks/recommendations/discovery
-router.get('/recommendations/discovery', (req, res) => {
+router.get('/recommendations/discovery', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
-    const allTracks = getAllTracks({});
-    const favoritesMap = getFavoritesMap(userId);
-    const tracks = generateDiscoveryRadar({ allTracks, favoritesMap, userId });
+    const allTracks = await getAllTracks({});
+    const favoritesMap = await getFavoritesMap(userId);
+    const tracks = await generateDiscoveryRadar({ allTracks, favoritesMap, userId });
     return res.json({ tracks });
   } catch (err) {
     console.error('Error generating discovery radar:', err);
@@ -78,12 +79,12 @@ router.get('/recommendations/discovery', (req, res) => {
 });
 
 // GET /api/tracks/recommendations/forgotten
-router.get('/recommendations/forgotten', (req, res) => {
+router.get('/recommendations/forgotten', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
-    const allTracks = getAllTracks({});
-    const favoritesMap = getFavoritesMap(userId);
-    const tracks = generateForgottenFavorites({ allTracks, favoritesMap, userId });
+    const allTracks = await getAllTracks({});
+    const favoritesMap = await getFavoritesMap(userId);
+    const tracks = await generateForgottenFavorites({ allTracks, favoritesMap, userId });
     return res.json({ tracks });
   } catch (err) {
     console.error('Error generating forgotten favorites:', err);
@@ -92,17 +93,17 @@ router.get('/recommendations/forgotten', (req, res) => {
 });
 
 // GET /api/tracks/recommendations/autoplay
-router.get('/recommendations/autoplay', (req, res) => {
+router.get('/recommendations/autoplay', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
     const currentTrackId = req.query.currentTrackId ? parseInt(req.query.currentTrackId, 10) : null;
     const excludeTrackIds = req.query.exclude ? req.query.exclude.split(',').map((id) => parseInt(id, 10)).filter(Boolean) : [];
     const count = req.query.count ? parseInt(req.query.count, 10) : 5;
 
-    const allTracks = getAllTracks({});
-    const favoritesMap = getFavoritesMap(userId);
+    const allTracks = await getAllTracks({});
+    const favoritesMap = await getFavoritesMap(userId);
 
-    const tracks = generateAutoplayTracks({
+    const tracks = await generateAutoplayTracks({
       allTracks,
       favoritesMap,
       userId,
@@ -119,7 +120,7 @@ router.get('/recommendations/autoplay', (req, res) => {
 });
 
 // POST /api/tracks/recommendations/log
-router.post('/recommendations/log', (req, res) => {
+router.post('/recommendations/log', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
     const { trackId, shelfId, action } = req.body;
@@ -127,7 +128,7 @@ router.post('/recommendations/log', (req, res) => {
       return res.status(400).json({ error: 'Missing trackId or action' });
     }
 
-    logRecommendationAction({ userId, trackId, shelfId, action });
+    await logRecommendationAction({ userId, trackId, shelfId, action });
     return res.json({ success: true });
   } catch (err) {
     console.error('Error logging recommendation action:', err);
@@ -136,14 +137,14 @@ router.post('/recommendations/log', (req, res) => {
 });
 
 // GET /api/tracks/recommendations (Legacy single endpoint)
-router.get('/recommendations', (req, res) => {
+router.get('/recommendations', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
     const currentTrackId = req.query.currentTrackId ? parseInt(req.query.currentTrackId, 10) : null;
-    const allTracks = getAllTracks({});
-    const favoritesMap = getFavoritesMap(userId);
+    const allTracks = await getAllTracks({});
+    const favoritesMap = await getFavoritesMap(userId);
 
-    const recommendedTracks = generateRecommendations({
+    const recommendedTracks = await generateRecommendations({
       allTracks,
       favoritesMap,
       userId,
@@ -170,7 +171,7 @@ router.post('/scan-missing-metadata', async (req, res) => {
 });
 
 // PATCH /api/tracks/bulk-edit (Bulk Edit Metadata)
-router.patch('/bulk-edit', (req, res) => {
+router.patch('/bulk-edit', async (req, res) => {
   try {
     const { trackIds, genre, year, artist, album } = req.body;
     if (!Array.isArray(trackIds) || trackIds.length === 0) {
@@ -178,7 +179,7 @@ router.patch('/bulk-edit', (req, res) => {
     }
 
     const normGenre = genre !== undefined ? (genre ? normalizeGenre(genre) : null) : undefined;
-    const count = bulkUpdateTrackMetadata(trackIds, {
+    const count = await bulkUpdateTrackMetadata(trackIds, {
       genre: normGenre,
       year,
       artist,
@@ -194,41 +195,47 @@ router.patch('/bulk-edit', (req, res) => {
 });
 
 // GET /api/tracks
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { search, artist, releaseType, sortBy, sortOrder, groupBy } = req.query;
 
   if (groupBy === 'album') {
-    const albums = getAlbums(releaseType);
+    const albums = await getAlbums(releaseType);
     return res.json({ albums });
   }
 
   if (groupBy === 'artist') {
-    const artists = getArtists();
+    const artists = await getArtists();
     return res.json({ artists });
   }
 
-  const tracks = getAllTracks({ search, artist, releaseType, sortBy, sortOrder });
+  const tracks = await getAllTracks({ search, artist, releaseType, sortBy, sortOrder });
   return res.json({ tracks });
 });
 
 // GET /api/tracks/artist-image/:artistName
-router.get('/artist-image/:artistName', (req, res) => {
+router.get('/artist-image/:artistName', async (req, res) => {
   const artistName = req.params.artistName;
-  const artistImg = getArtistImage(artistName);
+  const artistImg = await getArtistImage(artistName);
   if (!artistImg || !artistImg.image_path) {
     return res.status(404).json({ error: 'No artist image found' });
   }
-  return res.sendFile(artistImg.image_path);
+  try {
+    // B2 object key -> 302 redirect; legacy local path -> sendFile
+    return await serveStoredImage(res, artistImg.b2_key || artistImg.image_path);
+  } catch (err) {
+    console.error('Error serving artist image:', err);
+    return res.status(500).json({ error: 'Failed to serve artist image' });
+  }
 });
 
 // GET /api/tracks/:id
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const trackId = parseInt(req.params.id, 10);
   if (isNaN(trackId)) {
     return res.status(400).json({ error: 'Invalid track ID' });
   }
 
-  const track = getTrackById(trackId);
+  const track = await getTrackById(trackId);
   if (!track) {
     return res.status(404).json({ error: 'Track not found' });
   }
@@ -237,22 +244,27 @@ router.get('/:id', (req, res) => {
 });
 
 // GET /api/tracks/:id/art
-router.get('/:id/art', (req, res) => {
+router.get('/:id/art', async (req, res) => {
   const trackId = parseInt(req.params.id, 10);
   if (isNaN(trackId)) {
     return res.status(400).json({ error: 'Invalid track ID' });
   }
 
-  const track = getTrackById(trackId);
-  if (!track || !track.cover_art_path) {
+  const track = await getTrackById(trackId);
+  if (!track || (!track.cover_art_path && !track.artwork_b2_key)) {
     return res.status(404).json({ error: 'No album art found for track' });
   }
 
-  return res.sendFile(track.cover_art_path);
+  try {
+    return await serveStoredImage(res, track.artwork_b2_key || track.cover_art_path);
+  } catch (err) {
+    console.error('Error serving artwork:', err);
+    return res.status(500).json({ error: 'Failed to serve artwork' });
+  }
 });
 
 // PATCH /api/tracks/:id (Single track metadata update)
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
     const trackId = parseInt(req.params.id, 10);
     if (isNaN(trackId)) {
@@ -262,7 +274,7 @@ router.patch('/:id', (req, res) => {
     const { title, artist, album, genre, year, language, composer, comment, rating, tags } = req.body;
     const normGenre = genre !== undefined ? (genre ? normalizeGenre(genre) : null) : undefined;
 
-    const updatedTrack = updateTrackMetadata(trackId, {
+    const updatedTrack = await updateTrackMetadata(trackId, {
       title,
       artist,
       album,
@@ -288,14 +300,14 @@ router.patch('/:id', (req, res) => {
 });
 
 // POST /api/tracks/:id/reset-metadata (Reset metadata to original)
-router.post('/:id/reset-metadata', (req, res) => {
+router.post('/:id/reset-metadata', async (req, res) => {
   try {
     const trackId = parseInt(req.params.id, 10);
     if (isNaN(trackId)) {
       return res.status(400).json({ error: 'Invalid track ID' });
     }
 
-    const resetTrack = resetTrackMetadata(trackId);
+    const resetTrack = await resetTrackMetadata(trackId);
     if (!resetTrack) {
       return res.status(404).json({ error: 'Track not found' });
     }

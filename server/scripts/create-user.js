@@ -11,8 +11,8 @@ if (!username || !password) {
   process.exit(1);
 }
 
-try {
-  const existing = getUserByUsername(username);
+async function main() {
+  const existing = await getUserByUsername(username);
   if (existing) {
     console.error(`❌ User '${username}' already exists!`);
     process.exit(1);
@@ -20,11 +20,14 @@ try {
 
   const saltRounds = 10;
   const passwordHash = bcrypt.hashSync(password, saltRounds);
-  const userId = createUser(username, passwordHash, displayName);
+  const userId = await createUser(username, passwordHash, displayName);
 
   console.log(`✅ User '${username}' (${displayName}) created successfully with ID: ${userId}`);
-  process.exit(0);
-} catch (err) {
-  console.error('❌ Failed to create user:', err.message);
-  process.exit(1);
 }
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('❌ Failed to create user:', err.message);
+    process.exit(1);
+  });

@@ -15,7 +15,15 @@ const recommendationCache = new Map();
  */
 export function invalidateRecommendationCache(userId) {
   if (userId) {
-    recommendationCache.delete(userId);
+    // Cache keys are composites ("${userId}_${currentTrackId}") because
+    // recommendations differ per playing context; drop every entry owned
+    // by this user, otherwise favorites/plays would keep serving stale data.
+    const prefix = `${userId}_`;
+    for (const key of [...recommendationCache.keys()]) {
+      if (key.startsWith(prefix)) {
+        recommendationCache.delete(key);
+      }
+    }
   } else {
     recommendationCache.clear();
   }
@@ -96,13 +104,15 @@ function getTimeWindow(hour) {
 /**
  * Score all candidate tracks and attach scoreBreakdown & reason
  */
-export function scoreTracks({ allTracks, favoritesMap = {}, userId, currentTrackId }) {
+export async function scoreTracks({ allTracks, favoritesMap = {}, userId, currentTrackId }) {
   const config = loadRecommendationConfig();
   const w = config.weights;
   const t = config.thresholds;
 
-  const userLogs = userId ? getPlayLogsForUser(userId) : [];
-  const userTransitions = userId ? getTransitionsForUser(userId) : [];
+  // Fetch user history concurrently (async DB backends)
+  const [userLogs, userTransitions] = userId
+    ? await Promise.all([getPlayLogsForUser(userId), getTransitionsForUser(userId)])
+    : [[], []];
 
   const now = Date.now();
   const currentHour = new Date().getHours();
@@ -359,13 +369,13 @@ function applyCooldown(scoredTracks, cooldownHours = 6) {
 /**
  * Main function: Generate recommendations for single shelf / generic endpoint
  */
-export function generateRecommendations({ allTracks, favoritesMap = {}, userId, currentTrackId, count = 20 }) {
+export async function generateRecommendations({ allTracks, favoritesMap = {}, userId, currentTrackId, count = 20 }) {
   const cacheKey = `${userId || 'guest'}_${currentTrackId || 'none'}`;
   if (recommendationCache.has(cacheKey)) {
     return recommendationCache.get(cacheKey);
   }
 
-  const scoredTracks = scoreTracks({ allTracks, favoritesMap, userId, currentTrackId });
+  const scoredTracks = await scoreTracks({ allTracks, favoritesMap, userId, currentTrackId });
   const candidates = scoredTracks.filter(({ track }) => !currentTrackId || track.id !== currentTrackId);
   candidates.sort((a, b) => b.totalScore - a.totalScore);
 
@@ -403,8 +413,8 @@ export function generateRecommendations({ allTracks, favoritesMap = {}, userId, 
     }
   }
 
-  // Update telemetry for recommended tracks
-  selected.forEach((tr) => updateRecommendationStats(tr.id));
+  // Update telemetry for recommended tracks (concurrently)
+  await Promise.all(selected.map((tr) => updateRecommendationStats(tr.id)));
 
   recommendationCache.set(cacheKey, selected);
   return selected;
@@ -413,8 +423,8 @@ export function generateRecommendations({ allTracks, favoritesMap = {}, userId, 
 /**
  * Generate Discovery Radar shelf (prioritizes 0-play / 1-play songs matching genres/artists)
  */
-export function generateDiscoveryRadar({ allTracks, favoritesMap = {}, userId, count = 10 }) {
-  const scored = scoreTracks({ allTracks, favoritesMap, userId });
+export async function generateDiscoveryRadar({ allTracks, favoritesMap = {}, userId, count = 10 }) {
+  const scored = await scoreTracks({ allTracks, favoritesMap, userId });
   const discoveryCandidates = scored.filter(({ logs }) => logs.length <= 1);
   discoveryCandidates.sort((a, b) => b.totalScore - a.totalScore);
 
@@ -429,8 +439,8 @@ export function generateDiscoveryRadar({ allTracks, favoritesMap = {}, userId, c
 /**
  * Generate Forgotten Favorites shelf (favorites/heavily played not played in 30+ days)
  */
-export function generateForgottenFavorites({ allTracks, favoritesMap = {}, userId, count = 10 }) {
-  const scored = scoreTracks({ allTracks, favoritesMap, userId });
+export async function generateForgottenFavorites({ allTracks, favoritesMap = {}, userId, count = 10 }) {
+  const scored = await scoreTracks({ allTracks, favoritesMap, userId });
   const now = Date.now();
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -455,8 +465,8 @@ export function generateForgottenFavorites({ allTracks, favoritesMap = {}, userI
 /**
  * Generate Endless Autoplay tracks (5-10 contextual tracks when queue ends)
  */
-export function generateAutoplayTracks({ allTracks, favoritesMap = {}, userId, currentTrackId, excludeTrackIds = [], count = 5 }) {
-  const scored = scoreTracks({ allTracks, favoritesMap, userId, currentTrackId });
+export async function generateAutoplayTracks({ allTracks, favoritesMap = {}, userId, currentTrackId, excludeTrackIds = [], count = 5 }) {
+  const scored = await scoreTracks({ allTracks, favoritesMap, userId, currentTrackId });
   const excludeSet = new Set(excludeTrackIds);
 
   const candidates = scored.filter(({ track }) => !excludeSet.has(track.id) && track.id !== currentTrackId);
@@ -468,8 +478,8 @@ export function generateAutoplayTracks({ allTracks, favoritesMap = {}, userId, c
 /**
  * Generate Multiple Generic Shelves for API response: [ { id, title, priority, tracks } ]
  */
-export function generateShelves({ allTracks, favoritesMap = {}, userId, currentTrackId }) {
-  const scored = scoreTracks({ allTracks, favoritesMap, userId, currentTrackId });
+export async function generateShelves({ allTracks, favoritesMap = {}, userId, currentTrackId }) {
+  const scored = await scoreTracks({ allTracks, favoritesMap, userId, currentTrackId });
 
   // 1. Continue Listening (tracks recently listened to with completion)
   const continueListening = scored
@@ -478,14 +488,12 @@ export function generateShelves({ allTracks, favoritesMap = {}, userId, currentT
     .slice(0, 8)
     .map((i) => ({ ...i.track, reason: 'Picked up from your recent session' }));
 
-  // 2. Recommended For You (Top overall scored)
-  const recommendedForYou = generateRecommendations({ allTracks, favoritesMap, userId, currentTrackId, count: 12 });
-
-  // 3. Discovery Radar
-  const discoveryRadar = generateDiscoveryRadar({ allTracks, favoritesMap, userId, count: 8 });
-
-  // 4. Forgotten Favorites
-  const forgottenFavorites = generateForgottenFavorites({ allTracks, favoritesMap, userId, count: 8 });
+  // 2-4. Sub-shelves (concurrent; each hits its own cache key)
+  const [recommendedForYou, discoveryRadar, forgottenFavorites] = await Promise.all([
+    generateRecommendations({ allTracks, favoritesMap, userId, currentTrackId, count: 12 }),
+    generateDiscoveryRadar({ allTracks, favoritesMap, userId, count: 8 }),
+    generateForgottenFavorites({ allTracks, favoritesMap, userId, count: 8 })
+  ]);
 
   // 5. Hidden Gems (Low play count 1-3, high score)
   const hiddenGems = scored

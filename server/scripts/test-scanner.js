@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { scanLibrary, getScanStatus } from '../scanner.js';
-import db, { getAllTracks } from '../db.js';
+import { getAllTracks, rawRun } from '../db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,7 +51,7 @@ try {
     throw new Error(`Expected scannedCount 5, got ${status.scannedCount}`);
   }
 
-  const tracks = getAllTracks();
+  const tracks = await getAllTracks();
   console.log(`✓ Database tracks populated. Total rows in DB: ${tracks.length}`);
 
   tracks.forEach(t => {
@@ -64,7 +64,7 @@ try {
 
   await scanLibrary(testDir);
 
-  const updatedTracks = getAllTracks();
+  const updatedTracks = await getAllTracks();
   console.log(`✓ Database tracks after deletion re-scan: ${updatedTracks.length}`);
 
   const deletedTrack = updatedTracks.find(t => t.file_path.endsWith('01_Track_One.mp3'));
@@ -75,7 +75,7 @@ try {
 
   // Cleanup test music folder & DB tracks
   fs.rmSync(testDir, { recursive: true, force: true });
-  db.prepare(`DELETE FROM tracks WHERE file_path LIKE ?`).run(`%test_music%`);
+  await rawRun(`DELETE FROM tracks WHERE file_path LIKE ?`, [`%test_music%`]);
   console.log('✓ Cleaned up test music files and DB rows.');
 
   console.log('\n✅ Scanner verification PASSED successfully!');
