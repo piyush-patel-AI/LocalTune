@@ -1,14 +1,12 @@
 /**
  * LocalTune Unified API Client
- * Automatically injects the ngrok-skip-browser-warning header into all backend HTTP requests.
+ * Automatically prepends the production API base URL to all backend requests.
  */
 
-const NGROK_HEADER_KEY = 'ngrok-skip-browser-warning';
-const NGROK_HEADER_VAL = '69420';
+import { apiUrl } from '../config';
 
 async function request(endpoint, options = {}) {
   const headers = new Headers(options.headers || {});
-  headers.set(NGROK_HEADER_KEY, NGROK_HEADER_VAL);
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
@@ -20,7 +18,7 @@ async function request(endpoint, options = {}) {
     headers
   };
 
-  const response = await fetch(endpoint, config);
+  const response = await fetch(apiUrl(endpoint), config);
 
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}: ${response.statusText}`;

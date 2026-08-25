@@ -12,6 +12,7 @@ import {
 } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
 import { usePlayer } from '../context/PlayerContext';
+import { apiUrl } from '../config';
 
 const QUALITY_OPTIONS = [
   { label: 'Normal (128 kbps)', value: 'Normal' },
@@ -66,7 +67,7 @@ export default function MobileSettingsView() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/stats', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/stats'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setStats({
@@ -98,7 +99,7 @@ export default function MobileSettingsView() {
     try {
       setScanning(true);
       setScanMessage('Scanning local music library directory...');
-      const res = await fetch('/api/scan', {
+      const res = await fetch(apiUrl('/api/scan'), {
         method: 'POST',
         credentials: 'include'
       });
@@ -123,7 +124,7 @@ export default function MobileSettingsView() {
     try {
       setScanningMeta(true);
       setScanMessage('Refreshing track metadata & artwork...');
-      const res = await fetch('/api/tracks/scan-missing-metadata', {
+      const res = await fetch(apiUrl('/api/tracks/scan-missing-metadata'), {
         method: 'POST',
         credentials: 'include'
       });

@@ -3,6 +3,7 @@ import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import BottomSheet from './BottomSheet';
 import { IconMusic, IconPlus, IconPlay, IconTrash } from './Icons';
+import { apiUrl } from '../config';
 
 export default function QueueModal() {
   const {
@@ -28,7 +29,7 @@ export default function QueueModal() {
   const fetchQueueRecommendations = async () => {
     try {
       setLoadingRecs(true);
-      const res = await fetch('/api/tracks/recommendations', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/tracks/recommendations'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const rawList = data.recommendations || data.tracks || [];
@@ -91,7 +92,7 @@ export default function QueueModal() {
               <div className="row-main-info">
                 {currentTrack.cover_art_path ? (
                   <img
-                    src={`/api/tracks/${currentTrack.id}/art`}
+                    src={apiUrl(`/api/tracks/${currentTrack.id}/art`)}
                     alt={currentTrack.title}
                     className="row-art"
                     onError={(e) => { e.target.style.display = 'none'; }}
@@ -177,7 +178,7 @@ export default function QueueModal() {
                   <div className="row-main-info" onClick={() => playTrack(track, [...queue, track])} style={{ cursor: 'pointer' }}>
                     {track.cover_art_path ? (
                       <img
-                        src={`/api/tracks/${track.id}/art`}
+                        src={apiUrl(`/api/tracks/${track.id}/art`)}
                         alt={track.title}
                         className="row-art"
                         onError={(e) => { e.target.style.display = 'none'; }}

@@ -5,6 +5,7 @@ import { apiClient } from '../services/apiClient';
 import { LocalTuneEvents } from '../services/LocalTuneEvents';
 import { MediaMetadataProvider } from '../services/MediaMetadataProvider';
 import { LocalTuneBridge } from '../services/LocalTuneBridge';
+import { apiUrl } from '../config';
 
 const PlayerContext = createContext();
 
@@ -136,7 +137,7 @@ export function PlayerProvider({ children }) {
 
   const fetchFavorites = async () => {
     try {
-      const res = await fetch('/api/favorites', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/favorites'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const map = {};
@@ -186,7 +187,7 @@ export function PlayerProvider({ children }) {
     if (!initialHydratedRef.current && currentTrack) {
       initialHydratedRef.current = true;
       const audio = audioRef.current;
-      audio.src = `/stream/${currentTrack.id}?ngrok-skip-browser-warning=69420`;
+      audio.src = apiUrl(`/stream/${currentTrack.id}`);
       audio.currentTime = currentTime;
     }
   }, [currentTrack]);
@@ -202,7 +203,7 @@ export function PlayerProvider({ children }) {
 
     if (currentTrack) {
       localStorage.setItem('localTune_currentTrack', JSON.stringify(currentTrack));
-      const artUrl = currentTrack.coverUrl || currentTrack.cover_art_url || `/api/tracks/${currentTrack.id}/art`;
+      const artUrl = currentTrack.coverUrl || currentTrack.cover_art_url || apiUrl(`/api/tracks/${currentTrack.id}/art`);
       
       extractColorsFromAlbumArt(artUrl).then((colors) => {
         if (!isCancelled && ambientBgEnabled) {
@@ -321,8 +322,8 @@ export function PlayerProvider({ children }) {
         title: currentTrack.title || 'Unknown Title',
         artist: currentTrack.artist || 'Unknown Artist',
         album: currentTrack.album || 'LocalTune',
-        artwork: currentTrack.cover_art_path ? [
-          { src: `/api/tracks/${currentTrack.id}/art`, sizes: '512x512', type: 'image/jpeg' }
+          artwork: currentTrack.cover_art_path ? [
+            { src: apiUrl(`/api/tracks/${currentTrack.id}/art`), sizes: '512x512', type: 'image/jpeg' }
         ] : []
       });
 
@@ -356,7 +357,7 @@ export function PlayerProvider({ children }) {
     });
 
     const audio = audioRef.current;
-    audio.src = `/stream/${track.id}?ngrok-skip-browser-warning=69420`;
+    audio.src = apiUrl(`/stream/${track.id}`);
     audio.load();
     audio.play().catch((err) => console.error('Audio playback error:', err));
 
@@ -388,7 +389,7 @@ export function PlayerProvider({ children }) {
       const q = queueRef.current;
       const excludeIds = q.map((t) => t.id).join(',');
 
-      const res = await fetch(`/api/tracks/recommendations/autoplay?currentTrackId=${curTrackId || ''}&exclude=${excludeIds}&count=5`, {
+      const res = await fetch(apiUrl(`/api/tracks/recommendations/autoplay?currentTrackId=${curTrackId || ''}&exclude=${excludeIds}&count=5`), {
         credentials: 'include'
       });
       if (res.ok) {
@@ -506,7 +507,7 @@ export function PlayerProvider({ children }) {
     const isFav = !!favoritesMap[trackId];
     try {
       const method = isFav ? 'DELETE' : 'POST';
-      const res = await fetch(`/api/favorites/${trackId}`, {
+      const res = await fetch(apiUrl(`/api/favorites/${trackId}`), {
         method,
         credentials: 'include'
       });

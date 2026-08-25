@@ -10,6 +10,7 @@ import {
   IconSearch
 } from '../components/Icons';
 import TrackActionSheet from '../components/TrackActionSheet';
+import { apiUrl } from '../config';
 
 const MOOD_CARDS = [
   {
@@ -121,8 +122,8 @@ export default function MobileExploreView() {
     try {
       setLoading(true);
       const [tracksRes, recsRes] = await Promise.all([
-        fetch('/api/tracks', { credentials: 'include' }),
-        fetch('/api/tracks/recommendations', { credentials: 'include' })
+        fetch(apiUrl('/api/tracks'), { credentials: 'include' }),
+        fetch(apiUrl('/api/tracks/recommendations'), { credentials: 'include' })
       ]);
 
       if (tracksRes.ok) {
@@ -326,7 +327,7 @@ export default function MobileExploreView() {
                 >
                   {sampleTrack && sampleTrack.cover_art_path && (
                     <img
-                      src={`/api/tracks/${sampleTrack.id}/art`}
+                      src={apiUrl(`/api/tracks/${sampleTrack.id}/art`)}
                       alt=""
                       style={{
                         position: 'absolute',
@@ -382,7 +383,7 @@ export default function MobileExploreView() {
                   <div className="media-card-art-box" style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', aspectRatio: '1/1' }}>
                     {track.cover_art_path ? (
                       <img
-                        src={`/api/tracks/${track.id}/art`}
+                        src={apiUrl(`/api/tracks/${track.id}/art`)}
                         alt={track.title}
                         className="media-card-art"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -469,7 +470,7 @@ export default function MobileExploreView() {
                     <div className="row-main-info">
                       {track.cover_art_path ? (
                         <img
-                          src={`/api/tracks/${track.id}/art`}
+                          src={apiUrl(`/api/tracks/${track.id}/art`)}
                           alt={track.title}
                           className="row-art"
                           onError={(e) => { e.target.style.display = 'none'; }}

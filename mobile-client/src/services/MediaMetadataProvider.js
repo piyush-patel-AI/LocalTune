@@ -3,9 +3,11 @@
  * Handles metadata formatting, multi-resolution artwork URLs, and standard Web MediaSession API synchronization.
  */
 
+import { apiUrl } from '../config';
+
 export function getArtworkUrl(track, requestedSize = 512) {
   if (!track) return '';
-  let url = track.coverUrl || track.cover_art_url || `/api/tracks/${track.id}/art?size=${requestedSize}&ngrok-skip-browser-warning=69420`;
+  let url = track.coverUrl || track.cover_art_url || apiUrl(`/api/tracks/${track.id}/art?size=${requestedSize}`);
 
   if (typeof window !== 'undefined' && !url.startsWith('http://') && !url.startsWith('https://')) {
     try {
@@ -32,11 +34,10 @@ export function syncServerPlaybackState(state = {}) {
   lastPostTime = now;
 
   try {
-    fetch('/api/playback-state', {
+    fetch(apiUrl('/api/playback-state'), {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': '69420'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(state)
     }).catch(() => {});

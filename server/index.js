@@ -15,7 +15,7 @@ import streamRoutes from './routes/stream.js';
 import statsRoutes from './routes/stats.js';
 import { getTrackById, initDatabase } from './db.js';
 import { requireAuth } from './middleware/auth.js';
-import { uploadFieldsMiddleware, handleUploadTrack } from './uploader.js';
+import { uploadFieldsMiddleware, handleUploadTrack, uploaderRouter } from './uploader.js';
 import { serveStoredImage } from './mediaServe.js';
 
 dotenv.config();
@@ -163,6 +163,9 @@ app.post('/api/upload', requireAuth, uploadFieldsMiddleware, handleUploadTrack);
 
 // Audio Streaming route
 app.use('/stream', streamRoutes);
+
+// Uploader portal (serves HTML at /uploader and handles /upload, /upload-artist, etc.)
+app.use(uploaderRouter);
 
 // 404 Handler
 app.use((req, res) => {

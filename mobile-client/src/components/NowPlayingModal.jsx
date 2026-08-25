@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import AddToPlaylistModal from './AddToPlaylistModal';
+import { apiUrl } from '../config';
 import {
   IconChevronDown,
   IconHeart,
@@ -129,7 +130,7 @@ export default function NowPlayingModal() {
         {currentTrack.cover_art_path && (
           <div
             className="now-playing-bg-blur"
-            style={{ backgroundImage: `url(/api/tracks/${currentTrack.id}/art)` }}
+            style={{ backgroundImage: `url(${apiUrl(`/api/tracks/${currentTrack.id}/art`)})` }}
           />
         )}
         <div className="now-playing-gradient-overlay" />
@@ -309,7 +310,7 @@ export default function NowPlayingModal() {
             <div className="action-sheet-track-header">
               {currentTrack.cover_art_path ? (
                 <img
-                  src={`/api/tracks/${currentTrack.id}/art`}
+                  src={apiUrl(`/api/tracks/${currentTrack.id}/art`)}
                   alt={currentTrack.title}
                   className="action-sheet-art"
                 />

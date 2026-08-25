@@ -51,6 +51,10 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB max per file
 });
 
+// Shared router for uploader routes — mounted on the main Express server in
+// production OR used directly by the standalone uploader app in development.
+export const uploaderRouter = express.Router();
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -74,7 +78,7 @@ async function saveImageBuffer(buffer, mimetype, b2Key, localDir, localName) {
 }
 
 // GET /api/artists - List all registered artists for autocomplete
-app.get('/api/artists', async (req, res) => {
+uploaderRouter.get('/api/artists', async (req, res) => {
   try {
     const artists = await getArtists();
     res.json({ artists });
@@ -84,7 +88,7 @@ app.get('/api/artists', async (req, res) => {
 });
 
 // GET /api/manage-tracks - Get all tracks for editing
-app.get('/api/manage-tracks', async (req, res) => {
+uploaderRouter.get('/api/manage-tracks', async (req, res) => {
   try {
     const tracks = await getAllTracks();
     res.json({ tracks });
@@ -94,7 +98,7 @@ app.get('/api/manage-tracks', async (req, res) => {
 });
 
 // POST /api/manage-tracks/:id - Update track metadata from upload portal
-app.post('/api/manage-tracks/:id', async (req, res) => {
+uploaderRouter.post('/api/manage-tracks/:id', async (req, res) => {
   try {
     const trackId = parseInt(req.params.id, 10);
     const { title, artist, album, genre, year } = req.body;
@@ -114,7 +118,7 @@ app.post('/api/manage-tracks/:id', async (req, res) => {
 });
 
 // POST /api/manage-tracks/:id/reset - Reset track metadata
-app.post('/api/manage-tracks/:id/reset', async (req, res) => {
+uploaderRouter.post('/api/manage-tracks/:id/reset', async (req, res) => {
   try {
     const trackId = parseInt(req.params.id, 10);
     const resetTrack = await resetTrackMetadata(trackId);
@@ -126,7 +130,7 @@ app.post('/api/manage-tracks/:id/reset', async (req, res) => {
 });
 
 // POST /upload-artist - Create/Update Artist Profile without uploading a song
-app.post('/upload-artist', upload.single('artistImage'), async (req, res) => {
+uploaderRouter.post('/upload-artist', upload.single('artistImage'), async (req, res) => {
   try {
     const artistName = req.body.artistName ? req.body.artistName.trim() : '';
     if (!artistName) {
@@ -386,11 +390,13 @@ export const handleUploadTrack = async (req, res) => {
   }
 };
 
-app.post('/upload', uploadFieldsMiddleware, handleUploadTrack);
+uploaderRouter.post('/upload', uploadFieldsMiddleware, handleUploadTrack);
 
 // Single Page Upload Interface
-app.get('/', (req, res) => {
-  res.send(`
+function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtitle = '' } = {}) {
+  if (!subtitle) subtitle = `Upload songs & manage artist profiles (Port ${UPLOAD_PORT})`;
+  if (!webPlayerUrl) webPlayerUrl = `http://localhost:5173`;
+  return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -650,7 +656,7 @@ app.get('/', (req, res) => {
     <div class="header">
       <div class="logo">🎵</div>
       <h1 class="title">LocalTune Portal</h1>
-      <p class="subtitle">Upload songs & manage artist profiles (Port ${UPLOAD_PORT})</p>
+      <p class="subtitle">${subtitle}</p>
     </div>
 
     <!-- Mode Selector Tabs -->
@@ -857,7 +863,7 @@ app.get('/', (req, res) => {
 
     <div id="resultAlert" class="result-alert"></div>
 
-    <a href="http://${req.hostname}:5173" target="_blank" class="nav-link">
+    <a href="${webPlayerUrl}" target="_blank" class="nav-link">
       🎧 Open LocalTune Web Player &rarr;
     </a>
   </div>
@@ -1327,13 +1333,34 @@ app.get('/', (req, res) => {
   </script>
 </body>
 </html>
-  `);
+  `;
+}
+
+uploaderRouter.get('/uploader', (req, res) => {
+  const proto = req.protocol;
+  const host = req.get('host');
+  const baseUrl = `${proto}://${host}`;
+  res.send(generateUploaderHtml({
+    uploadUrl: `${baseUrl}/upload`,
+    webPlayerUrl: process.env.WEB_PLAYER_URL || 'http://localhost:5173',
+    subtitle: `Upload songs & manage artist profiles — ${baseUrl}`
+  }));
 });
 
 // Only start the standalone portal server when uploader.js is executed directly
 // (index.js imports these handlers without spawning a second listener).
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isDirectRun) {
+  app.use(uploaderRouter);
+
+  app.get('/', (req, res) => {
+    res.send(generateUploaderHtml({
+      uploadUrl: '/upload',
+      webPlayerUrl: `http://localhost:5173`,
+      subtitle: `Upload songs & manage artist profiles (Port ${UPLOAD_PORT})`
+    }));
+  });
+
   initDatabase()
     .then(() => {
       app.listen(UPLOAD_PORT, '0.0.0.0', () => {

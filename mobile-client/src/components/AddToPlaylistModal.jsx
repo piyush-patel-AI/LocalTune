@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import BottomSheet from './BottomSheet';
 import PlaylistCover from './PlaylistCover';
 import { IconPlus, IconCheck, IconImage } from './Icons';
+import { apiUrl } from '../config';
 
 export default function AddToPlaylistModal({ track, onClose }) {
   const [playlists, setPlaylists] = useState([]);
@@ -19,7 +20,7 @@ export default function AddToPlaylistModal({ track, onClose }) {
 
   const fetchPlaylists = async () => {
     try {
-      const res = await fetch('/api/playlists', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/playlists'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setPlaylists(data.playlists || []);
@@ -43,7 +44,7 @@ export default function AddToPlaylistModal({ track, onClose }) {
 
   const handleAddToPlaylist = async (playlistId) => {
     try {
-      const res = await fetch(`/api/playlists/${playlistId}/tracks`, {
+      const res = await fetch(apiUrl(`/api/playlists/${playlistId}/tracks`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -75,7 +76,7 @@ export default function AddToPlaylistModal({ track, onClose }) {
         formData.append('cover', coverFile);
       }
 
-      const resCreate = await fetch('/api/playlists', {
+      const resCreate = await fetch(apiUrl('/api/playlists'), {
         method: 'POST',
         credentials: 'include',
         body: formData

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import GenreSelector from './GenreSelector';
 import { IconX, IconCheck } from './Icons';
+import { apiUrl } from '../config';
 
 export default function BulkEditModal({ selectedTrackIds = [], onClose, onSave }) {
   const [genre, setGenre] = useState('');
@@ -18,7 +19,7 @@ export default function BulkEditModal({ selectedTrackIds = [], onClose, onSave }
     try {
       setSaving(true);
       setError(null);
-      const res = await fetch('/api/tracks/bulk-edit', {
+      const res = await fetch(apiUrl('/api/tracks/bulk-edit'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../config';
 
 export default function MobileLoginView() {
   const { login, register } = useAuth();
@@ -12,7 +13,7 @@ export default function MobileLoginView() {
   const [publicUsers, setPublicUsers] = useState([]);
 
   useEffect(() => {
-    fetch('/api/users/public')
+    fetch(apiUrl('/api/users/public'))
       .then((res) => res.json())
       .then((data) => {
         if (data.users) {

@@ -16,6 +16,7 @@ import {
   IconGrid,
   IconList
 } from '../components/Icons';
+import { apiUrl } from '../config';
 
 export default function MobileLibraryView() {
   const { playTrack, favoritesMap, selectedArtistForView, setSelectedArtistForView } = usePlayer();
@@ -51,10 +52,10 @@ export default function MobileLibraryView() {
   const fetchLibraryData = async () => {
     try {
       const [favRes, playRes, artRes, tracksRes] = await Promise.all([
-        fetch('/api/favorites', { credentials: 'include' }),
-        fetch('/api/playlists', { credentials: 'include' }),
-        fetch('/api/tracks?groupBy=artist', { credentials: 'include' }),
-        fetch('/api/tracks', { credentials: 'include' })
+        fetch(apiUrl('/api/favorites'), { credentials: 'include' }),
+        fetch(apiUrl('/api/playlists'), { credentials: 'include' }),
+        fetch(apiUrl('/api/tracks?groupBy=artist'), { credentials: 'include' }),
+        fetch(apiUrl('/api/tracks'), { credentials: 'include' })
       ]);
 
       if (favRes.ok) {
@@ -101,7 +102,7 @@ export default function MobileLibraryView() {
 
   const openPlaylist = async (pl) => {
     try {
-      const res = await fetch(`/api/playlists/${pl.id}`, { credentials: 'include' });
+      const res = await fetch(apiUrl(`/api/playlists/${pl.id}`), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const playlistObj = data.playlist || pl;
@@ -123,7 +124,7 @@ export default function MobileLibraryView() {
       const formData = new FormData();
       formData.append('cover', file);
 
-      const res = await fetch(`/api/playlists/${playlistId}/cover`, {
+      const res = await fetch(apiUrl(`/api/playlists/${playlistId}/cover`), {
         method: 'POST',
         credentials: 'include',
         body: formData
@@ -153,7 +154,7 @@ export default function MobileLibraryView() {
         formData.append('cover', newPlaylistCoverFile);
       }
 
-      const res = await fetch('/api/playlists', {
+      const res = await fetch(apiUrl('/api/playlists'), {
         method: 'POST',
         credentials: 'include',
         body: formData
@@ -174,7 +175,7 @@ export default function MobileLibraryView() {
   const handleDeletePlaylist = async (playlistId) => {
     if (!window.confirm('Are you sure you want to delete this playlist?')) return;
     try {
-      const res = await fetch(`/api/playlists/${playlistId}`, {
+      const res = await fetch(apiUrl(`/api/playlists/${playlistId}`), {
         method: 'DELETE',
         credentials: 'include'
       });
@@ -216,7 +217,7 @@ export default function MobileLibraryView() {
           <div style={{ width: '84px', height: '84px', borderRadius: 'var(--radius-md)', overflow: 'hidden', flexShrink: 0, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--glass-border)' }}>
             {selectedAlbum.firstTrackId ? (
               <img
-                src={`/api/tracks/${selectedAlbum.firstTrackId}/art`}
+                src={apiUrl(`/api/tracks/${selectedAlbum.firstTrackId}/art`)}
                 alt={selectedAlbum.name}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -305,7 +306,7 @@ export default function MobileLibraryView() {
           <div className="artist-avatar-ring" style={{ width: '84px', height: '84px', flexShrink: 0 }}>
             {selectedArtist.artist_image_path ? (
               <img
-                src={`/api/tracks/artist-image/${encodeURIComponent(selectedArtist.artist)}`}
+                src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(selectedArtist.artist)}`)}
                 alt={selectedArtist.artist}
                 className="artist-avatar-img"
                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -335,7 +336,7 @@ export default function MobileLibraryView() {
                 <div className="row-main-info">
                   {track.cover_art_path ? (
                     <img
-                      src={`/api/tracks/${track.id}/art`}
+                      src={apiUrl(`/api/tracks/${track.id}/art`)}
                       alt={track.title}
                       className="row-art"
                       onError={(e) => { e.target.style.display = 'none'; }}
@@ -469,7 +470,7 @@ export default function MobileLibraryView() {
                 <div className="row-main-info">
                   {track.cover_art_path ? (
                     <img
-                      src={`/api/tracks/${track.id}/art`}
+                      src={apiUrl(`/api/tracks/${track.id}/art`)}
                       alt={track.title}
                       className="row-art"
                       onError={(e) => { e.target.style.display = 'none'; }}
@@ -645,7 +646,7 @@ export default function MobileLibraryView() {
                   <div className="row-main-info">
                     {track.cover_art_path ? (
                       <img
-                        src={`/api/tracks/${track.id}/art`}
+                        src={apiUrl(`/api/tracks/${track.id}/art`)}
                         alt={track.title}
                         className="row-art"
                         onError={(e) => { e.target.style.display = 'none'; }}
@@ -737,7 +738,7 @@ export default function MobileLibraryView() {
                   <div className="media-card-art-box" style={{ width: '120px', height: '120px', borderRadius: 'var(--radius-md)' }}>
                     {alb.firstTrackId ? (
                       <img
-                        src={`/api/tracks/${alb.firstTrackId}/art`}
+                        src={apiUrl(`/api/tracks/${alb.firstTrackId}/art`)}
                         alt={alb.name}
                         className="media-card-art"
                         onError={(e) => { e.target.style.display = 'none'; }}
@@ -784,7 +785,7 @@ export default function MobileLibraryView() {
                   <div className="compact-list-info">
                     {alb.firstTrackId ? (
                       <img
-                        src={`/api/tracks/${alb.firstTrackId}/art`}
+                        src={apiUrl(`/api/tracks/${alb.firstTrackId}/art`)}
                         alt={alb.name}
                         className="compact-list-art"
                         onError={(e) => { e.target.style.display = 'none'; }}
@@ -826,7 +827,7 @@ export default function MobileLibraryView() {
                   <div className="artist-avatar-ring">
                     {art.artist_image_path ? (
                       <img
-                        src={`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`}
+                        src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
                         alt={art.artist}
                         className="artist-avatar-img"
                         onError={(e) => { e.target.style.display = 'none'; }}
@@ -849,7 +850,7 @@ export default function MobileLibraryView() {
                     <div className="artist-avatar-ring" style={{ width: 44, height: 44 }}>
                       {art.artist_image_path ? (
                         <img
-                          src={`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`}
+                          src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
                           alt={art.artist}
                           className="artist-avatar-img"
                           onError={(e) => { e.target.style.display = 'none'; }}

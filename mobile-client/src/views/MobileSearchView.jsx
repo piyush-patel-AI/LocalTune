@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { IconSearch, IconMusic, IconPlay, IconUser, IconFlame } from '../components/Icons';
+import { apiUrl } from '../config';
 
 const RECENT_SEARCHES = ['Coldplay', 'Electronic Synth', 'Post Malone', 'Chill Beats', 'Instrumental'];
 const QUICK_MOODS = ['Acoustic Vibes', 'Focus & Deep Study', 'Late Night Vinyl', 'High Energy Workout'];
@@ -29,7 +30,7 @@ export default function MobileSearchView({ onClose }) {
 
   const fetchTrendingArtists = async () => {
     try {
-      const res = await fetch('/api/tracks?groupBy=artist', { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/tracks?groupBy=artist'), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setTrendingArtists((data.artists || []).slice(0, 6));
@@ -42,7 +43,7 @@ export default function MobileSearchView({ onClose }) {
   const performSearch = async (q) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/tracks?search=${encodeURIComponent(q)}`, { credentials: 'include' });
+      const res = await fetch(apiUrl(`/api/tracks?search=${encodeURIComponent(q)}`), { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setResults(data.tracks || []);
@@ -137,7 +138,7 @@ export default function MobileSearchView({ onClose }) {
                       <div className="row-main-info">
                         {track.cover_art_path ? (
                           <img
-                            src={`/api/tracks/${track.id}/art`}
+                            src={apiUrl(`/api/tracks/${track.id}/art`)}
                             alt={track.title}
                             className="row-art"
                             onError={(e) => { e.target.style.display = 'none'; }}
@@ -228,7 +229,7 @@ export default function MobileSearchView({ onClose }) {
                         <div className="artist-avatar-ring">
                           {art.artist_image_path ? (
                             <img
-                              src={`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`}
+                              src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
                               alt={art.artist}
                               className="artist-avatar-img"
                               onError={(e) => { e.target.style.display = 'none'; }}

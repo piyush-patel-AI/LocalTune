@@ -1,5 +1,6 @@
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import { IconDisc } from './Icons';
+import { apiUrl } from '../config';
 
 export default function PlaylistCover({ playlist, tracks = [], size = 48, className = '' }) {
   if (!playlist) return null;
@@ -12,7 +13,7 @@ export default function PlaylistCover({ playlist, tracks = [], size = 48, classN
         style={{ width: `${size}px`, height: `${size}px`, borderRadius: '10px', overflow: 'hidden', flexShrink: 0, position: 'relative' }}
       >
         <img
-          src={`/api/playlists/${playlist.id}/cover`}
+          src={apiUrl(`/api/playlists/${playlist.id}/cover`)}
           alt={playlist.name}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={(e) => {

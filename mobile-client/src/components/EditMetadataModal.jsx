@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GenreSelector from './GenreSelector';
 import { IconX, IconRefresh, IconCheck } from './Icons';
+import { apiUrl } from '../config';
 
 export default function EditMetadataModal({ track, onClose, onSave }) {
   const [title, setTitle] = useState('');
@@ -29,7 +30,7 @@ export default function EditMetadataModal({ track, onClose, onSave }) {
     try {
       setSaving(true);
       setError(null);
-      const res = await fetch(`/api/tracks/${track.id}`, {
+      const res = await fetch(apiUrl(`/api/tracks/${track.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -62,7 +63,7 @@ export default function EditMetadataModal({ track, onClose, onSave }) {
     try {
       setSaving(true);
       setError(null);
-      const res = await fetch(`/api/tracks/${track.id}/reset-metadata`, {
+      const res = await fetch(apiUrl(`/api/tracks/${track.id}/reset-metadata`), {
         method: 'POST',
         credentials: 'include'
       });

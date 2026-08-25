@@ -12,6 +12,7 @@ import {
   IconSparkles,
   IconHeart
 } from '../components/Icons';
+import { apiUrl } from '../config';
 
 const CATEGORIES = ['All', 'Chill', 'Energy', 'Focus', 'Workout', 'Late Night', 'Acoustic'];
 
@@ -41,9 +42,9 @@ export default function MobileHomeView() {
     try {
       setLoading(true);
       const [tracksRes, recsRes, artistsRes] = await Promise.all([
-        fetch('/api/tracks', { credentials: 'include' }),
-        fetch(`/api/tracks/recommendations${currentTrack ? `?currentTrackId=${currentTrack.id}` : ''}`, { credentials: 'include' }),
-        fetch('/api/tracks?groupBy=artist', { credentials: 'include' })
+        fetch(apiUrl('/api/tracks'), { credentials: 'include' }),
+        fetch(apiUrl(`/api/tracks/recommendations${currentTrack ? `?currentTrackId=${currentTrack.id}` : ''}`), { credentials: 'include' }),
+        fetch(apiUrl('/api/tracks?groupBy=artist'), { credentials: 'include' })
       ]);
 
       let tracksList = [];
@@ -224,7 +225,7 @@ export default function MobileHomeView() {
                 <div className="artist-avatar-ring">
                   {art.artist_image_path ? (
                     <img
-                      src={`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`}
+                      src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
                       alt={art.artist}
                       className="artist-avatar-img"
                       onError={(e) => { e.target.style.display = 'none'; }}

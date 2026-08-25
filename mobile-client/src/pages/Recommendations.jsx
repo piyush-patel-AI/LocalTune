@@ -14,6 +14,7 @@ import {
   IconSparkles,
   IconPlus
 } from '../components/Icons';
+import { apiUrl } from '../config';
 
 export default function Recommendations() {
   const { currentTrack, isPlaying, playTrack, togglePlay, favoritesMap, toggleFavorite, addToQueue } = usePlayer();
@@ -35,7 +36,7 @@ export default function Recommendations() {
       setLoading(true);
       setError(null);
       const curId = currentTrack ? currentTrack.id : '';
-      const res = await fetch(`/api/tracks/recommendations/shelves?currentTrackId=${curId}`, {
+      const res = await fetch(apiUrl(`/api/tracks/recommendations/shelves?currentTrackId=${curId}`), {
         credentials: 'include'
       });
       const data = await res.json();
@@ -55,7 +56,7 @@ export default function Recommendations() {
   const handleRescanMissing = async () => {
     try {
       setRescanning(true);
-      const res = await fetch('/api/tracks/scan-missing-metadata', {
+      const res = await fetch(apiUrl('/api/tracks/scan-missing-metadata'), {
         method: 'POST',
         credentials: 'include'
       });
@@ -224,7 +225,7 @@ export default function Recommendations() {
                           }}
                         >
                           <img
-                            src={`/api/tracks/${track.id}/art`}
+                            src={apiUrl(`/api/tracks/${track.id}/art`)}
                             alt={track.title}
                             onError={(e) => { e.target.style.display = 'none'; }}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
