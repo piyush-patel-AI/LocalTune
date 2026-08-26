@@ -1,9 +1,13 @@
 /**
  * server/b2.js
- * Shared Backblaze B2 client — AWS SDK v3 S3-compatible API.
+ * Shared Backblaze B2 client.
  *
- * Uses the official S3Client for ALL operations including PutObject.
- * The signing region is derived from B2_ENDPOINT (s3.<region>.backblazeb2.com).
+ * Uploads use native HTTPS PUT with manual SigV4 signing and SHA256-hashed
+ * payload — the official SDK's body handling is incompatible with B2 on
+ * large PUT bodies (~8.8 MB).
+ *
+ * All read operations (GET, HEAD, DELETE, presigned URLs) use the official
+ * AWS SDK v3 S3Client which works correctly.
  *
  * Required env vars:
  *   B2_ACCOUNT_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENDPOINT
@@ -11,9 +15,10 @@
  *   B2_PUBLIC_URL  — Cloudflare CDN base URL for public objects (artworks/artists)
  */
 
+import https from 'node:https';
+import { createHash, createHmac } from 'node:crypto';
 import {
   S3Client,
-  PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
   GetObjectCommand,
@@ -38,8 +43,10 @@ const _b2Url = B2_ENDPOINT ? new URL(B2_ENDPOINT) : null;
 // B2 endpoint format: s3.<region>.backblazeb2.com  →  region = <region>
 // Fallback to 'auto' if parsing fails.
 const _b2Region = _b2Url?.hostname?.match(/^s3\.([^.]+)\.backblazeb2\.com$/)?.[1] || 'auto';
+const _b2Hostname = _b2Url?.hostname || 's3.backblazeb2.com';
+const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
 
-// ── Single S3Client for all operations (PUT, GET, HEAD, DELETE, presigned) ──
+// ── S3Client for read operations only (GET, HEAD, DELETE, presigned URLs) ──
 export const s3 = new S3Client({
   endpoint: B2_ENDPOINT,
   region: _b2Region,
@@ -52,9 +59,31 @@ export const s3 = new S3Client({
   }
 });
 
+// ── SigV4 helpers for native HTTPS PUT ──
+
+function sha256Hex(data) {
+  return createHash('sha256').update(data).digest('hex');
+}
+
+function hmac(key, data) {
+  return createHmac('sha256', key).update(data).digest();
+}
+
 /**
- * Upload a Buffer to B2 via S3Client PutObjectCommand.
- * The SDK handles SigV4 signing, path encoding, and HTTP transmission internally.
+ * Percent-encode a single path segment (preserves '/').
+ * AWS SigV4 getCanonicalPath encodes every character except: A-Z a-z 0-9 - _ . ~ /
+ */
+function encodePathSegment(seg) {
+  return seg.replace(/[^A-Za-z0-9\-_.~\/]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+}
+
+/**
+ * Upload a Buffer to B2 via native HTTPS PUT with SigV4 signing.
+ *
+ * Uses the actual SHA256 hash of the body (not UNSIGNED-PAYLOAD) because
+ * B2 rejects UNSIGNED-PAYLOAD on PUT. The body is written as a single
+ * contiguous Buffer — no chunking, no streaming — which bypasses the
+ * SDK body-handling bugs that cause "request body was too small" on ~8.8 MB.
  *
  * @param {string} key         B2 object key
  * @param {Buffer} body        data to upload
@@ -66,25 +95,107 @@ export async function uploadToB2(key, body, contentType, cid) {
   if (!Buffer.isBuffer(body)) throw new Error('uploadToB2 only accepts Buffer bodies');
   const tag = cid ? `[B2][${cid}]` : '[B2]';
   const size = body.length;
-  console.log(`${tag} upload start key=${key} size=${size} body_type=Buffer is_buffer=true content_type=${contentType}`);
+  const bodyHash = sha256Hex(body);
+  console.log(`${tag} upload start key=${key} size=${size} sha256=${bodyHash.slice(0, 16)}… content_type=${contentType}`);
 
   const t0 = Date.now();
-  try {
-    await s3.send(new PutObjectCommand({
-      Bucket: B2_BUCKET_NAME,
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-      ContentLength: size
-    }));
-    const elapsed = Date.now() - t0;
-    console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms`);
-    return key;
-  } catch (err) {
-    const elapsed = Date.now() - t0;
-    console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms body_length=${size} error=${err.message}`);
-    throw err;
-  }
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '000Z');
+  const dateStamp = amzDate.slice(0, 8);
+
+  // ── Step 1: Canonical Request ──
+  const canonicalUri = '/' + B2_BUCKET_NAME + '/' + encodePathSegment(key);
+  const canonicalQueryString = '';
+  const signedHeaders = 'content-length;content-type;host;x-amz-content-sha256;x-amz-date';
+  const canonicalHeaders =
+    `content-length:${size}\n` +
+    `content-type:${contentType}\n` +
+    `host:${_b2Hostname}\n` +
+    `x-amz-content-sha256:${bodyHash}\n` +
+    `x-amz-date:${amzDate}\n`;
+  const canonicalRequest = [
+    'PUT',
+    canonicalUri,
+    canonicalQueryString,
+    canonicalHeaders,
+    signedHeaders,
+    bodyHash
+  ].join('\n');
+
+  // ── Step 2: String to Sign ──
+  const credentialScope = `${dateStamp}/${_b2Region}/s3/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest)
+  ].join('\n');
+
+  // ── Step 3: Signing Key ──
+  const kDate = hmac('AWS4' + B2_APPLICATION_KEY, dateStamp);
+  const kRegion = hmac(kDate, _b2Region);
+  const kService = hmac(kRegion, 's3');
+  const kSigning = hmac(kService, 'aws4_request');
+
+  // ── Step 4: Signature ──
+  const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+
+  const authorization = `AWS4-HMAC-SHA256 Credential=${B2_ACCOUNT_ID}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const wirePath = '/' + B2_BUCKET_NAME + '/' + encodePathSegment(key);
+
+  const headers = {
+    'Host': _b2Hostname,
+    'Content-Type': contentType,
+    'Content-Length': size,
+    'x-amz-content-sha256': bodyHash,
+    'x-amz-date': amzDate,
+    'Authorization': authorization
+  };
+
+  console.log(`${tag} PUT ${_b2Hostname}:${_b2Port}${wirePath}  content-length=${size}  x-amz-content-sha256=${bodyHash.slice(0, 16)}…`);
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: _b2Hostname,
+      port: _b2Port,
+      path: wirePath,
+      method: 'PUT',
+      headers
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const elapsed = Date.now() - t0;
+        const bodyStr = Buffer.concat(chunks).toString('utf8');
+
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          const etagMatch = bodyStr.match(/<ETag>"([^"]+)"<\/ETag>/);
+          const etag = etagMatch ? etagMatch[1] : 'unknown';
+          console.log(`${tag} upload ok key=${key} status=${res.statusCode} etag=${etag} elapsed=${elapsed}ms`);
+          return resolve(key);
+        }
+
+        console.error(`${tag} upload FAILED key=${key} status=${res.statusCode} elapsed=${elapsed}ms body_length=${size}`);
+        console.error(`${tag} B2 response: ${bodyStr.slice(0, 500)}`);
+
+        const codeMatch = bodyStr.match(/<Code>([^<]+)<\/Code>/);
+        const msgMatch = bodyStr.match(/<Message>([^<]+)<\/Message>/);
+        const err = new Error(`B2 PUT failed: ${res.statusCode} ${codeMatch ? codeMatch[1] : ''} ${msgMatch ? msgMatch[1] : bodyStr.slice(0, 200)}`);
+        err.b2StatusCode = res.statusCode;
+        reject(err);
+      });
+    });
+
+    req.on('error', (err) => {
+      const elapsed = Date.now() - t0;
+      console.error(`${tag} upload NETWORK ERROR key=${key} elapsed=${elapsed}ms error=${err.message}`);
+      reject(err);
+    });
+
+    req.write(body);
+    req.end();
+  });
 }
 
 /**

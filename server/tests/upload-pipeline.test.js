@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
+import { Readable } from 'node:stream';
 
 // ── Set B2 env vars BEFORE importing b2.js so the module-level endpoint parse works ──
 process.env.B2_ACCOUNT_ID = process.env.B2_ACCOUNT_ID || 'test-account-id';
@@ -34,7 +37,7 @@ test('b2.js exports key builder functions', () => {
   assert.equal(typeof b2.extFromMime, 'function');
 });
 
-// ── S3Client configuration ──
+// ── S3Client configuration (used for reads/presigned only) ──
 
 test('REGRESSION: S3Client uses extracted region from B2_ENDPOINT', async () => {
   const region = await b2.s3.config.region();
@@ -49,19 +52,44 @@ test('REGRESSION: S3Client uses forcePathStyle for B2 compatibility', () => {
     'S3Client must use forcePathStyle for Backblaze B2');
 });
 
-// ── 8.8 MB upload: verify PutObjectCommand receives full Buffer ──
+// ── 8.8 MB native HTTPS PUT: verify full Buffer on wire ──
 
-test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via PutObjectCommand', async () => {
+test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via native HTTPS PUT', async () => {
   const PRODUCTION_SIZE = 8_832_102;
   const body = Buffer.alloc(PRODUCTION_SIZE, 0xCD);
   assert.equal(Buffer.byteLength(body), PRODUCTION_SIZE, 'Buffer must be exactly 8,832,102 bytes');
 
-  let capturedCommand = null;
-  const origSend = b2.s3.send.bind(b2.s3);
+  let capturedOptions = null;
+  let capturedBody = null;
+  let bodyFullyWritten = false;
 
-  b2.s3.send = async function mockSend(command) {
-    capturedCommand = command;
-    return {};
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    capturedOptions = options;
+    const req = new EventEmitter();
+    req.writableEnded = false;
+    req.write = function(data) {
+      if (Buffer.isBuffer(data)) capturedBody = data;
+      return true;
+    };
+    req.end = function(data) {
+      if (data !== undefined && Buffer.isBuffer(data)) capturedBody = data;
+      bodyFullyWritten = true;
+      req.writableEnded = true;
+      process.nextTick(() => {
+        const res = new Readable({
+          read() {
+            this.push(Buffer.from('<PutObjectResult><ETag>"abc123"</ETag></PutObjectResult>'));
+            this.push(null);
+          }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-regression-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
   };
 
   try {
@@ -69,45 +97,64 @@ test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via PutObjectComma
     const result = await b2.uploadToB2(key, body, 'audio/mpeg', 'test-regression');
 
     assert.equal(result, key, 'uploadToB2 must return the key on success');
-    assert.ok(capturedCommand, 'S3Client.send must have been called');
-
-    const input = capturedCommand.input;
-    assert.equal(input.Bucket, process.env.B2_BUCKET_NAME);
-    assert.equal(input.Key, key);
-    assert.ok(Buffer.isBuffer(input.Body), 'Body must be a Buffer');
-    assert.equal(input.Body.length, PRODUCTION_SIZE, 'Body must be exactly 8,832,102 bytes');
-    assert.equal(input.ContentLength, PRODUCTION_SIZE, 'ContentLength must equal body length');
-    assert.equal(input.ContentType, 'audio/mpeg');
-
-    // Verify the exact same Buffer reference is passed (no copy, no conversion)
-    assert.equal(input.Body, body, 'Body must be the exact same Buffer reference');
+    assert.ok(capturedOptions, 'https.request must have been called');
+    assert.ok(bodyFullyWritten, 'request.end() must have been called');
+    assert.ok(capturedBody, 'the full body must have been written');
+    assert.equal(capturedBody.length, PRODUCTION_SIZE, 'written body must be exactly 8,832,102 bytes');
+    assert.equal(capturedOptions.method, 'PUT', 'must be a PUT request');
+    assert.equal(capturedOptions.headers['Content-Length'], PRODUCTION_SIZE, 'Content-Length must equal body length');
+    assert.ok(!capturedOptions.headers['x-amz-content-sha256'].includes('UNSIGNED'),
+      'must use actual SHA256 hash, not UNSIGNED-PAYLOAD');
+    assert.ok(capturedOptions.headers['Authorization'], 'request must be SigV4-signed');
+    assert.ok(capturedOptions.headers['x-amz-date'], 'request must have x-amz-date header');
   } finally {
-    b2.s3.send = origSend;
+    https.request = origRequest;
   }
 });
 
-// ── Production key with spaces: verify correct handling ──
+// ── Production key with spaces ──
 
 test('REGRESSION: uploadToB2 preserves exact production key with spaces', async () => {
   const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
   const body = Buffer.alloc(1024, 0xAA);
+  let capturedWirePath = null;
+  let capturedAuthHeader = null;
 
-  let capturedCommand = null;
-  const origSend = b2.s3.send.bind(b2.s3);
-  b2.s3.send = async function mockSend(command) { capturedCommand = command; return {}; };
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    capturedWirePath = options.path;
+    capturedAuthHeader = options.headers?.Authorization;
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<PutObjectResult><ETag>"e"</ETag></PutObjectResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-space-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
 
   try {
     const result = await b2.uploadToB2(PRODUCTION_KEY, body, 'audio/mpeg', 'test-space');
-
     assert.equal(result, PRODUCTION_KEY, 'must return original unencoded key');
-    assert.ok(capturedCommand, 'S3Client.send must have been called');
 
-    const input = capturedCommand.input;
-    assert.equal(input.Key, PRODUCTION_KEY, 'B2 Key must be the original unencoded key');
-    assert.equal(input.Body.length, body.length, 'Body size must match');
-    assert.equal(input.Body, body, 'Body must be the exact same Buffer reference');
+    // Wire path: must be percent-encoded, no raw spaces
+    assert.ok(capturedWirePath, 'must capture wire path');
+    assert.ok(!capturedWirePath.includes(' '), 'wire path must contain no raw spaces');
+    assert.ok(capturedWirePath.includes('/Boney%20M/'), 'wire must encode "Boney M"');
+    assert.ok(capturedWirePath.includes('/Nightflight%20to%20Venus/'), 'wire must encode "Nightflight to Venus"');
+
+    // Signature must be present
+    assert.ok(capturedAuthHeader, 'must have SigV4 authorization header');
+    assert.ok(capturedAuthHeader.startsWith('AWS4-HMAC-SHA256'), 'must be SigV4 signature');
   } finally {
-    b2.s3.send = origSend;
+    https.request = origRequest;
   }
 });
 
@@ -116,19 +163,36 @@ test('REGRESSION: uploadToB2 preserves exact production key with spaces', async 
 test('REGRESSION: uploadToB2 handles keys with &, +, # characters', async () => {
   const SPECIAL_KEY = 'music/Artist & Band/Album + Deluxe/track #1.mp3';
   const body = Buffer.alloc(512, 0xBB);
+  let capturedWirePath = null;
 
-  let capturedCommand = null;
-  const origSend = b2.s3.send.bind(b2.s3);
-  b2.s3.send = async function mockSend(command) { capturedCommand = command; return {}; };
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    capturedWirePath = options.path;
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<PutObjectResult><ETag>"s"</ETag></PutObjectResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-special-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
 
   try {
     const result = await b2.uploadToB2(SPECIAL_KEY, body, 'audio/mpeg', 'test-special');
-
     assert.equal(result, SPECIAL_KEY, 'must return original key');
-    assert.equal(capturedCommand.input.Key, SPECIAL_KEY, 'B2 Key must be original');
-    assert.equal(capturedCommand.input.Body, body, 'Body must be the same Buffer');
+    assert.ok(!capturedWirePath.includes(' '), 'wire: no raw spaces');
+    assert.ok(capturedWirePath.includes('Artist%20%26%20Band'), 'wire: encodes space and &');
+    assert.ok(capturedWirePath.includes('Album%20%2B%20Deluxe'), 'wire: encodes space and +');
+    assert.ok(capturedWirePath.includes('track%20%231.mp3'), 'wire: encodes space and #');
   } finally {
-    b2.s3.send = origSend;
+    https.request = origRequest;
   }
 });
 
@@ -141,20 +205,74 @@ test('REGRESSION: uploadToB2 rejects non-Buffer input', async () => {
   );
 });
 
+// ── Non-2xx B2 response is rejected ──
+
+test('REGRESSION: uploadToB2 rejects on non-2xx B2 response', async () => {
+  const body = Buffer.alloc(1024, 0xAB);
+
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const errorXml = '<Error><Code>RequestAborted</Code><Message>The request body was too small</Message></Error>';
+        const res = new Readable({
+          read() { this.push(Buffer.from(errorXml)); this.push(null); }
+        });
+        res.statusCode = 400;
+        res.headers = { 'x-amz-request-id': 'test-reject-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
+
+  try {
+    const key = `__regression-test__/${Date.now()}/fail-upload.mp3`;
+    await assert.rejects(
+      () => b2.uploadToB2(key, body, 'audio/mpeg', 'test-reject'),
+      (err) => {
+        assert.ok(err.message.includes('B2 PUT failed'), 'error message must prefix with B2 PUT failed');
+        assert.equal(err.b2StatusCode, 400, 'must capture HTTP status code');
+        return true;
+      }
+    );
+  } finally {
+    https.request = origRequest;
+  }
+});
+
 // ── Return value is always the original key ──
 
 test('REGRESSION: uploadToB2 returns original key, not encoded path', async () => {
   const keyWithSpaces = 'music/Test Artist/Test Album/song.mp3';
   const body = Buffer.alloc(100, 0xCC);
 
-  const origSend = b2.s3.send.bind(b2.s3);
-  b2.s3.send = async function() { return {}; };
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<PutObjectResult><ETag>"r"</ETag></PutObjectResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-return-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
 
   try {
     const result = await b2.uploadToB2(keyWithSpaces, body, 'audio/mpeg', 'test-return');
     assert.equal(result, keyWithSpaces, 'return value must be the original key');
   } finally {
-    b2.s3.send = origSend;
+    https.request = origRequest;
   }
 });
 
