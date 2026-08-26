@@ -146,6 +146,62 @@ test('REGRESSION: uploadToB2 rejects non-Buffer input', async () => {
   );
 });
 
+test('REGRESSION: SigV4 signer uses region derived from B2_ENDPOINT, not auto', async () => {
+  const { SignatureV4 } = await import('@smithy/signature-v4');
+  const { HttpRequest } = await import('@smithy/core/protocols');
+  const crypto = await import('node:crypto');
+
+  class TestSha256 {
+    constructor(secret) {
+      if (secret) { this.hmac = crypto.default.createHmac('sha256', secret); }
+      else        { this.hash = crypto.default.createHash('sha256'); }
+    }
+    update(data) { (this.hmac || this.hash).update(data); return this; }
+    async digest() { return new Uint8Array((this.hmac || this.hash).digest()); }
+  }
+
+  // Production endpoint: s3.ca-east-006.backblazeb2.com → region must be ca-east-006
+  const signer = new SignatureV4({
+    credentials: { accessKeyId: 'AKID', secretAccessKey: 'SECRET' },
+    region: 'ca-east-006',
+    service: 's3',
+    sha256: TestSha256,
+  });
+
+  const req = new HttpRequest({
+    method: 'PUT', hostname: 's3.ca-east-006.backblazeb2.com', port: 443,
+    path: '/bucket/key',
+    headers: { 'host': 's3.ca-east-006.backblazeb2.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
+    body: Buffer.alloc(10),
+  });
+
+  const signed = await signer.signRequest(req);
+
+  // Authorization header contains the region in the credential scope:
+  // AWS4-HMAC-SHA256 Credential=.../ca-east-006/s3/aws4_request, ...
+  assert.ok(signed.headers.authorization.includes('/ca-east-006/s3/'),
+    'SigV4 authorization must contain ca-east-006 in credential scope, not auto');
+
+  // Compare with what 'auto' would produce — must differ
+  const autoSigner = new SignatureV4({
+    credentials: { accessKeyId: 'AKID', secretAccessKey: 'SECRET' },
+    region: 'auto',
+    service: 's3',
+    sha256: TestSha256,
+  });
+  const autoSigned = await autoSigner.signRequest(new HttpRequest({
+    method: 'PUT', hostname: 's3.ca-east-006.backblazeb2.com', port: 443,
+    path: '/bucket/key',
+    headers: { 'host': 's3.ca-east-006.backblazeb2.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
+    body: Buffer.alloc(10),
+  }));
+
+  assert.ok(autoSigned.headers.authorization.includes('/auto/s3/'),
+    'auto region must produce /auto/ in credential scope');
+  assert.notEqual(signed.headers.authorization, autoSigned.headers.authorization,
+    'ca-east-006 and auto signatures must differ — proving region is used in signing');
+});
+
 test('REGRESSION: URL-encodes spaces in key — exact production key', async () => {
   const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
   const body = Buffer.alloc(1024, 0xAA);

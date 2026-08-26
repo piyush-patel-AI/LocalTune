@@ -49,6 +49,16 @@ export const s3 = new S3Client({
   }
 });
 
+// ── Pre-parse the B2 endpoint once at module load ──
+const _b2Url = B2_ENDPOINT ? new URL(B2_ENDPOINT) : null;
+const _b2Hostname = _b2Url?.hostname || '';
+const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
+
+// Derive signing region from B2 endpoint hostname.
+// B2 endpoint format: s3.<region>.backblazeb2.com  →  region = <region>
+// Fallback to 'auto' if parsing fails.
+const _b2Region = _b2Hostname.match(/^s3\.([^.]+)\.backblazeb2\.com$/)?.[1] || 'auto';
+
 // ── SigV4 signer for native PUT uploads ──
 
 class Sha256 {
@@ -65,15 +75,10 @@ const b2Signer = new SignatureV4({
     accessKeyId: B2_ACCOUNT_ID || '',
     secretAccessKey: B2_APPLICATION_KEY || '',
   },
-  region: 'auto',
+  region: _b2Region,
   service: 's3',
   sha256: Sha256,
 });
-
-// ── Pre-parse the B2 endpoint once at module load ──
-const _b2Url = B2_ENDPOINT ? new URL(B2_ENDPOINT) : null;
-const _b2Hostname = _b2Url?.hostname || '';
-const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
 
 /**
  * Encode an S3-style "bucket/key" path for use in an HTTP request URI.
