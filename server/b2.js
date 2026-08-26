@@ -193,8 +193,7 @@ export async function uploadToB2(key, body, contentType, cid) {
       reject(err);
     });
 
-    req.write(body);
-    req.end();
+    req.end(body);
   });
 }
 
