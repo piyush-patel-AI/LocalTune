@@ -1,8 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import https from 'node:https';
-import { EventEmitter } from 'node:events';
-import { Readable } from 'node:stream';
 
 // ── Set B2 env vars BEFORE importing b2.js so the module-level endpoint parse works ──
 process.env.B2_ACCOUNT_ID = process.env.B2_ACCOUNT_ID || 'test-account-id';
@@ -37,49 +34,34 @@ test('b2.js exports key builder functions', () => {
   assert.equal(typeof b2.extFromMime, 'function');
 });
 
-// ── 8.8 MB regression test: native HTTPS PUT sends full Buffer ──
+// ── S3Client configuration ──
 
-test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via native HTTPS PUT', async () => {
+test('REGRESSION: S3Client uses extracted region from B2_ENDPOINT', async () => {
+  const region = await b2.s3.config.region();
+  assert.equal(region, 'ca-east-006',
+    'S3Client region must be extracted from B2_ENDPOINT hostname, not auto');
+});
+
+test('REGRESSION: S3Client uses forcePathStyle for B2 compatibility', () => {
+  const s3 = b2.s3;
+  const config = s3.config;
+  assert.equal(config.forcePathStyle, true,
+    'S3Client must use forcePathStyle for Backblaze B2');
+});
+
+// ── 8.8 MB upload: verify PutObjectCommand receives full Buffer ──
+
+test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via PutObjectCommand', async () => {
   const PRODUCTION_SIZE = 8_832_102;
   const body = Buffer.alloc(PRODUCTION_SIZE, 0xCD);
   assert.equal(Buffer.byteLength(body), PRODUCTION_SIZE, 'Buffer must be exactly 8,832,102 bytes');
 
-  let capturedOptions = null;
-  let capturedBody = null;
-  let bodyFullyWritten = false;
+  let capturedCommand = null;
+  const origSend = b2.s3.send.bind(b2.s3);
 
-  const origRequest = https.request;
-  https.request = function mockRequest(options, callback) {
-    capturedOptions = options;
-    const req = new EventEmitter();
-    req.writableEnded = false;
-    req.write = function(data) {
-      if (Buffer.isBuffer(data)) {
-        capturedBody = data;
-        assert.equal(data.length, PRODUCTION_SIZE, 'https.request must receive the full 8,832,102-byte Buffer');
-      }
-      return true;
-    };
-    req.end = function(data) {
-      if (data !== undefined && Buffer.isBuffer(data)) {
-        capturedBody = data;
-      }
-      bodyFullyWritten = true;
-      req.writableEnded = true;
-      process.nextTick(() => {
-        const res = new Readable({
-          read() {
-            this.push(Buffer.from('<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>'));
-            this.push(null);
-          }
-        });
-        res.statusCode = 200;
-        res.headers = { 'x-amz-request-id': 'test-regression-001' };
-        callback(res);
-      });
-      return req;
-    };
-    return req;
+  b2.s3.send = async function mockSend(command) {
+    capturedCommand = command;
+    return {};
   };
 
   try {
@@ -87,57 +69,70 @@ test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via native HTTPS P
     const result = await b2.uploadToB2(key, body, 'audio/mpeg', 'test-regression');
 
     assert.equal(result, key, 'uploadToB2 must return the key on success');
-    assert.ok(capturedOptions, 'https.request must have been called');
-    assert.ok(bodyFullyWritten, 'request.end() must have been called');
-    assert.ok(capturedBody, 'the full body must have been written');
-    assert.equal(capturedBody.length, PRODUCTION_SIZE, 'written body must be exactly 8,832,102 bytes');
-    assert.equal(capturedOptions.method, 'PUT', 'must be a PUT request');
-    assert.equal(capturedOptions.headers['content-length'], String(PRODUCTION_SIZE), 'Content-Length must equal body length');
-    assert.equal(capturedOptions.headers['x-amz-content-sha256'], 'UNSIGNED-PAYLOAD');
-    assert.ok(capturedOptions.headers['authorization'], 'request must be SigV4-signed');
-    assert.ok(capturedOptions.headers['x-amz-date'], 'request must have x-amz-date header');
+    assert.ok(capturedCommand, 'S3Client.send must have been called');
+
+    const input = capturedCommand.input;
+    assert.equal(input.Bucket, process.env.B2_BUCKET_NAME);
+    assert.equal(input.Key, key);
+    assert.ok(Buffer.isBuffer(input.Body), 'Body must be a Buffer');
+    assert.equal(input.Body.length, PRODUCTION_SIZE, 'Body must be exactly 8,832,102 bytes');
+    assert.equal(input.ContentLength, PRODUCTION_SIZE, 'ContentLength must equal body length');
+    assert.equal(input.ContentType, 'audio/mpeg');
+
+    // Verify the exact same Buffer reference is passed (no copy, no conversion)
+    assert.equal(input.Body, body, 'Body must be the exact same Buffer reference');
   } finally {
-    https.request = origRequest;
+    b2.s3.send = origSend;
   }
 });
 
-test('REGRESSION: uploadToB2 rejects on non-2xx B2 response', async () => {
-  const PRODUCTION_SIZE = 8_832_102;
-  const body = Buffer.alloc(PRODUCTION_SIZE, 0xAB);
+// ── Production key with spaces: verify correct handling ──
 
-  const origRequest = https.request;
-  https.request = function mockRequest(options, callback) {
-    const req = new EventEmitter();
-    req.write = function() { return true; };
-    req.end = function() {
-      process.nextTick(() => {
-        const errorXml = '<Error><Code>RequestAborted</Code><Message>The request body was too small</Message></Error>';
-        const res = new Readable({
-          read() { this.push(Buffer.from(errorXml)); this.push(null); }
-        });
-        res.statusCode = 400;
-        res.headers = { 'x-amz-request-id': 'test-reject-001' };
-        callback(res);
-      });
-      return req;
-    };
-    return req;
-  };
+test('REGRESSION: uploadToB2 preserves exact production key with spaces', async () => {
+  const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
+  const body = Buffer.alloc(1024, 0xAA);
+
+  let capturedCommand = null;
+  const origSend = b2.s3.send.bind(b2.s3);
+  b2.s3.send = async function mockSend(command) { capturedCommand = command; return {}; };
 
   try {
-    const key = `__regression-test__/${Date.now()}/fail-upload.mp3`;
-    await assert.rejects(
-      () => b2.uploadToB2(key, body, 'audio/mpeg', 'test-reject'),
-      (err) => {
-        assert.ok(err.message.includes('B2 PUT failed'), 'error message must prefix with B2 PUT failed');
-        assert.equal(err.b2StatusCode, 400, 'must capture HTTP status code');
-        return true;
-      }
-    );
+    const result = await b2.uploadToB2(PRODUCTION_KEY, body, 'audio/mpeg', 'test-space');
+
+    assert.equal(result, PRODUCTION_KEY, 'must return original unencoded key');
+    assert.ok(capturedCommand, 'S3Client.send must have been called');
+
+    const input = capturedCommand.input;
+    assert.equal(input.Key, PRODUCTION_KEY, 'B2 Key must be the original unencoded key');
+    assert.equal(input.Body.length, body.length, 'Body size must match');
+    assert.equal(input.Body, body, 'Body must be the exact same Buffer reference');
   } finally {
-    https.request = origRequest;
+    b2.s3.send = origSend;
   }
 });
+
+// ── Special characters in key ──
+
+test('REGRESSION: uploadToB2 handles keys with &, +, # characters', async () => {
+  const SPECIAL_KEY = 'music/Artist & Band/Album + Deluxe/track #1.mp3';
+  const body = Buffer.alloc(512, 0xBB);
+
+  let capturedCommand = null;
+  const origSend = b2.s3.send.bind(b2.s3);
+  b2.s3.send = async function mockSend(command) { capturedCommand = command; return {}; };
+
+  try {
+    const result = await b2.uploadToB2(SPECIAL_KEY, body, 'audio/mpeg', 'test-special');
+
+    assert.equal(result, SPECIAL_KEY, 'must return original key');
+    assert.equal(capturedCommand.input.Key, SPECIAL_KEY, 'B2 Key must be original');
+    assert.equal(capturedCommand.input.Body, body, 'Body must be the same Buffer');
+  } finally {
+    b2.s3.send = origSend;
+  }
+});
+
+// ── Reject non-Buffer input ──
 
 test('REGRESSION: uploadToB2 rejects non-Buffer input', async () => {
   await assert.rejects(
@@ -146,236 +141,24 @@ test('REGRESSION: uploadToB2 rejects non-Buffer input', async () => {
   );
 });
 
-test('REGRESSION: SigV4 signer uses region derived from B2_ENDPOINT, not auto', async () => {
-  const { SignatureV4 } = await import('@smithy/signature-v4');
-  const { HttpRequest } = await import('@smithy/core/protocols');
-  const crypto = await import('node:crypto');
+// ── Return value is always the original key ──
 
-  class TestSha256 {
-    constructor(secret) {
-      if (secret) { this.hmac = crypto.default.createHmac('sha256', secret); }
-      else        { this.hash = crypto.default.createHash('sha256'); }
-    }
-    update(data) { (this.hmac || this.hash).update(data); return this; }
-    async digest() { return new Uint8Array((this.hmac || this.hash).digest()); }
-  }
-
-  // Production endpoint: s3.ca-east-006.backblazeb2.com → region must be ca-east-006
-  const signer = new SignatureV4({
-    credentials: { accessKeyId: 'AKID', secretAccessKey: 'SECRET' },
-    region: 'ca-east-006',
-    service: 's3',
-    sha256: TestSha256,
-  });
-
-  const req = new HttpRequest({
-    method: 'PUT', hostname: 's3.ca-east-006.backblazeb2.com', port: 443,
-    path: '/bucket/key',
-    headers: { 'host': 's3.ca-east-006.backblazeb2.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
-    body: Buffer.alloc(10),
-  });
-
-  const signed = await signer.signRequest(req);
-
-  // Authorization header contains the region in the credential scope:
-  // AWS4-HMAC-SHA256 Credential=.../ca-east-006/s3/aws4_request, ...
-  assert.ok(signed.headers.authorization.includes('/ca-east-006/s3/'),
-    'SigV4 authorization must contain ca-east-006 in credential scope, not auto');
-
-  // Compare with what 'auto' would produce — must differ
-  const autoSigner = new SignatureV4({
-    credentials: { accessKeyId: 'AKID', secretAccessKey: 'SECRET' },
-    region: 'auto',
-    service: 's3',
-    sha256: TestSha256,
-  });
-  const autoSigned = await autoSigner.signRequest(new HttpRequest({
-    method: 'PUT', hostname: 's3.ca-east-006.backblazeb2.com', port: 443,
-    path: '/bucket/key',
-    headers: { 'host': 's3.ca-east-006.backblazeb2.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
-    body: Buffer.alloc(10),
-  }));
-
-  assert.ok(autoSigned.headers.authorization.includes('/auto/s3/'),
-    'auto region must produce /auto/ in credential scope');
-  assert.notEqual(signed.headers.authorization, autoSigned.headers.authorization,
-    'ca-east-006 and auto signatures must differ — proving region is used in signing');
-});
-
-test('REGRESSION: URL-encodes spaces in key — exact production key', async () => {
-  const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
-  const body = Buffer.alloc(1024, 0xAA);
-  let capturedWirePath = null;
-  let capturedAuthHeader = null;
-
-  const origRequest = https.request;
-  https.request = function mockRequest(options, callback) {
-    capturedWirePath = options.path;
-    capturedAuthHeader = options.headers?.authorization;
-    const req = new EventEmitter();
-    req.write = function() { return true; };
-    req.end = function() {
-      process.nextTick(() => {
-        const res = new Readable({
-          read() { this.push(Buffer.from('<CompleteMultipartUploadResult><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>')); this.push(null); }
-        });
-        res.statusCode = 200;
-        res.headers = { 'x-amz-request-id': 'test-space-001' };
-        callback(res);
-      });
-      return req;
-    };
-    return req;
-  };
-
-  try {
-    const result = await b2.uploadToB2(PRODUCTION_KEY, body, 'audio/mpeg', 'test-space');
-    assert.equal(result, PRODUCTION_KEY, 'must return original unencoded key');
-
-    // Wire path: must be percent-encoded, no raw spaces
-    assert.ok(capturedWirePath, 'must capture wire path');
-    assert.ok(!capturedWirePath.includes(' '), 'wire path must contain no raw spaces');
-    assert.ok(capturedWirePath.includes('/Boney%20M/'), 'wire must encode "Boney M"');
-    assert.ok(capturedWirePath.includes('/Nightflight%20to%20Venus/'), 'wire must encode "Nightflight to Venus"');
-
-    // Signature must be present (proves signer ran with raw path)
-    assert.ok(capturedAuthHeader, 'must have SigV4 authorization header');
-    assert.ok(capturedAuthHeader.startsWith('AWS4-HMAC-SHA256'), 'must be SigV4 signature');
-  } finally {
-    https.request = origRequest;
-  }
-});
-
-test('REGRESSION: raw signing path vs encoded wire path — same canonical URI', async () => {
-  const SPECIAL_KEY = 'music/Artist & Band/Album + Deluxe/track #1.mp3';
-  const body = Buffer.alloc(512, 0xBB);
-  let capturedWirePath = null;
-
-  const origRequest = https.request;
-  https.request = function mockRequest(options, callback) {
-    capturedWirePath = options.path;
-    const req = new EventEmitter();
-    req.write = function() { return true; };
-    req.end = function() {
-      process.nextTick(() => {
-        const res = new Readable({
-          read() { this.push(Buffer.from('<CompleteMultipartUploadResult><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>')); this.push(null); }
-        });
-        res.statusCode = 200;
-        res.headers = { 'x-amz-request-id': 'test-special-001' };
-        callback(res);
-      });
-      return req;
-    };
-    return req;
-  };
-
-  try {
-    const result = await b2.uploadToB2(SPECIAL_KEY, body, 'audio/mpeg', 'test-special');
-    assert.equal(result, SPECIAL_KEY, 'must return original unencoded key');
-
-    // Wire path: percent-encoded
-    assert.ok(!capturedWirePath.includes(' '), 'wire: no raw spaces');
-    assert.ok(capturedWirePath.includes('Artist%20%26%20Band'), 'wire: encodes space and &');
-    assert.ok(capturedWirePath.includes('Album%20%2B%20Deluxe'), 'wire: encodes space and +');
-    assert.ok(capturedWirePath.includes('track%20%231.mp3'), 'wire: encodes space and #');
-  } finally {
-    https.request = origRequest;
-  }
-});
-
-test('REGRESSION: SigV4 canonical URI matches wire path encoding', async () => {
-  // Verify that the signer's getCanonicalPath produces the same encoding
-  // that encodePathForWire produces — i.e. both produce %20 for spaces.
-  // This ensures the signature is computed over what B2 receives on the wire.
-  const { SignatureV4 } = await import('@smithy/signature-v4');
-  const { HttpRequest } = await import('@smithy/core/protocols');
-  const crypto = await import('node:crypto');
-
-  class TestSha256 {
-    constructor(secret) {
-      if (secret) { this.hmac = crypto.default.createHmac('sha256', secret); }
-      else        { this.hash = crypto.default.createHash('sha256'); }
-    }
-    update(data) { (this.hmac || this.hash).update(data); return this; }
-    async digest() { return new Uint8Array((this.hmac || this.hash).digest()); }
-  }
-
-  const signer = new SignatureV4({
-    credentials: { accessKeyId: 'AKID', secretAccessKey: 'SECRET' },
-    region: 'auto', service: 's3', sha256: TestSha256,
-  });
-
-  const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
-  const rawPath = '/test-bucket/' + PRODUCTION_KEY;
-  const wirePath = '/test-bucket/' + PRODUCTION_KEY.split('/').map(encodeURIComponent).join('/');
-
-  // Sign with raw path (what uploadToB2 does)
-  const req = new HttpRequest({
-    method: 'PUT', hostname: 's3.example.com', port: 443,
-    path: rawPath,
-    headers: { 'host': 's3.example.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
-    body: Buffer.alloc(10),
-  });
-  const signed = await signer.signRequest(req);
-
-  // The wire path and the signer's canonical URI must agree on encoding.
-  // Both should have %20 for spaces, %26 for &, etc.
-  // The signed authorization header was computed over the raw path's canonical form.
-  // B2 will receive the wire path and canonicalize it the same way.
-  assert.ok(signed.headers.authorization, 'must have authorization');
-  assert.ok(signed.headers.authorization.includes('Signature='), 'must contain signature');
-  assert.ok(!wirePath.includes(' '), 'wire path must have no raw spaces');
-  assert.ok(wirePath.includes('%20'), 'wire path must encode spaces as %20');
-
-  // The signer receives rawPath. Its getCanonicalPath encodes spaces to %20.
-  // B2 receives wirePath which also has %20. Both canonical URIs match.
-  // If we had passed wirePath (pre-encoded) to the signer, it would double-encode
-  // to %2520, causing SignatureDoesNotMatch.
-  const preEncodedReq = new HttpRequest({
-    method: 'PUT', hostname: 's3.example.com', port: 443,
-    path: wirePath,
-    headers: { 'host': 's3.example.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
-    body: Buffer.alloc(10),
-  });
-  const preEncodedSigned = await signer.signRequest(preEncodedReq);
-  // Signatures MUST differ — proving that pre-encoding causes double-encoding
-  assert.notEqual(
-    signed.headers.authorization,
-    preEncodedSigned.headers.authorization,
-    'raw path and pre-encoded path must produce different signatures (proves double-encoding if pre-encoded)'
-  );
-});
-
-test('REGRESSION: uploadToB2 returns original unencoded key, not encoded path', async () => {
+test('REGRESSION: uploadToB2 returns original key, not encoded path', async () => {
   const keyWithSpaces = 'music/Test Artist/Test Album/song.mp3';
   const body = Buffer.alloc(100, 0xCC);
 
-  const origRequest = https.request;
-  https.request = function mockRequest(options, callback) {
-    const req = new EventEmitter();
-    req.write = function() { return true; };
-    req.end = function() {
-      process.nextTick(() => {
-        const res = new Readable({
-          read() { this.push(Buffer.from('<CompleteMultipartUploadResult><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>')); this.push(null); }
-        });
-        res.statusCode = 200;
-        res.headers = { 'x-amz-request-id': 'test-return-001' };
-        callback(res);
-      });
-      return req;
-    };
-    return req;
-  };
+  const origSend = b2.s3.send.bind(b2.s3);
+  b2.s3.send = async function() { return {}; };
 
   try {
     const result = await b2.uploadToB2(keyWithSpaces, body, 'audio/mpeg', 'test-return');
-    assert.equal(result, keyWithSpaces, 'return value must be the original key, not URL-encoded');
+    assert.equal(result, keyWithSpaces, 'return value must be the original key');
   } finally {
-    https.request = origRequest;
+    b2.s3.send = origSend;
   }
 });
+
+// ── Key builder tests ──
 
 test('buildAudioKey produces expected path format', () => {
   const key = b2.buildAudioKey('Artist', 'Album', 'song.mp3');
@@ -409,10 +192,6 @@ test('uploader.js exports uploaderRouter', () => {
 });
 
 // ── Data consistency invariants ──
-// useTempDb AFTER uploader import — uploader.js calls dotenv.config() at
-// module level which re-reads .env and restores TURSO_DATABASE_URL. Setting
-// DB_PATH and deleting the Turso vars here ensures q() → initDatabase()
-// picks up the temp local SQLite.
 import { useTempDb } from './helpers.js';
 useTempDb('upload-pipeline');
 

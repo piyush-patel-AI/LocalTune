@@ -2,10 +2,8 @@
  * server/b2.js
  * Shared Backblaze B2 client — AWS SDK v3 S3-compatible API.
  *
- * PutObject uploads use native https.request() with SigV4 signing to bypass
- * a bug in @smithy/node-http-handler that truncates large request bodies.
- * All other operations (HeadObject, DeleteObject, ListObjectsV2, GetObject,
- * presigned URLs) continue using the standard S3Client.
+ * Uses the official S3Client for ALL operations including PutObject.
+ * The signing region is derived from B2_ENDPOINT (s3.<region>.backblazeb2.com).
  *
  * Required env vars:
  *   B2_ACCOUNT_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENDPOINT
@@ -15,16 +13,13 @@
 
 import {
   S3Client,
+  PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { SignatureV4 } from '@smithy/signature-v4';
-import { HttpRequest } from '@smithy/core/protocols';
-import https from 'node:https';
-import crypto from 'node:crypto';
 
 const { B2_ACCOUNT_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENDPOINT, B2_PUBLIC_URL } = process.env;
 
@@ -36,10 +31,18 @@ if (!isB2Configured()) {
   console.warn('[B2] WARNING: Missing B2 env vars — B2 storage unavailable until configured.');
 }
 
-// ── S3Client for non-upload operations (HeadObject, DeleteObject, etc.) ──
+// ── Pre-parse the B2 endpoint once at module load ──
+const _b2Url = B2_ENDPOINT ? new URL(B2_ENDPOINT) : null;
+
+// Derive signing region from B2 endpoint hostname.
+// B2 endpoint format: s3.<region>.backblazeb2.com  →  region = <region>
+// Fallback to 'auto' if parsing fails.
+const _b2Region = _b2Url?.hostname?.match(/^s3\.([^.]+)\.backblazeb2\.com$/)?.[1] || 'auto';
+
+// ── Single S3Client for all operations (PUT, GET, HEAD, DELETE, presigned) ──
 export const s3 = new S3Client({
   endpoint: B2_ENDPOINT,
-  region: 'auto',
+  region: _b2Region,
   forcePathStyle: true,
   requestChecksumCalculation: 'WHEN_REQUIRED',
   expectContinueHeader: false,
@@ -49,139 +52,37 @@ export const s3 = new S3Client({
   }
 });
 
-// ── Pre-parse the B2 endpoint once at module load ──
-const _b2Url = B2_ENDPOINT ? new URL(B2_ENDPOINT) : null;
-const _b2Hostname = _b2Url?.hostname || '';
-const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
-
-// Derive signing region from B2 endpoint hostname.
-// B2 endpoint format: s3.<region>.backblazeb2.com  →  region = <region>
-// Fallback to 'auto' if parsing fails.
-const _b2Region = _b2Hostname.match(/^s3\.([^.]+)\.backblazeb2\.com$/)?.[1] || 'auto';
-
-// ── SigV4 signer for native PUT uploads ──
-
-class Sha256 {
-  constructor(secret) {
-    if (secret) { this.hmac = crypto.createHmac('sha256', secret); }
-    else        { this.hash = crypto.createHash('sha256'); }
-  }
-  update(data) { (this.hmac || this.hash).update(data); return this; }
-  async digest() { return new Uint8Array((this.hmac || this.hash).digest()); }
-}
-
-const b2Signer = new SignatureV4({
-  credentials: {
-    accessKeyId: B2_ACCOUNT_ID || '',
-    secretAccessKey: B2_APPLICATION_KEY || '',
-  },
-  region: _b2Region,
-  service: 's3',
-  sha256: Sha256,
-});
-
 /**
- * Encode an S3-style "bucket/key" path for use in an HTTP request URI.
- * Splits on "/", percent-encodes each segment (spaces → %20, etc.),
- * then rejoins with "/".  Preserves slash separators.
- *
- * Used only for the wire path in https.request().  The SigV4 signer
- * receives the RAW (unencoded) path and encodes it internally during
- * canonical URI construction — this avoids double-encoding.
- */
-function encodePathForWire(bucket, key) {
-  return '/' + bucket + '/' + key.split('/').map(encodeURIComponent).join('/');
-}
-
-/**
- * Upload a Buffer to B2 using native https.request() with SigV4 signing.
- * Bypasses @smithy/node-http-handler which truncates large request bodies.
+ * Upload a Buffer to B2 via S3Client PutObjectCommand.
+ * The SDK handles SigV4 signing, path encoding, and HTTP transmission internally.
  *
  * @param {string} key         B2 object key
- * @param {Buffer} body        data to upload (Buffer only — streams not supported)
+ * @param {Buffer} body        data to upload
  * @param {string} contentType MIME type
  * @param {string} [cid]       optional correlation id for structured logging
  * @returns {Promise<string>}  the key on success
  */
 export async function uploadToB2(key, body, contentType, cid) {
+  if (!Buffer.isBuffer(body)) throw new Error('uploadToB2 only accepts Buffer bodies');
   const tag = cid ? `[B2][${cid}]` : '[B2]';
-  const isBuffer = Buffer.isBuffer(body);
-  const size = isBuffer ? body.length : null;
-  console.log(`${tag} upload start key=${key} size=${size} body_type=${body?.constructor?.name || typeof body} is_buffer=${isBuffer} content_type=${contentType}`);
-
-  if (!isBuffer) {
-    throw new Error('uploadToB2 only accepts Buffer bodies');
-  }
-  if (!_b2Url) {
-    throw new Error('B2_ENDPOINT is not configured');
-  }
+  const size = body.length;
+  console.log(`${tag} upload start key=${key} size=${size} body_type=Buffer is_buffer=true content_type=${contentType}`);
 
   const t0 = Date.now();
-  // rawPath: unencoded, passed to SigV4 signer.  The signer's getCanonicalPath()
-  // encodes spaces → %20 internally during canonical URI construction.
-  const rawPath = '/' + B2_BUCKET_NAME + '/' + key;
-  // wirePath: percent-encoded, passed to https.request().  Node.js rejects
-  // raw spaces, and B2 expects %20 on the wire.
-  const wirePath = encodePathForWire(B2_BUCKET_NAME, key);
-  const bodyLength = body.length;
-
   try {
-    const unsignedRequest = new HttpRequest({
-      method: 'PUT',
-      hostname: _b2Hostname,
-      port: _b2Port,
-      path: rawPath,
-      headers: {
-        'host':                  _b2Hostname,
-        'content-type':          contentType,
-        'content-length':        String(bodyLength),
-        'x-amz-content-sha256':  'UNSIGNED-PAYLOAD',
-      },
-      body,
-    });
-
-    const signedRequest = await b2Signer.signRequest(unsignedRequest);
-    const signedHeaders = { ...signedRequest.headers };
-
-    const statusCode = await new Promise((resolve, reject) => {
-      const req = https.request({
-        hostname: _b2Hostname,
-        port:     _b2Port,
-        path:     wirePath,
-        method:   'PUT',
-        headers:  signedHeaders,
-      }, (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => {
-          const resBody = Buffer.concat(chunks).toString('utf-8');
-          resolve({ statusCode: res.statusCode, body: resBody, requestId: res.headers['x-amz-request-id'] || res.headers['x-amz-requestid'] });
-        });
-      });
-      req.on('error', reject);
-      req.write(body);
-      req.end();
-    });
-
+    await s3.send(new PutObjectCommand({
+      Bucket: B2_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      ContentLength: size
+    }));
     const elapsed = Date.now() - t0;
-
-    if (statusCode.statusCode >= 300) {
-      const codeMatch = statusCode.body.match(/<Code>(.*?)<\/Code>/);
-      const msgMatch = statusCode.body.match(/<Message>(.*?)<\/Message>/);
-      const errMsg = `B2 PUT failed: ${codeMatch?.[1] || 'Unknown'} — ${msgMatch?.[1] || statusCode.body.substring(0, 200)}`;
-      console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms status=${statusCode.statusCode} requestId=${statusCode.requestId} body_length=${bodyLength} error=${errMsg}`);
-      const err = new Error(errMsg);
-      err.b2StatusCode = statusCode.statusCode;
-      err.b2RequestId = statusCode.requestId;
-      throw err;
-    }
-
-    console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms status=${statusCode.statusCode} requestId=${statusCode.requestId} body_length=${bodyLength}`);
+    console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms`);
     return key;
   } catch (err) {
-    if (err.b2StatusCode) throw err;
     const elapsed = Date.now() - t0;
-    console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms body_length=${bodyLength} error=${err.message}`);
+    console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms body_length=${size} error=${err.message}`);
     throw err;
   }
 }
