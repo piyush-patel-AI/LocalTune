@@ -100,7 +100,7 @@ export async function uploadToB2(key, body, contentType, cid) {
 
   const t0 = Date.now();
   const now = new Date();
-  const amzDate = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '000Z');
+  const amzDate = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
   const dateStamp = amzDate.slice(0, 8);
 
   // ── Step 1: Canonical Request ──

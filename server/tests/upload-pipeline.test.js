@@ -112,6 +112,45 @@ test('REGRESSION: uploadToB2 sends full 8,832,102-byte Buffer via native HTTPS P
   }
 });
 
+// ── x-amz-date format: must be YYYYMMDDTHHMMSSZ, no milliseconds ──
+
+test('REGRESSION: x-amz-date is SigV4-compliant YYYYMMDDTHHMMSSZ (no milliseconds)', async () => {
+  const body = Buffer.alloc(100, 0x00);
+  let capturedDateHeader = null;
+
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    capturedDateHeader = options.headers?.['x-amz-date'];
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<PutObjectResult><ETag>"d"</ETag></PutObjectResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = {};
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
+
+  try {
+    await b2.uploadToB2('date-test/test.mp3', body, 'audio/mpeg', 'test-date');
+    assert.ok(capturedDateHeader, 'must have x-amz-date header');
+    // SigV4 format: YYYYMMDDTHHMMSSZ — exactly 16 chars, no milliseconds
+    assert.match(capturedDateHeader, /^\d{8}T\d{6}Z$/,
+      'x-amz-date must be exactly YYYYMMDDTHHMMSSZ (16 chars, no milliseconds)');
+    assert.equal(capturedDateHeader.length, 16,
+      'x-amz-date must be exactly 16 characters');
+    assert.ok(!capturedDateHeader.includes('.'), 'x-amz-date must not contain a dot (milliseconds)');
+  } finally {
+    https.request = origRequest;
+  }
+});
+
 // ── Production key with spaces ──
 
 test('REGRESSION: uploadToB2 preserves exact production key with spaces', async () => {
