@@ -25,47 +25,35 @@ const __dirname = path.dirname(__filename);
 let client = null;
 let initPromise = null;
 
-/** Turso Cloud backend (@tursodatabase/serverless). */
+/**
+ * Turso Cloud backend (@tursodatabase/serverless).
+ *
+ * Uses two independent connections to avoid a driver bug where `exec()`
+ * (pipeline /v3/pipeline) can redirect the session's internal `baseUrl`
+ * via the server's `base_url` response field.  That redirected URL may
+ * not serve `/v3/cursor`, so all cursor-based reads (get/all/run/batch)
+ * would 404.  Keeping a separate `execConn` isolates the redirect.
+ */
 async function createTursoClient(url, authToken) {
   const { connect } = await import('@tursodatabase/serverless');
-  let conn = connect({ url, authToken });
-  let lastReconnect = 0;
+  const readConn = connect({ url, authToken });
+  const execConn = connect({ url, authToken });
   const normInfo = (info) => ({
     changes: Number(info?.changes ?? 0),
     lastInsertRowid: info?.lastInsertRowid == null ? 0 : Number(info.lastInsertRowid)
   });
-
-  function reconnect(reason) {
-    const now = Date.now();
-    if (now - lastReconnect < 5000) return;
-    lastReconnect = now;
-    console.warn(`[db.js] Turso reconnect (${reason})`);
-    conn = connect({ url, authToken });
-  }
-
-  async function withFallback(fn) {
-    try {
-      return await fn(conn);
-    } catch (e) {
-      const msg = e?.message || '';
-      if (msg.includes('404') || msg.includes('cursor')) {
-        reconnect(msg);
-        return await fn(conn);
-      }
-      throw e;
-    }
-  }
-
+  const hostname = new URL(url.replace(/^(libsql|turso):\/\//, 'https://')).hostname;
+  console.log(`[db.js] Turso connected: ${hostname}`);
   return {
     mode: 'turso',
-    all: async (sql, ...params) => withFallback(c => c.all(sql, ...params)),
-    get: async (sql, ...params) => withFallback(c => c.get(sql, ...params)),
-    run: async (sql, ...params) => withFallback(async c => normInfo(await c.run(sql, ...params))),
+    all: async (sql, ...params) => await readConn.all(sql, ...params),
+    get: async (sql, ...params) => await readConn.get(sql, ...params),
+    run: async (sql, ...params) => normInfo(await readConn.run(sql, ...params)),
     exec: async (sql) => {
-      for (const stmt of splitStatements(sql)) await conn.exec(stmt);
+      for (const stmt of splitStatements(sql)) await execConn.exec(stmt);
     },
     batch: async (statements) => {
-      await conn.batch(
+      await readConn.batch(
         statements.map((s) => ({ sql: s.sql, args: s.args || [] })),
         'write'
       );
