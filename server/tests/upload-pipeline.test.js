@@ -146,6 +146,113 @@ test('REGRESSION: uploadToB2 rejects non-Buffer input', async () => {
   );
 });
 
+test('REGRESSION: URL-encodes spaces in key — exact production key', async () => {
+  const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
+  const body = Buffer.alloc(1024, 0xAA);
+  let capturedPath = null;
+
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    capturedPath = options.path;
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<CompleteMultipartUploadResult><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-space-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
+
+  try {
+    const result = await b2.uploadToB2(PRODUCTION_KEY, body, 'audio/mpeg', 'test-space');
+    assert.equal(result, PRODUCTION_KEY, 'must return original unencoded key');
+
+    assert.ok(capturedPath, 'must capture request path');
+    assert.ok(!capturedPath.includes(' '), 'HTTP path must contain no raw spaces');
+    assert.ok(capturedPath.includes('/Boney%20M/'), 'must encode "Boney M" → "Boney%20M"');
+    assert.ok(capturedPath.includes('/Nightflight%20to%20Venus/'), 'must encode "Nightflight to Venus"');
+    assert.ok(capturedPath.includes('/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3'), 'filename preserved');
+    assert.ok(capturedPath.startsWith('/'), 'path must start with /');
+    const slashCount = (capturedPath.match(/\//g) || []).length;
+    assert.ok(slashCount >= 4, 'must have at least 4 slashes: /bucket/music/Boney M/.../file.mp3');
+  } finally {
+    https.request = origRequest;
+  }
+});
+
+test('REGRESSION: URL-encodes special characters in key (&, +, spaces)', async () => {
+  const SPECIAL_KEY = 'music/Artist & Band/Album + Deluxe/track #1.mp3';
+  const body = Buffer.alloc(512, 0xBB);
+  let capturedPath = null;
+
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    capturedPath = options.path;
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<CompleteMultipartUploadResult><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-special-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
+
+  try {
+    const result = await b2.uploadToB2(SPECIAL_KEY, body, 'audio/mpeg', 'test-special');
+    assert.equal(result, SPECIAL_KEY, 'must return original unencoded key');
+    assert.ok(!capturedPath.includes(' '), 'no raw spaces');
+    assert.ok(capturedPath.includes('Artist%20%26%20Band'), 'encodes space and &');
+    assert.ok(capturedPath.includes('Album%20%2B%20Deluxe'), 'encodes space and +');
+    assert.ok(capturedPath.includes('track%20%231.mp3'), 'encodes space and #');
+  } finally {
+    https.request = origRequest;
+  }
+});
+
+test('REGRESSION: uploadToB2 returns original unencoded key, not encoded path', async () => {
+  const keyWithSpaces = 'music/Test Artist/Test Album/song.mp3';
+  const body = Buffer.alloc(100, 0xCC);
+
+  const origRequest = https.request;
+  https.request = function mockRequest(options, callback) {
+    const req = new EventEmitter();
+    req.write = function() { return true; };
+    req.end = function() {
+      process.nextTick(() => {
+        const res = new Readable({
+          read() { this.push(Buffer.from('<CompleteMultipartUploadResult><Bucket>b</Bucket><Key>k</Key></CompleteMultipartUploadResult>')); this.push(null); }
+        });
+        res.statusCode = 200;
+        res.headers = { 'x-amz-request-id': 'test-return-001' };
+        callback(res);
+      });
+      return req;
+    };
+    return req;
+  };
+
+  try {
+    const result = await b2.uploadToB2(keyWithSpaces, body, 'audio/mpeg', 'test-return');
+    assert.equal(result, keyWithSpaces, 'return value must be the original key, not URL-encoded');
+  } finally {
+    https.request = origRequest;
+  }
+});
+
 test('buildAudioKey produces expected path format', () => {
   const key = b2.buildAudioKey('Artist', 'Album', 'song.mp3');
   assert.equal(key, 'music/Artist/Album/song.mp3');

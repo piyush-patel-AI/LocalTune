@@ -76,6 +76,15 @@ const _b2Hostname = _b2Url?.hostname || '';
 const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
 
 /**
+ * Encode an S3-style "bucket/key" path for use in an HTTP request URI.
+ * Splits on "/", percent-encodes each segment (spaces → %20, etc.),
+ * then rejoins with "/".  Preserves slash separators.
+ */
+function encodeS3Path(bucket, key) {
+  return '/' + bucket + '/' + key.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
  * Upload a Buffer to B2 using native https.request() with SigV4 signing.
  * Bypasses @smithy/node-http-handler which truncates large request bodies.
  *
@@ -99,7 +108,7 @@ export async function uploadToB2(key, body, contentType, cid) {
   }
 
   const t0 = Date.now();
-  const path = `/${B2_BUCKET_NAME}/${key}`;
+  const path = encodeS3Path(B2_BUCKET_NAME, key);
   const bodyLength = body.length;
 
   try {
