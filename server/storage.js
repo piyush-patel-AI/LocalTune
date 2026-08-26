@@ -252,6 +252,44 @@ export async function listStorageObjects(prefix, options = {}) {
   }
 }
 
+/**
+ * Recursively list all audio objects in the Supabase Storage bucket under a directory prefix.
+ * @param {string} prefix - Starting path (e.g., 'music' or '')
+ * @returns {Array<{ name: string, path: string, updated_at: string, created_at: string, metadata: object }>}
+ */
+export async function listAllAudioObjects(prefix = 'music') {
+  const AUDIO_EXTS = new Set(['.mp3', '.flac', '.wav', '.m4a', '.ogg', '.aac']);
+  const audioObjects = [];
+
+  async function walk(dirPath) {
+    const items = await listStorageObjects(dirPath);
+    for (const item of items) {
+      const fullPath = dirPath ? `${dirPath}/${item.name}` : item.name;
+
+      // In Supabase Storage, directory entries have id === null or metadata === null or no mimetype
+      const isDirectory = !item.id && !item.metadata;
+
+      if (isDirectory) {
+        await walk(fullPath);
+      } else {
+        const ext = fullPath.substring(fullPath.lastIndexOf('.')).toLowerCase();
+        if (AUDIO_EXTS.has(ext)) {
+          audioObjects.push({
+            name: item.name,
+            path: fullPath,
+            updated_at: item.updated_at,
+            created_at: item.created_at,
+            metadata: item.metadata
+          });
+        }
+      }
+    }
+  }
+
+  await walk(prefix);
+  return audioObjects;
+}
+
 // ============================================================
 // Key Builders (preserve B2 key format)
 // ============================================================

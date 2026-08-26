@@ -35,6 +35,7 @@ import {
   uploadToStorage,
   getBufferFromStorage,
   listStorageObjects,
+  listAllAudioObjects,
   buildAudioKey,
   buildArtworkKey,
   extFromMime,
@@ -99,11 +100,10 @@ function extractReleaseType(album, commonReleasetype) {
     const rt = commonReleasetype.toLowerCase();
     if (rt.includes('ep')) releaseType = 'ep';
     else if (rt.includes('single')) releaseType = 'single';
-  }
-  if (album.match(/\bEP\b/i) || album.toLowerCase().includes('(ep)') || album.toLowerCase().includes('[ep]')) {
-    releaseType = 'ep';
-  } else if (album.match(/\bSingle\b/i) || album.toLowerCase().includes('(single)')) {
-    releaseType = 'single';
+  } else if (album && typeof album === 'string') {
+    const alb = album.toLowerCase();
+    if (alb.includes(' - ep') || alb.endsWith(' ep') || alb.includes(' (ep)')) releaseType = 'ep';
+    else if (alb.includes(' - single') || alb.endsWith(' single') || alb.includes(' (single)')) releaseType = 'single';
   }
   return releaseType;
 }
@@ -112,29 +112,29 @@ function extractReleaseType(album, commonReleasetype) {
  * Parse metadata from an in-memory buffer.
  * Returns { title, artist, album, releaseType, durationSeconds, genre, year, format, embeddedArt }.
  */
-export const parseAudioBuffer = async (buffer, filename) => {
+export const parseAudioBuffer = async (buffer, filename = 'audio.mp3') => {
   const ext = path.extname(filename).toLowerCase();
-  const formatStr = ext.replace('.', '');
-  const filenameNoExt = path.basename(filename, ext);
+  const formatStr = ext.replace('.', '') || 'mp3';
+  const mimeType = extToMime(ext);
 
-  let title = filenameNoExt;
+  let title = path.basename(filename, ext);
   let artist = 'Unknown Artist';
   let album = 'Unknown Album';
   let releaseType = 'album';
   let durationSeconds = 0;
   let genre = null;
   let year = null;
-  let embeddedArt = null;
   let rawReleasetype = null;
+  let embeddedArt = null;
 
   try {
-    const metadata = await parseBuffer(buffer, extToMime(ext));
-    if (metadata.common) {
+    const metadata = await parseBuffer(buffer, { mimeType });
+    if (metadata && metadata.common) {
       if (metadata.common.title && metadata.common.title.trim()) {
         title = metadata.common.title.trim();
       }
       if (metadata.common.artist && metadata.common.artist.trim()) {
-        artist = metadata.common.artist.trim().replace(/\bMicheal\b/g, 'Michael');
+        artist = metadata.common.artist.trim();
       }
       if (metadata.common.album && metadata.common.album.trim()) {
         album = metadata.common.album.trim();
@@ -260,10 +260,10 @@ const saveEmbeddedArtwork = async (trackId, embeddedArt) => {
 
 /** Reconcile PostgreSQL against the contents of the storage bucket (`music/` prefix). */
 const reconcileStorageLibrary = async () => {
-  const storageObjects = await listStorageObjects('music/');
+  const audioObjects = await listAllAudioObjects('music');
   const storageMap = new Map();
-  for (const obj of storageObjects) {
-    storageMap.set(obj.name, obj);
+  for (const obj of audioObjects) {
+    storageMap.set(obj.path, obj);
   }
   console.log(`[Scanner] Found ${storageMap.size} audio object(s) in storage bucket.`);
 
