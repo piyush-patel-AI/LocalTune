@@ -1,188 +1,169 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { runMigrations, splitStatements } from './migrations/migrationManager.js';
-import { deleteFromB2, isLocalPath } from './b2.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 /**
- * Async database client with two interchangeable backends:
+ * server/db.js
  *
- *  - "turso": Turso Cloud via @tursodatabase/serverless (pure fetch, zero
- *    native dependencies). Selected automatically when TURSO_DATABASE_URL is set.
- *  - "local": better-sqlite3 wrapped in the same async surface. Used for
- *    development and tests (and until Turso credentials are provisioned).
+ * PostgreSQL database client using node-postgres (pg).
+ * Replaces the Turso/libSQL + better-sqlite3 dual backend.
  *
- * Every operation below preserves the historical better-sqlite3 return shapes:
+ * Preserves the same async API surface:
  *   .get()  -> row object | undefined
  *   .all()  -> array of row objects
  *   .run()  -> { changes: number, lastInsertRowid: number }
- * Explicit null returns (getPlaylistById / getPlaylistTracks / etc.) are kept.
+ *   .exec() -> void
+ *   .batch() -> { changes: 0, lastInsertRowid: 0 }  (uses transactions)
  */
 
-let client = null;
-let initPromise = null;
+import pg from 'pg';
+import { deleteFromStorage, isLocalPath } from './storage.js';
+
+const { Pool } = pg;
+
+let pool = null;
 
 /**
- * Turso Cloud backend (@tursodatabase/serverless).
- *
- * Uses two independent connections to avoid a driver bug where `exec()`
- * (pipeline /v3/pipeline) can redirect the session's internal `baseUrl`
- * via the server's `base_url` response field.  That redirected URL may
- * not serve `/v3/cursor`, so all cursor-based reads (get/all/run/batch)
- * would 404.  Keeping a separate `execConn` isolates the redirect.
- */
-async function createTursoClient(url, authToken) {
-  const { connect } = await import('@tursodatabase/serverless');
-  const readConn = connect({ url, authToken });
-  const execConn = connect({ url, authToken });
-  const normInfo = (info) => ({
-    changes: Number(info?.changes ?? 0),
-    lastInsertRowid: info?.lastInsertRowid == null ? 0 : Number(info.lastInsertRowid)
-  });
-  const hostname = new URL(url.replace(/^(libsql|turso):\/\//, 'https://')).hostname;
-  console.log(`[db.js] Turso connected: ${hostname}`);
-  return {
-    mode: 'turso',
-    all: async (sql, ...params) => await readConn.all(sql, ...params),
-    get: async (sql, ...params) => await readConn.get(sql, ...params),
-    run: async (sql, ...params) => normInfo(await readConn.run(sql, ...params)),
-    exec: async (sql) => {
-      for (const stmt of splitStatements(sql)) await execConn.exec(stmt);
-    },
-    batch: async (statements) => {
-      await readConn.batch(
-        statements.map((s) => ({ sql: s.sql, args: s.args || [] })),
-        'write'
-      );
-      return { changes: 0, lastInsertRowid: 0 };
-    }
-  };
-}
-
-/** Local SQLite backend (better-sqlite3), identical semantics. */
-async function createLocalClient(dbPath) {
-  const { default: Database } = await import('better-sqlite3');
-  const sqlite = new Database(dbPath);
-  sqlite.pragma('foreign_keys = ON');
-  return {
-    mode: 'local',
-    all: async (sql, ...params) => sqlite.prepare(sql).all(...params),
-    get: async (sql, ...params) => sqlite.prepare(sql).get(...params),
-    run: async (sql, ...params) => {
-      const info = sqlite.prepare(sql).run(...params);
-      return { changes: Number(info.changes), lastInsertRowid: Number(info.lastInsertRowid) };
-    },
-    exec: async (sql) => { sqlite.exec(sql); },
-    batch: async (statements) => {
-      const tx = sqlite.transaction(() => {
-        for (const s of statements) sqlite.prepare(s.sql).run(...(s.args || []));
-      });
-      tx();
-      return { changes: 0, lastInsertRowid: 0 };
-    }
-  };
-}
-
-/**
- * Initialize the database connection, schema and versioned migrations.
- * Idempotent; safe to await multiple times. Also invoked lazily by every
- * query helper, so importing modules never needs explicit bootstrapping.
+ * Initialize the PostgreSQL connection pool.
+ * Idempotent; safe to call multiple times.
  */
 export async function initDatabase() {
-  if (!initPromise) {
-    initPromise = (async () => {
-      const url = process.env.TURSO_DATABASE_URL;
-      client = url
-        ? await createTursoClient(url, process.env.TURSO_AUTH_TOKEN)
-        : await createLocalClient(process.env.DB_PATH || path.join(__dirname, 'localtune.db'));
+  if (pool) return pool;
 
-      console.log(`[db.js] Database backend: ${client.mode === 'turso' ? 'Turso Cloud' : 'local SQLite'} (${client.mode})`);
-
-      try {
-        await client.exec('PRAGMA foreign_keys = ON');
-      } catch (e) {
-        console.warn('[db.js] PRAGMA foreign_keys unsupported on this backend:', e.message);
-      }
-
-      const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-      await client.exec(schemaSql);
-
-      try {
-        await runMigrations(client);
-      } catch (migErr) {
-        console.error('[db.js] Error running migrations:', migErr.message);
-      }
-
-      try {
-        const cleaned = await removeDuplicateTracks();
-        if (cleaned > 0) {
-          console.log(`[Database] Automatically cleaned up ${cleaned} duplicate track(s).`);
-        }
-      } catch (e) {
-        console.error('Duplicate cleanup error on startup:', e);
-      }
-
-      return client;
-    })();
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required');
   }
-  return initPromise;
+
+  pool = new Pool({
+    connectionString,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+
+  // Test the connection
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT NOW()');
+    console.log('[db.js] PostgreSQL connected successfully');
+  } finally {
+    client.release();
+  }
+
+  return pool;
 }
 
-/** Resolve the active client, lazily initializing on first use. */
-async function q() {
-  if (!client) {
-    if (!initPromise) initDatabase();
-    await initPromise;
+/**
+ * Get the active pool, initializing if needed.
+ */
+async function getPool() {
+  if (!pool) {
+    await initDatabase();
   }
-  return client;
+  return pool;
+}
+
+/**
+ * Execute a query and return all rows.
+ */
+async function queryAll(sql, params = []) {
+  const p = await getPool();
+  const result = await p.query(sql, params);
+  return result.rows;
+}
+
+/**
+ * Execute a query and return the first row.
+ */
+async function queryGet(sql, params = []) {
+  const p = await getPool();
+  const result = await p.query(sql, params);
+  return result.rows[0];
+}
+
+/**
+ * Execute a write query (INSERT/UPDATE/DELETE).
+ * Returns { changes: number, lastInsertRowid: number }.
+ */
+async function queryRun(sql, params = []) {
+  const p = await getPool();
+  const result = await p.query(sql, params);
+  return {
+    changes: result.rowCount || 0,
+    lastInsertRowid: result.rows[0]?.id ?? 0,
+  };
+}
+
+/**
+ * Execute raw SQL (for schema setup, migrations).
+ */
+async function queryExec(sql) {
+  const p = await getPool();
+  await p.query(sql);
+}
+
+/**
+ * Execute a batch of statements in a transaction.
+ */
+async function queryBatch(statements) {
+  const p = await getPool();
+  const client = await p.connect();
+  try {
+    await client.query('BEGIN');
+    for (const stmt of statements) {
+      await client.query(stmt.sql, stmt.args || []);
+    }
+    await client.query('COMMIT');
+    return { changes: 0, lastInsertRowid: 0 };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // --- Raw escape hatch (scripts/tests only; app code uses the wrappers) ---
-export const rawAll = async (sql, ...params) => (await q()).all(sql, ...params);
-export const rawGet = async (sql, ...params) => (await q()).get(sql, ...params);
-export const rawRun = async (sql, ...params) => (await q()).run(sql, ...params);
-export const rawExec = async (sql) => { await (await q()).exec(sql); };
-export const rawBatch = async (statements) => (await q()).batch(statements);
-export const getBackendMode = () => (client ? client.mode : null);
+export const rawAll = queryAll;
+export const rawGet = queryGet;
+export const rawRun = queryRun;
+export const rawExec = queryExec;
+export const rawBatch = queryBatch;
+export const getBackendMode = () => 'postgres';
 
 // --- User Operations ---
 export const createUser = async (username, passwordHash, displayName) => {
-  const info = await (await q()).run(
-    `INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)`,
-    username, passwordHash, displayName
+  const result = await queryRun(
+    `INSERT INTO users (username, password_hash, display_name)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [username, passwordHash, displayName]
   );
-  return info.lastInsertRowid;
+  return result.lastInsertRowid;
 };
 
 export const getUserByUsername = async (username) => {
-  return (await q()).get(`SELECT * FROM users WHERE username = ?`, username);
+  return queryGet(`SELECT * FROM users WHERE username = $1`, [username]);
 };
 
 export const getUserById = async (id) => {
-  return (await q()).get(
-    `SELECT id, username, display_name, avatar_path, date_created FROM users WHERE id = ?`,
-    id
+  return queryGet(
+    `SELECT id, username, display_name, avatar_path, date_created FROM users WHERE id = $1`,
+    [id]
   );
 };
 
 export const updateUserAvatar = async (id, avatarPath) => {
-  await (await q()).run(`UPDATE users SET avatar_path = ? WHERE id = ?`, avatarPath, id);
+  await queryRun(`UPDATE users SET avatar_path = $1 WHERE id = $2`, [avatarPath, id]);
   return getUserById(id);
 };
 
 export const getAllUsersPublic = async () => {
-  return (await q()).all(`SELECT id, username, display_name, avatar_path FROM users`);
+  return queryAll(`SELECT id, username, display_name, avatar_path FROM users`);
 };
 
 // --- Track Operations ---
 export const upsertTrack = async (track) => {
-  const c = await q();
-  const existing = await c.get(
-    `SELECT id, date_modified, cover_art_path, release_type, genre, year FROM tracks WHERE file_path = ?`,
-    track.filePath
+  const existing = await queryGet(
+    `SELECT id, date_modified, cover_art_path, release_type, genre, year FROM tracks WHERE file_path = $1`,
+    [track.filePath]
   );
   const coverArt = track.coverArtPath !== undefined ? track.coverArtPath : (existing ? existing.cover_art_path : null);
   const releaseType = track.releaseType || track.release_type || (existing ? existing.release_type : 'album') || 'album';
@@ -191,78 +172,78 @@ export const upsertTrack = async (track) => {
   const b2Key = track.b2Key !== undefined ? track.b2Key : (existing && !isLocalPath(track.filePath) ? track.filePath : (existing?.b2_key ?? null));
 
   if (existing) {
-    await c.run(
+    await queryRun(
       `UPDATE tracks 
-       SET title = ?, artist = ?, album = ?, duration_seconds = ?, format = ?, file_size = ?, date_modified = ?, cover_art_path = ?, release_type = ?, genre = ?, year = ?, b2_key = ?
-       WHERE file_path = ?`,
-      track.title, track.artist, track.album,
-      track.durationSeconds || 0, track.format, track.fileSize || 0,
-      track.dateModified, coverArt, releaseType, genreVal, yearVal, b2Key,
-      track.filePath
+       SET title = $1, artist = $2, album = $3, duration_seconds = $4, format = $5, file_size = $6, date_modified = $7, cover_art_path = $8, release_type = $9, genre = $10, year = $11, b2_key = $12
+       WHERE file_path = $13`,
+      [track.title, track.artist, track.album,
+       track.durationSeconds || 0, track.format, track.fileSize || 0,
+       track.dateModified, coverArt, releaseType, genreVal, yearVal, b2Key,
+       track.filePath]
     );
     return existing.id;
   }
 
-  const info = await c.run(
+  const result = await queryRun(
     `INSERT INTO tracks (
       file_path, title, artist, album, duration_seconds, format, file_size, date_modified, cover_art_path, release_type, genre, year,
       original_title, original_artist, original_album, original_genre, original_year, b2_key
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    track.filePath, track.title, track.artist, track.album,
-    track.durationSeconds || 0, track.format, track.fileSize || 0,
-    track.dateModified, coverArt, releaseType, genreVal, yearVal,
-    track.title, track.artist, track.album, genreVal, yearVal, b2Key
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    RETURNING id`,
+    [track.filePath, track.title, track.artist, track.album,
+     track.durationSeconds || 0, track.format, track.fileSize || 0,
+     track.dateModified, coverArt, releaseType, genreVal, yearVal,
+     track.title, track.artist, track.album, genreVal, yearVal, b2Key]
   );
-  return info.lastInsertRowid;
+  return result.lastInsertRowid;
 };
 
 export const updateTrackCoverArt = async (trackId, coverArtPath) => {
-  return (await q()).run(`UPDATE tracks SET cover_art_path = ? WHERE id = ?`, coverArtPath, trackId);
+  return queryRun(`UPDATE tracks SET cover_art_path = $1 WHERE id = $2`, [coverArtPath, trackId]);
 };
 
-/** Set cover_art_path + artwork_b2_key together after uploading artwork to B2. */
+/** Set cover_art_path + artwork_b2_key together after uploading artwork. */
 export const setTrackArtwork = async (trackId, coverArtPath, artworkB2Key) => {
-  return (await q()).run(
-    `UPDATE tracks SET cover_art_path = ?, artwork_b2_key = ? WHERE id = ?`,
-    coverArtPath ?? null, artworkB2Key ?? null, trackId
+  return queryRun(
+    `UPDATE tracks SET cover_art_path = $1, artwork_b2_key = $2 WHERE id = $3`,
+    [coverArtPath ?? null, artworkB2Key ?? null, trackId]
   );
 };
 
 /**
- * Migration helper: replace a legacy local-disk path with its B2 object key,
+ * Migration helper: replace a legacy local-disk path with its storage key,
  * preserving the row id (and therefore playlist/favorite/history references).
  */
 export const rekeyTrack = async (oldFilePath, newKey, fileSize = null, dateModified = null) => {
-  return (await q()).run(
+  return queryRun(
     `UPDATE tracks 
-     SET file_path = ?, b2_key = ?, file_size = COALESCE(?, file_size), date_modified = COALESCE(?, date_modified)
-     WHERE file_path = ?`,
-    newKey, newKey, fileSize, dateModified, oldFilePath
+     SET file_path = $1, b2_key = $2, file_size = COALESCE($3, file_size), date_modified = COALESCE($4, date_modified)
+     WHERE file_path = $5`,
+    [newKey, newKey, fileSize, dateModified, oldFilePath]
   );
 };
 
 export const getTrackById = async (id) => {
-  return (await q()).get(`SELECT * FROM tracks WHERE id = ?`, id);
+  return queryGet(`SELECT * FROM tracks WHERE id = $1`, [id]);
 };
 
 export const getTrackByPath = async (filePath) => {
-  return (await q()).get(`SELECT * FROM tracks WHERE file_path = ?`, filePath);
+  return queryGet(`SELECT * FROM tracks WHERE file_path = $1`, [filePath]);
 };
 
 export const findTrackByTitleAndArtist = async (title, artist) => {
   if (!title || !artist) return null;
-  return (await q()).get(
+  return queryGet(
     `SELECT * FROM tracks 
-     WHERE LOWER(TRIM(title)) = LOWER(TRIM(?)) 
-       AND LOWER(TRIM(artist)) = LOWER(TRIM(?))`,
-    title, artist
+     WHERE LOWER(TRIM(title)) = LOWER(TRIM($1)) 
+       AND LOWER(TRIM(artist)) = LOWER(TRIM($2))`,
+    [title, artist]
   );
 };
 
 export const removeDuplicateTracks = async () => {
-  const c = await q();
-  const duplicates = await c.all(`
+  const duplicates = await queryAll(`
     SELECT id, file_path, b2_key, artwork_b2_key FROM tracks 
     WHERE id NOT IN (
       SELECT MIN(id) 
@@ -273,23 +254,25 @@ export const removeDuplicateTracks = async () => {
 
   let removedCount = 0;
   for (const dup of duplicates) {
-    await c.run(`DELETE FROM tracks WHERE id = ?`, dup.id);
+    await queryRun(`DELETE FROM tracks WHERE id = $1`, [dup.id]);
     removedCount++;
 
-    // Remove the corresponding media object — B2 key or legacy local file
+    // Remove the corresponding storage object
     const audioKey = dup.b2_key || (!isLocalPath(dup.file_path) ? dup.file_path : null);
     if (audioKey) {
-      await deleteFromB2(audioKey);
-    } else if (dup.file_path && isLocalPath(dup.file_path)) {
       try {
-        if (fs.existsSync(dup.file_path)) fs.unlinkSync(dup.file_path);
-      } catch (e) {
-        console.error('Failed to remove duplicate file from disk:', dup.file_path, e.message);
+        await deleteFromStorage(audioKey);
+      } catch (err) {
+        console.error(`[DB] Failed to delete audio storage object ${audioKey}:`, err.message);
       }
     }
 
     if (dup.artwork_b2_key) {
-      await deleteFromB2(dup.artwork_b2_key);
+      try {
+        await deleteFromStorage(dup.artwork_b2_key);
+      } catch (err) {
+        console.error(`[DB] Failed to delete artwork storage object ${dup.artwork_b2_key}:`, err.message);
+      }
     }
   }
   return removedCount;
@@ -300,22 +283,26 @@ export const getAllTracks = async (options = {}) => {
   let sql = `SELECT * FROM tracks`;
   const params = [];
   const conditions = [];
+  let paramIndex = 1;
 
   if (search && search.trim()) {
     const term = `%${search.trim()}%`;
-    conditions.push(`(title LIKE ? OR artist LIKE ? OR album LIKE ?)`);
+    conditions.push(`(title ILIKE $${paramIndex} OR artist ILIKE $${paramIndex + 1} OR album ILIKE $${paramIndex + 2})`);
     params.push(term, term, term);
+    paramIndex += 3;
   }
 
   if (artist && artist.trim()) {
     const term = `%${artist.trim()}%`;
-    conditions.push(`artist LIKE ?`);
+    conditions.push(`artist ILIKE $${paramIndex}`);
     params.push(term);
+    paramIndex += 1;
   }
 
   if (releaseType && releaseType.trim()) {
-    conditions.push(`LOWER(release_type) = LOWER(?)`);
+    conditions.push(`LOWER(release_type) = LOWER($${paramIndex})`);
     params.push(releaseType.trim());
+    paramIndex += 1;
   }
 
   if (conditions.length > 0) {
@@ -328,11 +315,11 @@ export const getAllTracks = async (options = {}) => {
 
   sql += ` ORDER BY ${sortCol} ${order}`;
 
-  return (await q()).all(sql, ...params);
+  return queryAll(sql, params);
 };
 
 export const deleteTrackByPath = async (filePath) => {
-  return (await q()).run(`DELETE FROM tracks WHERE file_path = ?`, filePath);
+  return queryRun(`DELETE FROM tracks WHERE file_path = $1`, [filePath]);
 };
 
 export const getAlbums = async (releaseTypeFilter = null) => {
@@ -348,11 +335,11 @@ export const getAlbums = async (releaseTypeFilter = null) => {
   `;
   const params = [];
   if (releaseTypeFilter && releaseTypeFilter.trim() && releaseTypeFilter.toLowerCase() !== 'all') {
-    sql += ` WHERE LOWER(release_type) = LOWER(?) `;
+    sql += ` WHERE LOWER(release_type) = LOWER($1) `;
     params.push(releaseTypeFilter.trim());
   }
   sql += ` GROUP BY album, artist ORDER BY album ASC `;
-  return (await q()).all(sql, ...params);
+  return queryAll(sql, params);
 };
 
 export const splitArtistNames = (artistStr) => {
@@ -375,9 +362,8 @@ export const splitArtistNames = (artistStr) => {
 };
 
 export const getArtists = async () => {
-  const c = await q();
-  const tracks = await c.all(`SELECT id, artist, album FROM tracks WHERE artist IS NOT NULL AND TRIM(artist) != ''`);
-  const artistImages = await c.all(`SELECT artist_name, image_path FROM artist_images WHERE artist_name IS NOT NULL AND TRIM(artist_name) != ''`);
+  const tracks = await queryAll(`SELECT id, artist, album FROM tracks WHERE artist IS NOT NULL AND TRIM(artist) != ''`);
+  const artistImages = await queryAll(`SELECT artist_name, image_path FROM artist_images WHERE artist_name IS NOT NULL AND TRIM(artist_name) != ''`);
 
   const imageMap = new Map();
   for (const img of artistImages) {
@@ -432,95 +418,94 @@ export const getArtists = async () => {
 
 export const upsertArtistImage = async (artistName, imagePath, b2Key = null) => {
   if (!artistName || !imagePath) return;
-  return (await q()).run(
+  return queryRun(
     `INSERT INTO artist_images (artist_name, image_path, b2_key)
-     VALUES (?, ?, ?)
+     VALUES ($1, $2, $3)
      ON CONFLICT(artist_name) DO UPDATE SET 
-       image_path = excluded.image_path,
-       b2_key = excluded.b2_key`,
-    artistName.trim(), imagePath, b2Key
+       image_path = EXCLUDED.image_path,
+       b2_key = EXCLUDED.b2_key`,
+    [artistName.trim(), imagePath, b2Key]
   );
 };
 
 export const getArtistImage = async (artistName) => {
   if (!artistName) return null;
-  return (await q()).get(
-    `SELECT image_path FROM artist_images WHERE LOWER(artist_name) = LOWER(?)`,
-    artistName.trim()
+  return queryGet(
+    `SELECT image_path FROM artist_images WHERE LOWER(artist_name) = LOWER($1)`,
+    [artistName.trim()]
   );
 };
 
 // --- Playlist Operations ---
 export const createPlaylist = async (userId, name, coverPath = null) => {
-  const info = await (await q()).run(
-    `INSERT INTO playlists (user_id, name, cover_path) VALUES (?, ?, ?)`,
-    userId, name, coverPath
+  const result = await queryRun(
+    `INSERT INTO playlists (user_id, name, cover_path) VALUES ($1, $2, $3)
+     RETURNING id`,
+    [userId, name, coverPath]
   );
-  return info.lastInsertRowid;
+  return result.lastInsertRowid;
 };
 
 export const updatePlaylistCover = async (playlistId, userId, coverPath) => {
-  return (await q()).run(
-    `UPDATE playlists SET cover_path = ? WHERE id = ? AND user_id = ?`,
-    coverPath, playlistId, userId
+  return queryRun(
+    `UPDATE playlists SET cover_path = $1 WHERE id = $2 AND user_id = $3`,
+    [coverPath, playlistId, userId]
   );
 };
 
 export const getUserPlaylists = async (userId) => {
-  const c = await q();
-  const playlists = await c.all(`
+  const playlists = await queryAll(`
     SELECT p.*, COUNT(pt.track_id) as track_count
     FROM playlists p
     LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
-    WHERE p.user_id = ?
+    WHERE p.user_id = $1
     GROUP BY p.id
     ORDER BY p.date_created DESC
-  `, userId);
+  `, [userId]);
 
   return Promise.all(playlists.map(async (pl) => ({
     ...pl,
-    sample_tracks: await c.all(`
+    sample_tracks: await queryAll(`
       SELECT t.id, t.cover_art_path 
       FROM playlist_tracks pt
       JOIN tracks t ON pt.track_id = t.id
-      WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
+      WHERE pt.playlist_id = $1 AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
       ORDER BY pt.position ASC
       LIMIT 4
-    `, pl.id)
+    `, [pl.id])
   })));
 };
 
 export const getPlaylistById = async (playlistId, userId) => {
-  const c = await q();
-  const playlist = await c.get(
-    `SELECT * FROM playlists WHERE id = ? AND user_id = ?`,
-    playlistId, userId
+  const playlist = await queryGet(
+    `SELECT * FROM playlists WHERE id = $1 AND user_id = $2`,
+    [playlistId, userId]
   );
   if (!playlist) return null;
 
-  const samples = await c.all(`
+  const samples = await queryAll(`
     SELECT t.id, t.cover_art_path 
     FROM playlist_tracks pt
     JOIN tracks t ON pt.track_id = t.id
-    WHERE pt.playlist_id = ? AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
+    WHERE pt.playlist_id = $1 AND t.cover_art_path IS NOT NULL AND TRIM(t.cover_art_path) != ''
     ORDER BY pt.position ASC
     LIMIT 4
-  `, playlistId);
+  `, [playlistId]);
 
   return { ...playlist, sample_tracks: samples };
 };
 
 export const updatePlaylistName = async (playlistId, userId, newName) => {
-  return (await q()).run(
-    `UPDATE playlists SET name = ? WHERE id = ? AND user_id = ?`,
-    newName, playlistId, userId
+  return queryRun(
+    `UPDATE playlists SET name = $1 WHERE id = $2 AND user_id = $3`,
+    [newName, playlistId, userId]
   );
 };
 
 export const deletePlaylist = async (playlistId, userId) => {
-  return (await q()).run(
-    `DELETE FROM playlists WHERE id = ? AND user_id = ?`,
-    playlistId, userId
+  return queryRun(
+    `DELETE FROM playlists WHERE id = $1 AND user_id = $2`,
+    [playlistId, userId]
   );
 };
 
@@ -529,30 +514,29 @@ export const getPlaylistTracks = async (playlistId, userId) => {
   const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return null;
 
-  return (await q()).all(`
+  return queryAll(`
     SELECT t.*, pt.position 
     FROM playlist_tracks pt
     JOIN tracks t ON pt.track_id = t.id
-    WHERE pt.playlist_id = ?
+    WHERE pt.playlist_id = $1
     ORDER BY pt.position ASC
-  `, playlistId);
+  `, [playlistId]);
 };
 
 export const addTrackToPlaylist = async (playlistId, userId, trackId) => {
-  const c = await q();
   const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return false;
 
-  const maxPosRow = await c.get(
-    `SELECT COALESCE(MAX(position), -1) as max_pos FROM playlist_tracks WHERE playlist_id = ?`,
-    playlistId
+  const maxPosRow = await queryGet(
+    `SELECT COALESCE(MAX(position), -1) as max_pos FROM playlist_tracks WHERE playlist_id = $1`,
+    [playlistId]
   );
 
-  await c.run(
+  await queryRun(
     `INSERT INTO playlist_tracks (playlist_id, track_id, position)
-     VALUES (?, ?, ?)
+     VALUES ($1, $2, $3)
      ON CONFLICT(playlist_id, track_id) DO NOTHING`,
-    playlistId, trackId, maxPosRow.max_pos + 1
+    [playlistId, trackId, (maxPosRow?.max_pos ?? -1) + 1]
   );
 
   return true;
@@ -562,9 +546,9 @@ export const removeTrackFromPlaylist = async (playlistId, userId, trackId) => {
   const playlist = await getPlaylistById(playlistId, userId);
   if (!playlist) return false;
 
-  await (await q()).run(
-    `DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?`,
-    playlistId, trackId
+  await queryRun(
+    `DELETE FROM playlist_tracks WHERE playlist_id = $1 AND track_id = $2`,
+    [playlistId, trackId]
   );
   return true;
 };
@@ -574,9 +558,9 @@ export const reorderPlaylistTracks = async (playlistId, userId, trackIds) => {
   if (!playlist) return false;
 
   // Atomic batch: all position updates commit together or not at all
-  await (await q()).batch(
+  await queryBatch(
     trackIds.map((trackId, index) => ({
-      sql: `UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?`,
+      sql: `UPDATE playlist_tracks SET position = $1 WHERE playlist_id = $2 AND track_id = $3`,
       args: [index, playlistId, trackId]
     }))
   );
@@ -586,86 +570,84 @@ export const reorderPlaylistTracks = async (playlistId, userId, trackIds) => {
 
 // --- Favorite Operations ---
 export const addFavorite = async (userId, trackId) => {
-  return (await q()).run(
+  return queryRun(
     `INSERT INTO favorites (user_id, track_id)
-     VALUES (?, ?)
+     VALUES ($1, $2)
      ON CONFLICT(user_id, track_id) DO NOTHING`,
-    userId, trackId
+    [userId, trackId]
   );
 };
 
 export const removeFavorite = async (userId, trackId) => {
-  return (await q()).run(
-    `DELETE FROM favorites WHERE user_id = ? AND track_id = ?`,
-    userId, trackId
+  return queryRun(
+    `DELETE FROM favorites WHERE user_id = $1 AND track_id = $2`,
+    [userId, trackId]
   );
 };
 
 export const getUserFavorites = async (userId) => {
-  return (await q()).all(`
+  return queryAll(`
     SELECT t.*, f.date_added as favorited_at
     FROM favorites f
     JOIN tracks t ON f.track_id = t.id
-    WHERE f.user_id = ?
+    WHERE f.user_id = $1
     ORDER BY f.date_added DESC
-  `, userId);
+  `, [userId]);
 };
 
 export const isFavorite = async (userId, trackId) => {
-  const row = await (await q()).get(
-    `SELECT 1 FROM favorites WHERE user_id = ? AND track_id = ?`,
-    userId, trackId
+  const row = await queryGet(
+    `SELECT 1 FROM favorites WHERE user_id = $1 AND track_id = $2`,
+    [userId, trackId]
   );
   return !!row;
 };
 
 // --- Recommendation Telemetry & Data Operations ---
 export const logPlayEvent = async ({ userId, trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId }) => {
-  const c = await q();
   const listened = parseFloat(listenedSeconds) || 0;
   const duration = parseFloat(durationSeconds) || 0;
   const completionRatio = duration > 0 ? Math.min(1.0, listened / duration) : 0;
-  const isSkip = (listened < 15 && duration >= 20 && completionRatio < 0.3) ? 1 : 0;
+  const isSkip = (listened < 15 && duration >= 20 && completionRatio < 0.3) ? true : false;
   const hourOfDay = new Date().getHours();
 
-  await c.run(
+  await queryRun(
     `INSERT INTO play_logs (user_id, track_id, listened_seconds, duration_seconds, completion_ratio, is_skip, is_replay, hour_of_day)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    userId, trackId, listened, duration, completionRatio, isSkip, isReplay ? 1 : 0, hourOfDay
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [userId, trackId, listened, duration, completionRatio, isSkip, !!isReplay, hourOfDay]
   );
 
   if (previousTrackId && previousTrackId !== trackId) {
-    await c.run(
+    await queryRun(
       `INSERT INTO song_transitions (user_id, from_track_id, to_track_id, transition_count, last_transition_time)
-       VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, 1, NOW())
        ON CONFLICT(user_id, from_track_id, to_track_id) DO UPDATE SET
-         transition_count = transition_count + 1,
-         last_transition_time = CURRENT_TIMESTAMP`,
-      userId, previousTrackId, trackId
+         transition_count = song_transitions.transition_count + 1,
+         last_transition_time = NOW()`,
+      [userId, previousTrackId, trackId]
     );
   }
 };
 
 export const getPlayLogsForUser = async (userId) => {
-  return (await q()).all(`
+  return queryAll(`
     SELECT * FROM play_logs 
-    WHERE user_id = ? 
+    WHERE user_id = $1 
     ORDER BY timestamp DESC 
     LIMIT 2000
-  `, userId);
+  `, [userId]);
 };
 
 export const getTransitionsForUser = async (userId) => {
-  return (await q()).all(`
+  return queryAll(`
     SELECT * FROM song_transitions 
-    WHERE user_id = ?
-  `, userId);
+    WHERE user_id = $1
+  `, [userId]);
 };
 
 // --- Single & Bulk Metadata Management ---
 export const updateTrackMetadata = async (trackId, metadata) => {
-  const c = await q();
-  const current = await c.get(`SELECT * FROM tracks WHERE id = ?`, trackId);
+  const current = await queryGet(`SELECT * FROM tracks WHERE id = $1`, [trackId]);
   if (!current) return null;
 
   const title = metadata.title !== undefined ? metadata.title.trim() : current.title;
@@ -679,19 +661,18 @@ export const updateTrackMetadata = async (trackId, metadata) => {
   const rating = metadata.rating !== undefined ? (metadata.rating ? parseInt(metadata.rating, 10) : null) : current.rating;
   const tags = metadata.tags !== undefined ? (metadata.tags ? metadata.tags.trim() : null) : current.tags;
 
-  await c.run(
+  await queryRun(
     `UPDATE tracks 
-     SET title = ?, artist = ?, album = ?, genre = ?, year = ?, language = ?, composer = ?, comment = ?, rating = ?, tags = ?, metadata_updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    title, artist, album, genre, year, language, composer, comment, rating, tags, trackId
+     SET title = $1, artist = $2, album = $3, genre = $4, year = $5, language = $6, composer = $7, comment = $8, rating = $9, tags = $10, metadata_updated_at = NOW()
+     WHERE id = $11`,
+    [title, artist, album, genre, year, language, composer, comment, rating, tags, trackId]
   );
 
   return getTrackById(trackId);
 };
 
 export const resetTrackMetadata = async (trackId) => {
-  const c = await q();
-  const current = await c.get(`SELECT * FROM tracks WHERE id = ?`, trackId);
+  const current = await queryGet(`SELECT * FROM tracks WHERE id = $1`, [trackId]);
   if (!current) return null;
 
   const title = current.original_title || current.title;
@@ -700,53 +681,58 @@ export const resetTrackMetadata = async (trackId) => {
   const genre = current.original_genre !== undefined ? current.original_genre : current.genre;
   const year = current.original_year !== undefined ? current.original_year : current.year;
 
-  await c.run(
+  await queryRun(
     `UPDATE tracks
-     SET title = ?, artist = ?, album = ?, genre = ?, year = ?, metadata_updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    title, artist, album, genre, year, trackId
+     SET title = $1, artist = $2, album = $3, genre = $4, year = $5, metadata_updated_at = NOW()
+     WHERE id = $6`,
+    [title, artist, album, genre, year, trackId]
   );
 
   return getTrackById(trackId);
 };
 
 export const bulkUpdateTrackMetadata = async (trackIds, updates) => {
-  const c = await q();
   if (!Array.isArray(trackIds) || trackIds.length === 0) return 0;
 
   const setClauses = [];
   const params = [];
+  let paramIndex = 1;
 
   if (updates.genre !== undefined) {
-    setClauses.push('genre = ?');
+    setClauses.push(`genre = $${paramIndex}`);
     params.push(updates.genre ? updates.genre.trim() : null);
+    paramIndex++;
   }
   if (updates.year !== undefined) {
-    setClauses.push('year = ?');
+    setClauses.push(`year = $${paramIndex}`);
     params.push(updates.year ? parseInt(updates.year, 10) : null);
+    paramIndex++;
   }
   if (updates.artist !== undefined && updates.artist.trim()) {
-    setClauses.push('artist = ?');
+    setClauses.push(`artist = $${paramIndex}`);
     params.push(updates.artist.trim());
+    paramIndex++;
   }
   if (updates.album !== undefined && updates.album.trim()) {
-    setClauses.push('album = ?');
+    setClauses.push(`album = $${paramIndex}`);
     params.push(updates.album.trim());
+    paramIndex++;
   }
 
   if (setClauses.length === 0) return 0;
 
-  setClauses.push('metadata_updated_at = CURRENT_TIMESTAMP');
+  setClauses.push('metadata_updated_at = NOW()');
 
-  const placeholders = trackIds.map(() => '?').join(',');
+  const placeholders = trackIds.map((_, i) => `$${paramIndex + i}`).join(',');
   const sql = `UPDATE tracks SET ${setClauses.join(', ')} WHERE id IN (${placeholders})`;
 
-  const info = await c.run(sql, ...params, ...trackIds);
-  return info.changes;
+  params.push(...trackIds);
+  const result = await queryRun(sql, params);
+  return result.changes;
 };
 
 export const getMissingMetadataTracks = async () => {
-  return (await q()).all(`
+  return queryAll(`
     SELECT * FROM tracks 
     WHERE genre IS NULL OR TRIM(genre) = '' OR year IS NULL
   `);
@@ -754,20 +740,20 @@ export const getMissingMetadataTracks = async () => {
 
 export const logRecommendationAction = async ({ userId, trackId, shelfId, action, algorithmVersion = 'v1' }) => {
   if (!userId || !trackId) return;
-  await (await q()).run(
+  await queryRun(
     `INSERT INTO recommendation_logs (user_id, track_id, shelf_id, action, algorithm_version)
-     VALUES (?, ?, ?, ?, ?)`,
-    userId, trackId, shelfId || 'recommendations', action, algorithmVersion
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId, trackId, shelfId || 'recommendations', action, algorithmVersion]
   );
 };
 
 export const updateRecommendationStats = async (trackId) => {
   if (!trackId) return;
-  await (await q()).run(
+  await queryRun(
     `UPDATE tracks 
-     SET last_recommended_at = CURRENT_TIMESTAMP, recommendation_count = COALESCE(recommendation_count, 0) + 1
-     WHERE id = ?`,
-    trackId
+     SET last_recommended_at = NOW(), recommendation_count = COALESCE(recommendation_count, 0) + 1
+     WHERE id = $1`,
+    [trackId]
   );
 };
 
@@ -775,11 +761,10 @@ export const updateRecommendationStats = async (trackId) => {
 
 /** Library overview counts (routes/stats.js). */
 export const getLibraryStats = async () => {
-  const c = await q();
   const [tracks, artists, albums] = await Promise.all([
-    c.get(`SELECT COUNT(*) AS count FROM tracks`),
-    c.get(`SELECT COUNT(DISTINCT artist) AS count FROM tracks`),
-    c.get(`SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ''`)
+    queryGet(`SELECT COUNT(*) AS count FROM tracks`),
+    queryGet(`SELECT COUNT(DISTINCT artist) AS count FROM tracks`),
+    queryGet(`SELECT COUNT(DISTINCT album) AS count FROM tracks WHERE album IS NOT NULL AND TRIM(album) != ''`)
   ]);
   return {
     totalTracks: tracks?.count || 0,
@@ -790,8 +775,8 @@ export const getLibraryStats = async () => {
 
 /** Scan info lookup for the library scanner (replaces raw prepares there). */
 export const getTrackScanInfoByPath = async (filePath) => {
-  return (await q()).get(
-    `SELECT id, date_modified, file_size FROM tracks WHERE file_path = ?`,
-    filePath
+  return queryGet(
+    `SELECT id, date_modified, file_size FROM tracks WHERE file_path = $1`,
+    [filePath]
   );
 };

@@ -1,15 +1,13 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import { getUserByUsername, getUserById, createUser, updateUserAvatar, getAllUsersPublic } from '../db.js';
-import { isB2Configured, uploadToB2, buildAvatarKey, extFromMime } from '../b2.js';
+import { uploadToStorage, buildAvatarKey, extFromMime, getSignedUrl } from '../storage.js';
 import { serveStoredImage } from '../mediaServe.js';
 
 const router = express.Router();
 
-// Avatars are held in memory and pushed to B2 (or local disk as fallback)
+// Avatars are held in memory and pushed to Supabase Storage
 const uploadAvatar = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
@@ -51,7 +49,6 @@ router.get('/users/:id/avatar', async (req, res) => {
   }
 
   try {
-    // B2 object key -> 302 redirect; legacy local path -> sendFile
     return await serveStoredImage(res, user.avatar_path);
   } catch (err) {
     console.error('Error serving avatar:', err);
@@ -71,22 +68,12 @@ router.post('/users/avatar', uploadAvatar.single('avatar'), async (req, res) => 
 
   try {
     const userId = req.session.userId;
-    let avatarRef;
+    const ext = extFromMime(req.file.mimetype);
+    const key = buildAvatarKey(userId, ext);
 
-    if (isB2Configured()) {
-      const key = buildAvatarKey(userId, extFromMime(req.file.mimetype));
-      await uploadToB2(key, req.file.buffer, req.file.mimetype || 'image/jpeg');
-      avatarRef = key;
-    } else {
-      // Local dev fallback
-      const dir = path.resolve('music/avatars');
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const ext = path.extname(req.file.originalname) || extFromMime(req.file.mimetype);
-      avatarRef = path.join(dir, `avatar_${userId}_${Date.now()}${ext}`);
-      fs.writeFileSync(avatarRef, req.file.buffer);
-    }
+    await uploadToStorage(key, req.file.buffer, req.file.mimetype || 'image/jpeg');
 
-    const updatedUser = await updateUserAvatar(userId, avatarRef);
+    const updatedUser = await updateUserAvatar(userId, key);
     return res.json({
       success: true,
       user: formatUserObj(updatedUser)

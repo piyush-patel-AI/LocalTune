@@ -1,15 +1,56 @@
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+import pg from 'pg';
 
-export function makeTempDb(label) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `localtune-${label}-`));
-  return path.join(dir, `${label}.db`);
+/**
+ * Test helpers for PostgreSQL backend.
+ *
+ * TEST_DATABASE_URL must be set to a PostgreSQL connection string.
+ * The test database is cleaned between test files via cleanAllTables().
+ */
+
+let pool = null;
+
+export function getTestPool() {
+  if (!pool) {
+    const connStr = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+    if (!connStr) {
+      throw new Error('TEST_DATABASE_URL or DATABASE_URL must be set to run tests');
+    }
+    pool = new pg.Pool({ connectionString: connStr, max: 5 });
+  }
+  return pool;
 }
 
-/** Point the db layer at a fresh temp SQLite file BEFORE importing ../db.js */
-export function useTempDb(label) {
-  delete process.env.TURSO_DATABASE_URL;
-  delete process.env.TURSO_AUTH_TOKEN;
-  process.env.DB_PATH = makeTempDb(label);
+export async function cleanAllTables() {
+  const p = getTestPool();
+  const client = await p.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SET CONSTRAINTS ALL DEFERRED');
+    const tables = [
+      'recommendation_logs', 'song_transitions', 'play_logs',
+      'playlist_tracks', 'favorites', 'playlists',
+      'artist_images', 'tracks', 'users', 'schema_migrations',
+      'user_sessions'
+    ];
+    for (const t of tables) {
+      await client.query(`TRUNCATE ${t} CASCADE`);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Initialize the test database connection and clean all tables.
+ * Call this in a `before()` hook or at the top of each test file.
+ */
+export async function initTestDb() {
+  process.env.NODE_ENV = 'test';
+  const { initDatabase } = await import('../db.js');
+  await initDatabase();
+  await cleanAllTables();
 }

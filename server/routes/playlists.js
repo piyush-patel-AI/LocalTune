@@ -1,7 +1,6 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
   createPlaylist,
@@ -15,53 +14,55 @@ import {
   removeTrackFromPlaylist,
   reorderPlaylistTracks
 } from '../db.js';
+import { uploadToStorage, deleteFromStorage, getSignedUrl, extFromMime, isStorageConfigured } from '../storage.js';
+import { serveStoredImage } from '../mediaServe.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PLAYLIST_COVERS_DIR = path.join(__dirname, '../music/playlist_covers');
-if (!fs.existsSync(PLAYLIST_COVERS_DIR)) {
-  fs.mkdirSync(PLAYLIST_COVERS_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, PLAYLIST_COVERS_DIR);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e4);
-    cb(null, `playlist_cover_${uniqueSuffix}${ext}`);
-  }
-});
-
 const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 const router = express.Router();
 
-// GET /api/playlists — List user's playlists
+function buildPlaylistCoverKey(playlistId, ext) {
+  return `playlist_covers/${playlistId}.${ext}`;
+}
+
 router.get('/', async (req, res) => {
   const playlists = await getUserPlaylists(req.session.userId);
   return res.json({ playlists });
 });
 
-// POST /api/playlists — Create playlist (with optional cover)
 router.post('/', upload.single('cover'), async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Playlist name is required.' });
   }
 
-  const coverPath = req.file ? req.file.path : null;
+  let coverPath = null;
+  if (req.file && isStorageConfigured()) {
+    const ext = extFromMime(req.file.mimetype);
+    const tempKey = `playlist_covers/temp_${Date.now()}.${ext}`;
+    await uploadToStorage(tempKey, req.file.buffer, req.file.mimetype || 'image/jpeg');
+    coverPath = tempKey;
+  }
+
   const playlistId = await createPlaylist(req.session.userId, name.trim(), coverPath);
+
+  if (coverPath && coverPath.startsWith('playlist_covers/temp_')) {
+    const finalKey = buildPlaylistCoverKey(playlistId, extFromMime(req.file.mimetype));
+    await deleteFromStorage(coverPath);
+    await uploadToStorage(finalKey, req.file.buffer, req.file.mimetype || 'image/jpeg');
+    await updatePlaylistCover(playlistId, req.session.userId, finalKey);
+  }
+
   const playlist = await getPlaylistById(playlistId, req.session.userId);
   return res.status(201).json({ playlist });
 });
 
-// POST /api/playlists/:id/cover — Upload/update playlist cover
 router.post('/:id/cover', upload.single('cover'), async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
@@ -77,21 +78,19 @@ router.post('/:id/cover', upload.single('cover'), async (req, res) => {
     return res.status(400).json({ error: 'Cover image file is required.' });
   }
 
-  // Remove old cover file if it exists
-  if (playlist.cover_path && fs.existsSync(playlist.cover_path)) {
-    try {
-      fs.unlinkSync(playlist.cover_path);
-    } catch (e) {
-      console.error('Failed to remove old playlist cover:', e);
-    }
+  if (playlist.cover_path) {
+    await deleteFromStorage(playlist.cover_path).catch(() => {});
   }
 
-  await updatePlaylistCover(playlistId, req.session.userId, req.file.path);
+  const ext = extFromMime(req.file.mimetype);
+  const key = buildPlaylistCoverKey(playlistId, ext);
+  await uploadToStorage(key, req.file.buffer, req.file.mimetype || 'image/jpeg');
+
+  await updatePlaylistCover(playlistId, req.session.userId, key);
   const updated = await getPlaylistById(playlistId, req.session.userId);
   return res.json({ playlist: updated });
 });
 
-// GET /api/playlists/:id/cover — Serve custom playlist cover image
 router.get('/:id/cover', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
@@ -103,14 +102,9 @@ router.get('/:id/cover', async (req, res) => {
     return res.status(404).json({ error: 'Playlist cover not found.' });
   }
 
-  if (!fs.existsSync(playlist.cover_path)) {
-    return res.status(404).json({ error: 'Playlist cover file missing on server.' });
-  }
-
-  return res.sendFile(path.resolve(playlist.cover_path));
+  return await serveStoredImage(res, playlist.cover_path);
 });
 
-// GET /api/playlists/:id — Get playlist metadata & tracks
 router.get('/:id', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
@@ -126,7 +120,6 @@ router.get('/:id', async (req, res) => {
   return res.json({ playlist: { ...playlist, tracks }, tracks });
 });
 
-// PATCH /api/playlists/:id — Rename playlist
 router.patch('/:id', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const { name } = req.body;
@@ -148,7 +141,6 @@ router.patch('/:id', async (req, res) => {
   return res.json({ playlist: updated });
 });
 
-// DELETE /api/playlists/:id — Delete playlist
 router.delete('/:id', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
@@ -160,11 +152,14 @@ router.delete('/:id', async (req, res) => {
     return res.status(404).json({ error: 'Playlist not found or access denied.' });
   }
 
+  if (playlist.cover_path) {
+    await deleteFromStorage(playlist.cover_path).catch(() => {});
+  }
+
   await deletePlaylist(playlistId, req.session.userId);
   return res.json({ success: true, message: 'Playlist deleted.' });
 });
 
-// GET /api/playlists/:id/tracks — Fetch tracks for a playlist
 router.get('/:id/tracks', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   if (isNaN(playlistId)) {
@@ -179,7 +174,6 @@ router.get('/:id/tracks', async (req, res) => {
   return res.json({ tracks });
 });
 
-// POST /api/playlists/:id/tracks — Add track to playlist
 router.post('/:id/tracks', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const { trackId } = req.body;
@@ -197,7 +191,6 @@ router.post('/:id/tracks', async (req, res) => {
   return res.json({ success: true, tracks });
 });
 
-// DELETE /api/playlists/:id/tracks/:trackId — Remove track from playlist
 router.delete('/:id/tracks/:trackId', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const trackId = parseInt(req.params.trackId, 10);
@@ -215,7 +208,6 @@ router.delete('/:id/tracks/:trackId', async (req, res) => {
   return res.json({ success: true, tracks });
 });
 
-// PATCH /api/playlists/:id/reorder — Reorder tracks in playlist
 router.patch('/:id/reorder', async (req, res) => {
   const playlistId = parseInt(req.params.id, 10);
   const { trackIds } = req.body;

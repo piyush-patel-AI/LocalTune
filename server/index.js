@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import pg from 'pg';
+import connectPgSimple from 'connect-pg-simple';
 
 import authRoutes from './routes/auth.js';
 import scanRoutes from './routes/scan.js';
@@ -48,12 +50,6 @@ app.use(cors({
   credentials: true
 }));
 
-// Set Ngrok skip browser warning header on all responses
-app.use((req, res, next) => {
-  res.setHeader('ngrok-skip-browser-warning', '69420');
-  next();
-});
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -62,16 +58,24 @@ app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Session middleware
+// Session middleware with PostgreSQL-backed store
+const PgSession = connectPgSimple(session);
+const pgPool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+});
+
 app.use(session({
+  store: new PgSession({
+    pool: pgPool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true,
+  }),
   secret: process.env.SESSION_SECRET || 'localtune_super_secret_key_2026',
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    // Production (Vercel frontend + Render API are different origins):
-    // SameSite=None + Secure is required for the session cookie to be
-    // included in cross-origin fetches with credentials: 'include'.
     secure: isProduction,
     sameSite: isProduction ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -92,7 +96,6 @@ app.get('/api/logo', (req, res) => {
 
 // Public Track Artwork Endpoint for Native Mobile Apps & System Widgets
 app.get('/api/tracks/:id/art', async (req, res) => {
-  res.setHeader('ngrok-skip-browser-warning', '69420');
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const trackId = parseInt(req.params.id, 10);
@@ -105,7 +108,6 @@ app.get('/api/tracks/:id/art', async (req, res) => {
   try {
     const track = await getTrackById(trackId);
     if (track && (track.artwork_b2_key || track.cover_art_path)) {
-      // B2 object key -> 302 redirect to CDN/presigned URL; legacy path -> sendFile
       return await serveStoredImage(res, track.artwork_b2_key || track.cover_art_path, logoPath);
     }
   } catch (e) {
@@ -134,7 +136,6 @@ let currentPlaybackState = {
 };
 
 app.get('/api/playback-state', (req, res) => {
-  res.setHeader('ngrok-skip-browser-warning', '69420');
   res.json(currentPlaybackState);
 });
 

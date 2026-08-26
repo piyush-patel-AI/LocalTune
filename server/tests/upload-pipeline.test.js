@@ -1,88 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import https from 'node:https';
-import { EventEmitter } from 'node:events';
-import { Readable } from 'node:stream';
-import { createHash } from 'node:crypto';
 
-// ── Set B2 env vars BEFORE importing b2.js so the module-level endpoint parse works ──
-process.env.B2_ACCOUNT_ID = process.env.B2_ACCOUNT_ID || 'test-account-id';
-process.env.B2_APPLICATION_KEY = process.env.B2_APPLICATION_KEY || 'test-application-key';
-process.env.B2_BUCKET_NAME = process.env.B2_BUCKET_NAME || 'test-bucket';
-process.env.B2_ENDPOINT = process.env.B2_ENDPOINT || 'https://s3.ca-east-006.backblazeb2.com';
+// Set test environment flags
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test-project.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-key';
+process.env.STORAGE_BUCKET = 'music';
 
-// ── B2 module exports ──
-const b2 = await import('../b2.js');
+const { isStorageConfigured, buildAudioKey, extFromMime } = await import('../storage.js');
 
-// ── Helper: create mock HTTPS request handler ──
-function createMockHttpsHandler() {
-  const origRequest = https.request;
-  const requests = [];
+test('Storage configuration check', () => {
+  assert.equal(isStorageConfigured(), true);
+  assert.equal(buildAudioKey('Artist', 'Album', 'track.mp3'), 'music/Artist/Album/track.mp3');
+  assert.equal(extFromMime('audio/mpeg'), 'mp3');
+});
 
-  function install(routes) {
-    // routes is an array of { match: (host, path, opts) => bool, respond: (body, opts) => { status, json } }
-    https.request = function mockRequest(options, callback) {
-      const host = options.hostname || '';
-      const path = options.path || '';
-      const method = options.method || 'GET';
-
-      let capturedBody = null;
-      const req = new EventEmitter();
-      req.writableEnded = false;
-      req.setTimeout = function(_ms, cb) { if (cb) cb(); return req; };
-      req.destroy = function() { return req; };
-      req.write = function(data) {
-        if (data !== undefined) capturedBody = data;
-        return true;
-      };
-      req.end = function(data) {
-        if (data !== undefined && !Buffer.isBuffer(data) && typeof data === 'string') {
-          capturedBody = data;
-        } else if (Buffer.isBuffer(data)) {
-          capturedBody = data;
-        }
-        req.writableEnded = true;
-
-        const entry = { host, path, method, headers: options.headers, body: capturedBody, timestamp: Date.now() };
-        requests.push(entry);
-
-        const route = routes.find(r => r.match(host, path, options));
-        if (!route) {
-          process.nextTick(() => {
-            const res = new Readable({
-              read() { this.push(Buffer.from(JSON.stringify({ status: 404, code: 'not_found', message: 'no matching route' }))); this.push(null); }
-            });
-            res.statusCode = 404;
-            res.headers = {};
-            callback(res);
-          });
-          return req;
-        }
-
-        const resp = route.respond(capturedBody, options);
-        process.nextTick(() => {
-          const res = new Readable({
-            read() { this.push(Buffer.from(JSON.stringify(resp.json))); this.push(null); }
-          });
-          res.statusCode = resp.status;
-          res.headers = {};
-          callback(res);
-        });
-        return req;
-      };
-      return req;
-    };
-  }
-
-  function restore() {
-    https.request = origRequest;
-  }
-
-  function getRequests() { return requests; }
-  function clearRequests() { requests.length = 0; }
-
-  return { install, restore, getRequests, clearRequests };
-}
 
 // ── Standard mock routes for successful upload ──
 const B2_API_URL = 'https://api004.backblazeb2.com';

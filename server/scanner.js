@@ -1,18 +1,18 @@
 /**
  * server/scanner.js
  *
- * Library scanning & reconciliation with Backblaze B2 as the media store.
+ * Library scanning & reconciliation with Supabase Storage as the media store.
  *
  * Modes:
- *  1. B2 configured (production / Render):
- *     - Lists all `music/` objects in the bucket and reconciles SQLite:
+ *  1. Storage configured (production):
+ *     - Lists all `music/` objects in the bucket and reconciles PostgreSQL:
  *       new/changed objects are parsed in-memory, embedded artwork is
  *       extracted and uploaded under `artworks/<trackId>.<ext>`, and rows
  *       whose object no longer exists are removed.
  *     - If local music directories are provided AND exist (dev machine),
- *       their files are first ingested into B2 (`music/Artist/Album/filename.ext`)
+ *       their files are first ingested into Storage (`music/Artist/Album/filename.ext`)
  *       so new music always lands in the bucket instead of server/music/.
- *  2. B2 not configured (local dev fallback):
+ *  2. Storage not configured (local dev fallback):
  *     - Legacy behaviour: walk local dirs, index by absolute file path.
  */
 
@@ -31,16 +31,16 @@ import {
   rekeyTrack
 } from './db.js';
 import {
-  isB2Configured,
-  uploadToB2,
-  getBufferFromB2,
-  listB2Objects,
+  isStorageConfigured,
+  uploadToStorage,
+  getBufferFromStorage,
+  listStorageObjects,
   buildAudioKey,
   buildArtworkKey,
   extFromMime,
   mimeFromExt,
   isLocalPath
-} from './b2.js';
+} from './storage.js';
 import { normalizeGenre } from './genreNormalizer.js';
 
 const ALLOWED_EXTENSIONS = new Set(['.mp3', '.flac', '.wav', '.m4a']);
@@ -79,7 +79,7 @@ const walkDirectory = (dir, fileList = []) => {
   return fileList;
 };
 
-/** Simple concurrency limiter so we don't hammer B2 with hundreds of parallel GETs. */
+/** Simple concurrency limiter so we don't hammer storage with hundreds of parallel GETs. */
 async function runWithConcurrency(items, limit, fn) {
   const queue = [...items];
   const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
@@ -218,11 +218,13 @@ export const scanMissingMetadata = async () => {
   for (const track of missingTracks) {
     try {
       let parsed = null;
-      const b2Key = track.b2_key || (!isLocalPath(track.file_path) ? track.file_path : null);
+      const storageKey = track.b2_key || (!isLocalPath(track.file_path) ? track.file_path : null);
 
-      if (b2Key && isB2Configured()) {
-        const buffer = await getBufferFromB2(b2Key);
-        parsed = await parseAudioBuffer(buffer, path.basename(b2Key));
+      if (storageKey && isStorageConfigured()) {
+        const buffer = await getBufferFromStorage(storageKey);
+        if (buffer) {
+          parsed = await parseAudioBuffer(buffer, path.basename(storageKey));
+        }
       } else if (track.file_path && isLocalPath(track.file_path) && fs.existsSync(track.file_path)) {
         parsed = await parseAudioFile(track.file_path);
       }
@@ -245,58 +247,68 @@ export const scanMissingMetadata = async () => {
 
 // --- Artwork extraction & upload ---
 
-/** Upload embedded artwork for a track to B2 and link it in SQLite. */
+/** Upload embedded artwork for a track to storage and link it in PostgreSQL. */
 const saveEmbeddedArtwork = async (trackId, embeddedArt) => {
   if (!embeddedArt || !embeddedArt.data) return false;
   const key = buildArtworkKey(trackId, extFromMime(embeddedArt.mime));
-  await uploadToB2(key, embeddedArt.data, embeddedArt.mime || 'image/jpeg');
+  await uploadToStorage(key, embeddedArt.data, embeddedArt.mime || 'image/jpeg');
   await setTrackArtwork(trackId, key, key);
   return true;
 };
 
-// --- B2 cloud scan ---
+// --- Cloud scan ---
 
-/** Reconcile SQLite against the contents of the B2 bucket (`music/` prefix). */
-const reconcileB2Library = async () => {
-  const b2Objects = await listB2Objects('music/');
-  const b2Map = new Map(b2Objects.map((o) => [o.key, o]));
-  console.log(`[Scanner] Found ${b2Map.size} audio object(s) in B2 bucket.`);
+/** Reconcile PostgreSQL against the contents of the storage bucket (`music/` prefix). */
+const reconcileStorageLibrary = async () => {
+  const storageObjects = await listStorageObjects('music/');
+  const storageMap = new Map();
+  for (const obj of storageObjects) {
+    storageMap.set(obj.name, obj);
+  }
+  console.log(`[Scanner] Found ${storageMap.size} audio object(s) in storage bucket.`);
 
-  // 1. Remove DB rows whose B2 object no longer exists
+  // 1. Remove DB rows whose storage object no longer exists
   const existingDbTracks = await getAllTracks();
   for (const dbTrack of existingDbTracks) {
-    if (!b2Map.has(dbTrack.file_path)) {
+    const storageKey = dbTrack.b2_key || dbTrack.file_path;
+    if (!storageMap.has(storageKey)) {
       // Keep legacy local-disk rows whose file still exists (dev machines mid-migration)
       if (isLocalPath(dbTrack.file_path) && fs.existsSync(dbTrack.file_path)) {
         continue;
       }
-      console.log(`[Scanner] Removing stale track from DB (not in B2): ${dbTrack.file_path}`);
+      console.log(`[Scanner] Removing stale track from DB (not in storage): ${dbTrack.file_path}`);
       await deleteTrackByPath(dbTrack.file_path);
     }
   }
 
-  // 2. Process new or changed B2 objects
+  // 2. Process new or changed storage objects
   const toProcess = [];
-  for (const [key, obj] of b2Map.entries()) {
+  for (const [key, obj] of storageMap.entries()) {
     const dbTrack = await getTrackScanInfoByPath(key);
-    const lastModified = obj.lastModified ? new Date(obj.lastModified).toISOString() : null;
+    const lastModified = obj.updated_at || obj.created_at;
+    const size = obj.metadata?.size || 0;
 
     const isNew = !dbTrack;
     const isChanged =
       dbTrack &&
-      ((obj.size > 0 && dbTrack.file_size !== obj.size) ||
+      ((size > 0 && dbTrack.file_size !== size) ||
         (lastModified && new Date(lastModified) > new Date(dbTrack.date_modified)));
 
     if (isNew || isChanged) {
-      toProcess.push({ key, size: obj.size, lastModified });
+      toProcess.push({ key, size, lastModified });
     }
   }
   scanState.totalCount = toProcess.length;
-  console.log(`[Scanner] ${toProcess.length} new/changed B2 object(s) to index.`);
+  console.log(`[Scanner] ${toProcess.length} new/changed storage object(s) to index.`);
 
   await runWithConcurrency(toProcess, 4, async ({ key, size, lastModified }) => {
     try {
-      const buffer = await getBufferFromB2(key);
+      const buffer = await getBufferFromStorage(key);
+      if (!buffer) {
+        console.warn(`[Scanner] Could not download: ${key}`);
+        scanState.errorCount++;
+        return;
+      }
       const parsed = await parseAudioBuffer(buffer, path.basename(key));
 
       const trackId = await upsertTrack({
@@ -319,7 +331,7 @@ const reconcileB2Library = async () => {
         await saveEmbeddedArtwork(trackId, parsed.embeddedArt);
       }
     } catch (err) {
-      console.error(`[Scanner Error] Failed indexing B2 object '${key}':`, err.message);
+      console.error(`[Scanner Error] Failed indexing storage object '${key}':`, err.message);
       scanState.errorCount++;
     } finally {
       scanState.scannedCount++;
@@ -327,9 +339,9 @@ const reconcileB2Library = async () => {
   });
 };
 
-// --- Local dir -> B2 ingestion (dev machines with B2 configured) ---
+// --- Local dir -> Storage ingestion (dev machines with storage configured) ---
 
-const ingestLocalDirIntoB2 = async (dirs) => {
+const ingestLocalDirIntoStorage = async (dirs) => {
   let allDiskFiles = [];
   for (const dir of dirs) {
     allDiskFiles.push(...walkDirectory(dir));
@@ -338,7 +350,7 @@ const ingestLocalDirIntoB2 = async (dirs) => {
 
   if (allDiskFiles.length === 0) return;
 
-  console.log(`[Scanner] Ingesting up to ${allDiskFiles.length} local file(s) into B2...`);
+  console.log(`[Scanner] Ingesting up to ${allDiskFiles.length} local file(s) into storage...`);
 
   for (const filePath of allDiskFiles) {
     try {
@@ -356,16 +368,16 @@ const ingestLocalDirIntoB2 = async (dirs) => {
       const targetKey = buildAudioKey(parsed.artist, parsed.album, filename);
       const existingAtKey = await getTrackByPath(targetKey);
 
-      // Skip if already indexed under its B2 key and unchanged
+      // Skip if already indexed under its storage key and unchanged
       if (existingAtKey && !(new Date(diskMtime) > new Date(existingAtKey.date_modified) && stats.size !== existingAtKey.file_size)) {
         continue;
       }
 
       const buffer = fs.readFileSync(filePath);
-      await uploadToB2(targetKey, buffer, extToMime(path.extname(filename).toLowerCase()));
+      await uploadToStorage(targetKey, buffer, extToMime(path.extname(filename).toLowerCase()));
 
       // Migrate an existing legacy row in place — keeps the track id so
-      // playlists and favorites survive the move to B2 keys.
+      // playlists and favorites survive the move to storage keys.
       const legacyRow = await getTrackByPath(filePath);
       if (legacyRow) {
         await rekeyTrack(filePath, targetKey, stats.size, diskMtime);
@@ -375,7 +387,7 @@ const ingestLocalDirIntoB2 = async (dirs) => {
         if (coverPath && isLocalPath(coverPath) && fs.existsSync(coverPath)) {
           const artExt = path.extname(coverPath).toLowerCase() || '.jpg';
           const artKey = buildArtworkKey(legacyRow.id, artExt);
-          await uploadToB2(artKey, fs.readFileSync(coverPath), mimeFromExt(artExt));
+          await uploadToStorage(artKey, fs.readFileSync(coverPath), mimeFromExt(artExt));
           await setTrackArtwork(legacyRow.id, artKey, artKey);
         }
         continue;
@@ -409,7 +421,7 @@ const ingestLocalDirIntoB2 = async (dirs) => {
   }
 };
 
-// --- Legacy local scan (no B2 configured) ---
+// --- Legacy local scan (no storage configured) ---
 
 const legacyLocalScan = async (dirs) => {
   let allDiskFiles = [];
@@ -469,13 +481,13 @@ export const scanLibrary = async (musicDirs) => {
   try {
     const dirs = Array.isArray(musicDirs) ? musicDirs : (musicDirs ? [musicDirs] : []);
 
-    if (isB2Configured()) {
-      // 1. Optionally ingest local files into B2 (dev machine flow)
+    if (isStorageConfigured()) {
+      // 1. Optionally ingest local files into storage (dev machine flow)
       if (dirs.length > 0) {
-        await ingestLocalDirIntoB2(dirs);
+        await ingestLocalDirIntoStorage(dirs);
       }
-      // 2. Always reconcile DB against the bucket (Render flow)
-      await reconcileB2Library();
+      // 2. Always reconcile DB against the bucket (production flow)
+      await reconcileStorageLibrary();
     } else {
       await legacyLocalScan(dirs);
     }

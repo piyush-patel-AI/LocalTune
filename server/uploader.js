@@ -19,14 +19,14 @@ import {
 } from './db.js';
 import { normalizeGenre } from './genreNormalizer.js';
 import {
-  isB2Configured,
-  uploadToB2,
-  uploadToB2Verified,
+  isStorageConfigured,
+  uploadToStorage,
+  uploadToStorageVerified,
   buildAudioKey,
   buildArtworkKey,
   buildArtistKey,
   extFromMime
-} from './b2.js';
+} from './storage.js';
 
 dotenv.config();
 
@@ -39,8 +39,8 @@ const MUSIC_DIR = process.env.MUSIC_DIR || path.join(__dirname, 'music');
 const ARTWORKS_DIR = path.join(MUSIC_DIR, 'artworks');
 const ARTISTS_DIR = path.join(MUSIC_DIR, 'artists');
 
-// Local fallback directories (only used when B2 is not configured)
-if (!isB2Configured()) {
+// Local fallback directories (only used when storage is not configured)
+if (!isStorageConfigured()) {
   if (!fs.existsSync(MUSIC_DIR)) fs.mkdirSync(MUSIC_DIR, { recursive: true });
   if (!fs.existsSync(ARTWORKS_DIR)) fs.mkdirSync(ARTWORKS_DIR, { recursive: true });
   if (!fs.existsSync(ARTISTS_DIR)) fs.mkdirSync(ARTISTS_DIR, { recursive: true });
@@ -66,11 +66,11 @@ const AUDIO_MIME = {
   '.m4a': 'audio/mp4'
 };
 
-/** Persist an image buffer either to B2 (returns key) or local disk (returns abs path). */
-async function saveImageBuffer(buffer, mimetype, b2Key, localDir, localName, cid) {
-  if (isB2Configured()) {
-    await uploadToB2Verified(b2Key, buffer, mimetype || 'image/jpeg', cid);
-    return b2Key;
+/** Persist an image buffer either to storage (returns key) or local disk (returns abs path). */
+async function saveImageBuffer(buffer, mimetype, storageKey, localDir, localName, cid) {
+  if (isStorageConfigured()) {
+    await uploadToStorageVerified(storageKey, buffer, mimetype || 'image/jpeg');
+    return storageKey;
   }
   const ext = extFromMime(mimetype);
   const localPath = path.join(localDir, `${localName}${ext}`);
@@ -164,7 +164,7 @@ uploaderRouter.post('/upload-artist', upload.single('artistImage'), async (req, 
       return res.status(502).json({ error: 'Failed to store artist image in object storage.', stage: 'b2_artist_img_upload', detail: upErr.message });
     }
 
-    await upsertArtistImage(artistName, imagePath, isB2Configured() ? imagePath : null);
+    await upsertArtistImage(artistName, imagePath, isStorageConfigured() ? imagePath : null);
     log('complete artist=%s', artistName);
 
     return res.json({
@@ -257,7 +257,7 @@ export const handleUploadTrack = async (req, res) => {
     let newTrackId;
     let adoptedExisting = false;
 
-    if (isB2Configured()) {
+    if (isStorageConfigured()) {
       // --- Backblaze B2 storage ---
       const cleanName = path.basename(audioFile.originalname, path.extname(audioFile.originalname))
         .replace(/[^a-zA-Z0-9_\-]/g, '_');
@@ -270,11 +270,11 @@ export const handleUploadTrack = async (req, res) => {
         log('stage=byte_trace point=pre_upload_adopt body_type=%s buffer_length=%s multer_size=%s buffer_intact=%s',
           audioFile.buffer?.constructor?.name, Buffer.isBuffer(audioFile.buffer) ? audioFile.buffer.length : null, audioFile.size, Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length === audioFile.size);
         try {
-          await uploadToB2Verified(audioKey, audioFile.buffer, contentType, cid);
+          await uploadToStorageVerified(audioKey, audioFile.buffer, contentType, cid);
         } catch (b2Err) {
           logErr('stage=b2_audio_upload FAILED key=%s error=%s', audioKey, b2Err.message);
           return res.status(502).json({
-            error: 'B2 audio upload failed',
+            error: 'Storage audio upload failed',
             stage: 'b2_audio_upload',
             detail: b2Err.message
           });
@@ -301,7 +301,7 @@ export const handleUploadTrack = async (req, res) => {
           const artKey = buildArtworkKey(newTrackId, extFromMime(artMimeAdopt));
           log('stage=b2_artwork_upload key=%s', artKey);
           try {
-            await uploadToB2Verified(artKey, artBufferAdopt, artMimeAdopt || 'image/jpeg', cid);
+            await uploadToStorageVerified(artKey, artBufferAdopt, artMimeAdopt || 'image/jpeg', cid);
           } catch (b2Err) {
             logErr('stage=b2_artwork_upload FAILED key=%s error=%s (non-fatal, continuing)', artKey, b2Err.message);
           }
@@ -314,7 +314,7 @@ export const handleUploadTrack = async (req, res) => {
           const imgKey = buildArtistKey(primaryArtistAdopt, extFromMime(artistImgFile.mimetype));
           log('stage=b2_artist_img_upload key=%s', imgKey);
           try {
-            await uploadToB2Verified(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg', cid);
+            await uploadToStorageVerified(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg', cid);
           } catch (b2Err) {
             logErr('stage=b2_artist_img_upload FAILED key=%s error=%s (non-fatal, continuing)', imgKey, b2Err.message);
           }
@@ -328,11 +328,11 @@ export const handleUploadTrack = async (req, res) => {
         log('stage=byte_trace point=pre_upload_new body_type=%s buffer_length=%s multer_size=%s buffer_intact=%s',
           audioFile.buffer?.constructor?.name, Buffer.isBuffer(audioFile.buffer) ? audioFile.buffer.length : null, audioFile.size, Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length === audioFile.size);
         try {
-          await uploadToB2Verified(audioKey, audioFile.buffer, contentType, cid);
+          await uploadToStorageVerified(audioKey, audioFile.buffer, contentType, cid);
         } catch (b2Err) {
           logErr('stage=b2_audio_upload FAILED key=%s error=%s', audioKey, b2Err.message);
           return res.status(502).json({
-            error: 'B2 audio upload failed',
+            error: 'Storage audio upload failed',
             stage: 'b2_audio_upload',
             detail: b2Err.message
           });
@@ -362,7 +362,7 @@ export const handleUploadTrack = async (req, res) => {
           const artKey = buildArtworkKey(newTrackId, extFromMime(artMime));
           log('stage=b2_artwork_upload key=%s', artKey);
           try {
-            await uploadToB2Verified(artKey, artBuffer, artMime || 'image/jpeg', cid);
+            await uploadToStorageVerified(artKey, artBuffer, artMime || 'image/jpeg', cid);
             await setTrackArtwork(newTrackId, artKey, artKey);
             coverArtRef = artKey;
           } catch (b2Err) {
@@ -376,7 +376,7 @@ export const handleUploadTrack = async (req, res) => {
           const imgKey = buildArtistKey(primaryArtist, extFromMime(artistImgFile.mimetype));
           log('stage=b2_artist_img_upload key=%s', imgKey);
           try {
-            await uploadToB2Verified(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg', cid);
+            await uploadToStorageVerified(imgKey, artistImgFile.buffer, artistImgFile.mimetype || 'image/jpeg', cid);
             await upsertArtistImage(primaryArtist, imgKey, imgKey);
             artistImgRef = imgKey;
           } catch (b2Err) {
