@@ -33,6 +33,7 @@ export const s3 = new S3Client({
   region: 'auto',
   forcePathStyle: true,
   requestChecksumCalculation: 'WHEN_REQUIRED',
+  expectContinueHeader: false,
   credentials: {
     accessKeyId: B2_ACCOUNT_ID || '',
     secretAccessKey: B2_APPLICATION_KEY || ''
@@ -55,7 +56,7 @@ s3.middlewareStack.add(
     } else {
       bodyLen = 'unknown';
     }
-    console.log(`[B2-HTTP] finalize body_type=${bodyType} body_length=${bodyLen} content_length=${headers['content-length']} host=${headers['host']}`);
+    console.log(`[B2-HTTP] finalize body_type=${bodyType} body_length=${bodyLen} content_length=${headers['content-length']} expect=${headers['Expect'] || headers.expect || 'none'} host=${headers['host']}`);
     return next(args);
   },
   { step: 'finalizeRequest', name: 'byteTraceInspector', priority: 'low' }
