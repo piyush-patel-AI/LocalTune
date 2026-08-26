@@ -28,16 +28,39 @@ let initPromise = null;
 /** Turso Cloud backend (@tursodatabase/serverless). */
 async function createTursoClient(url, authToken) {
   const { connect } = await import('@tursodatabase/serverless');
-  const conn = connect({ url, authToken });
+  let conn = connect({ url, authToken });
+  let lastReconnect = 0;
   const normInfo = (info) => ({
     changes: Number(info?.changes ?? 0),
     lastInsertRowid: info?.lastInsertRowid == null ? 0 : Number(info.lastInsertRowid)
   });
+
+  function reconnect(reason) {
+    const now = Date.now();
+    if (now - lastReconnect < 5000) return;
+    lastReconnect = now;
+    console.warn(`[db.js] Turso reconnect (${reason})`);
+    conn = connect({ url, authToken });
+  }
+
+  async function withFallback(fn) {
+    try {
+      return await fn(conn);
+    } catch (e) {
+      const msg = e?.message || '';
+      if (msg.includes('404') || msg.includes('cursor')) {
+        reconnect(msg);
+        return await fn(conn);
+      }
+      throw e;
+    }
+  }
+
   return {
     mode: 'turso',
-    all: async (sql, ...params) => await conn.all(sql, ...params),
-    get: async (sql, ...params) => await conn.get(sql, ...params),
-    run: async (sql, ...params) => normInfo(await conn.run(sql, ...params)),
+    all: async (sql, ...params) => withFallback(c => c.all(sql, ...params)),
+    get: async (sql, ...params) => withFallback(c => c.get(sql, ...params)),
+    run: async (sql, ...params) => withFallback(async c => normInfo(await c.run(sql, ...params))),
     exec: async (sql) => {
       for (const stmt of splitStatements(sql)) await conn.exec(stmt);
     },
