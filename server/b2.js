@@ -2,6 +2,11 @@
  * server/b2.js
  * Shared Backblaze B2 client — AWS SDK v3 S3-compatible API.
  *
+ * PutObject uploads use native https.request() with SigV4 signing to bypass
+ * a bug in @smithy/node-http-handler that truncates large request bodies.
+ * All other operations (HeadObject, DeleteObject, ListObjectsV2, GetObject,
+ * presigned URLs) continue using the standard S3Client.
+ *
  * Required env vars:
  *   B2_ACCOUNT_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENDPOINT
  * Optional:
@@ -10,13 +15,16 @@
 
 import {
   S3Client,
-  PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { SignatureV4 } from '@smithy/signature-v4';
+import { HttpRequest } from '@smithy/core/protocols';
+import https from 'node:https';
+import crypto from 'node:crypto';
 
 const { B2_ACCOUNT_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENDPOINT, B2_PUBLIC_URL } = process.env;
 
@@ -28,6 +36,7 @@ if (!isB2Configured()) {
   console.warn('[B2] WARNING: Missing B2 env vars — B2 storage unavailable until configured.');
 }
 
+// ── S3Client for non-upload operations (HeadObject, DeleteObject, etc.) ──
 export const s3 = new S3Client({
   endpoint: B2_ENDPOINT,
   region: 'auto',
@@ -40,59 +49,116 @@ export const s3 = new S3Client({
   }
 });
 
-// ── TEMP DIAGNOSTIC: inspect Body at the last moment before HTTP send ──
-// Runs on every s3.send() including retries. Logs type + byte count only.
-s3.middlewareStack.add(
-  (next) => async (args) => {
-    const { body: reqBody, headers } = args.request;
-    const bodyType = reqBody?.constructor?.name || typeof reqBody;
-    let bodyLen;
-    if (Buffer.isBuffer(reqBody)) {
-      bodyLen = reqBody.length;
-    } else if (typeof reqBody?.read === 'function') {
-      bodyLen = 'READABLE_STREAM';
-    } else if (typeof reqBody?.length === 'number') {
-      bodyLen = reqBody.length;
-    } else {
-      bodyLen = 'unknown';
-    }
-    console.log(`[B2-HTTP] finalize body_type=${bodyType} body_length=${bodyLen} content_length=${headers['content-length']} expect=${headers['Expect'] || headers.expect || 'none'} host=${headers['host']}`);
-    return next(args);
+// ── SigV4 signer for native PUT uploads ──
+
+class Sha256 {
+  constructor(secret) {
+    if (secret) { this.hmac = crypto.createHmac('sha256', secret); }
+    else        { this.hash = crypto.createHash('sha256'); }
+  }
+  update(data) { (this.hmac || this.hash).update(data); return this; }
+  async digest() { return new Uint8Array((this.hmac || this.hash).digest()); }
+}
+
+const b2Signer = new SignatureV4({
+  credentials: {
+    accessKeyId: B2_ACCOUNT_ID || '',
+    secretAccessKey: B2_APPLICATION_KEY || '',
   },
-  { step: 'finalizeRequest', name: 'byteTraceInspector', priority: 'low' }
-);
+  region: 'auto',
+  service: 's3',
+  sha256: Sha256,
+});
+
+// ── Pre-parse the B2 endpoint once at module load ──
+const _b2Url = B2_ENDPOINT ? new URL(B2_ENDPOINT) : null;
+const _b2Hostname = _b2Url?.hostname || '';
+const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
 
 /**
- * Upload a Buffer or readable stream to B2. Returns the key on success.
+ * Upload a Buffer to B2 using native https.request() with SigV4 signing.
+ * Bypasses @smithy/node-http-handler which truncates large request bodies.
+ *
  * @param {string} key         B2 object key
- * @param {Buffer} body        data to upload
+ * @param {Buffer} body        data to upload (Buffer only — streams not supported)
  * @param {string} contentType MIME type
  * @param {string} [cid]       optional correlation id for structured logging
+ * @returns {Promise<string>}  the key on success
  */
 export async function uploadToB2(key, body, contentType, cid) {
   const tag = cid ? `[B2][${cid}]` : '[B2]';
-  const bodyType = body?.constructor?.name || typeof body;
   const isBuffer = Buffer.isBuffer(body);
-  const isStream = body && typeof body.read === 'function';
   const size = isBuffer ? body.length : null;
-  console.log(`${tag} upload start key=${key} size=${size} body_type=${bodyType} is_buffer=${isBuffer} is_stream=${!!isStream} content_type=${contentType}`);
+  console.log(`${tag} upload start key=${key} size=${size} body_type=${body?.constructor?.name || typeof body} is_buffer=${isBuffer} content_type=${contentType}`);
+
+  if (!isBuffer) {
+    throw new Error('uploadToB2 only accepts Buffer bodies');
+  }
+  if (!_b2Url) {
+    throw new Error('B2_ENDPOINT is not configured');
+  }
 
   const t0 = Date.now();
+  const path = `/${B2_BUCKET_NAME}/${key}`;
+  const bodyLength = body.length;
+
   try {
-    await s3.send(new PutObjectCommand({
-      Bucket: B2_BUCKET_NAME,
-      Key: key,
-      Body: body,
-      ContentType: contentType
-    }));
+    const unsignedRequest = new HttpRequest({
+      method: 'PUT',
+      hostname: _b2Hostname,
+      port: _b2Port,
+      path,
+      headers: {
+        'host':                  _b2Hostname,
+        'content-type':          contentType,
+        'content-length':        String(bodyLength),
+        'x-amz-content-sha256':  'UNSIGNED-PAYLOAD',
+      },
+      body,
+    });
+
+    const signedRequest = await b2Signer.signRequest(unsignedRequest);
+    const signedHeaders = { ...signedRequest.headers };
+
+    const statusCode = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: _b2Hostname,
+        port:     _b2Port,
+        path,
+        method:   'PUT',
+        headers:  signedHeaders,
+      }, (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const resBody = Buffer.concat(chunks).toString('utf-8');
+          resolve({ statusCode: res.statusCode, body: resBody, requestId: res.headers['x-amz-request-id'] || res.headers['x-amz-requestid'] });
+        });
+      });
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+
     const elapsed = Date.now() - t0;
-    console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms`);
+
+    if (statusCode.statusCode >= 300) {
+      const codeMatch = statusCode.body.match(/<Code>(.*?)<\/Code>/);
+      const msgMatch = statusCode.body.match(/<Message>(.*?)<\/Message>/);
+      const errMsg = `B2 PUT failed: ${codeMatch?.[1] || 'Unknown'} — ${msgMatch?.[1] || statusCode.body.substring(0, 200)}`;
+      console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms status=${statusCode.statusCode} requestId=${statusCode.requestId} body_length=${bodyLength} error=${errMsg}`);
+      const err = new Error(errMsg);
+      err.b2StatusCode = statusCode.statusCode;
+      err.b2RequestId = statusCode.requestId;
+      throw err;
+    }
+
+    console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms status=${statusCode.statusCode} requestId=${statusCode.requestId} body_length=${bodyLength}`);
     return key;
   } catch (err) {
+    if (err.b2StatusCode) throw err;
     const elapsed = Date.now() - t0;
-    const postBodyType = body?.constructor?.name || typeof body;
-    const postSize = Buffer.isBuffer(body) ? body.length : null;
-    console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms post_err_body_type=${postBodyType} post_err_body_length=${postSize} error=${err.message}`);
+    console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms body_length=${bodyLength} error=${err.message}`);
     throw err;
   }
 }
