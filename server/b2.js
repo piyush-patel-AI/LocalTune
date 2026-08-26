@@ -31,6 +31,7 @@ if (!isB2Configured()) {
 export const s3 = new S3Client({
   endpoint: B2_ENDPOINT,
   region: 'auto',
+  forcePathStyle: true,
   credentials: {
     accessKeyId: B2_ACCOUNT_ID || '',
     secretAccessKey: B2_APPLICATION_KEY || ''
