@@ -205,12 +205,16 @@ export const handleUploadTrack = async (req, res) => {
     const artistImgFile = req.files.artistImage ? req.files.artistImage[0] : null;
 
     log('request received filename=%s size=%d bytes type=%s', audioFile.originalname, audioFile.size, audioFile.mimetype);
+    log('stage=byte_trace point=after_multer body_type=%s buffer_length=%s multer_size=%s is_buffer=%s',
+      audioFile.buffer?.constructor?.name, Buffer.isBuffer(audioFile.buffer) ? audioFile.buffer.length : null, audioFile.size, Buffer.isBuffer(audioFile.buffer));
 
     // ── Stage 1: Parse audio metadata ──
     log('stage=parse_meta start');
     const parsed = await parseAudioBuffer(audioFile.buffer, audioFile.originalname);
     log('stage=parse_meta ok title=%s artist=%s album=%s duration=%s',
       parsed.title, parsed.artist, parsed.album, parsed.durationSeconds);
+    log('stage=byte_trace point=after_parse body_type=%s buffer_length=%s multer_size=%s buffer_intact=%s',
+      audioFile.buffer?.constructor?.name, Buffer.isBuffer(audioFile.buffer) ? audioFile.buffer.length : null, audioFile.size, Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length === audioFile.size);
 
     // Custom metadata overrides from form input if provided
     const customTitle = req.body.title ? req.body.title.trim() : '';
@@ -263,6 +267,8 @@ export const handleUploadTrack = async (req, res) => {
       if (existingDuplicate && !forceNewRecord) {
         // ── ADOPT MODE ──
         log('stage=b2_audio_upload mode=adopt key=%s', audioKey);
+        log('stage=byte_trace point=pre_upload_adopt body_type=%s buffer_length=%s multer_size=%s buffer_intact=%s',
+          audioFile.buffer?.constructor?.name, Buffer.isBuffer(audioFile.buffer) ? audioFile.buffer.length : null, audioFile.size, Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length === audioFile.size);
         try {
           await uploadToB2Verified(audioKey, audioFile.buffer, contentType, cid);
         } catch (b2Err) {
@@ -319,6 +325,8 @@ export const handleUploadTrack = async (req, res) => {
         // ── NEW RECORD ──
         // 1. Upload audio bytes to B2 (must succeed before any DB write)
         log('stage=b2_audio_upload mode=new key=%s', audioKey);
+        log('stage=byte_trace point=pre_upload_new body_type=%s buffer_length=%s multer_size=%s buffer_intact=%s',
+          audioFile.buffer?.constructor?.name, Buffer.isBuffer(audioFile.buffer) ? audioFile.buffer.length : null, audioFile.size, Buffer.isBuffer(audioFile.buffer) && audioFile.buffer.length === audioFile.size);
         try {
           await uploadToB2Verified(audioKey, audioFile.buffer, contentType, cid);
         } catch (b2Err) {

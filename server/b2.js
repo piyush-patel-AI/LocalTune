@@ -39,6 +39,28 @@ export const s3 = new S3Client({
   }
 });
 
+// ── TEMP DIAGNOSTIC: inspect Body at the last moment before HTTP send ──
+// Runs on every s3.send() including retries. Logs type + byte count only.
+s3.middlewareStack.add(
+  (next) => async (args) => {
+    const { body: reqBody, headers } = args.request;
+    const bodyType = reqBody?.constructor?.name || typeof reqBody;
+    let bodyLen;
+    if (Buffer.isBuffer(reqBody)) {
+      bodyLen = reqBody.length;
+    } else if (typeof reqBody?.read === 'function') {
+      bodyLen = 'READABLE_STREAM';
+    } else if (typeof reqBody?.length === 'number') {
+      bodyLen = reqBody.length;
+    } else {
+      bodyLen = 'unknown';
+    }
+    console.log(`[B2-HTTP] finalize body_type=${bodyType} body_length=${bodyLen} content_length=${headers['content-length']} host=${headers['host']}`);
+    return next(args);
+  },
+  { step: 'finalizeRequest', name: 'byteTraceInspector', priority: 'low' }
+);
+
 /**
  * Upload a Buffer or readable stream to B2. Returns the key on success.
  * @param {string} key         B2 object key
@@ -48,19 +70,30 @@ export const s3 = new S3Client({
  */
 export async function uploadToB2(key, body, contentType, cid) {
   const tag = cid ? `[B2][${cid}]` : '[B2]';
-  const size = Buffer.isBuffer(body) ? body.length : null;
-  console.log(`${tag} upload start key=${key} size=${size} content_type=${contentType}`);
+  const bodyType = body?.constructor?.name || typeof body;
+  const isBuffer = Buffer.isBuffer(body);
+  const isStream = body && typeof body.read === 'function';
+  const size = isBuffer ? body.length : null;
+  console.log(`${tag} upload start key=${key} size=${size} body_type=${bodyType} is_buffer=${isBuffer} is_stream=${!!isStream} content_type=${contentType}`);
 
   const t0 = Date.now();
-  await s3.send(new PutObjectCommand({
-    Bucket: B2_BUCKET_NAME,
-    Key: key,
-    Body: body,
-    ContentType: contentType
-  }));
-  const elapsed = Date.now() - t0;
-  console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms`);
-  return key;
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: B2_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: contentType
+    }));
+    const elapsed = Date.now() - t0;
+    console.log(`${tag} upload ok key=${key} elapsed=${elapsed}ms`);
+    return key;
+  } catch (err) {
+    const elapsed = Date.now() - t0;
+    const postBodyType = body?.constructor?.name || typeof body;
+    const postSize = Buffer.isBuffer(body) ? body.length : null;
+    console.error(`${tag} upload FAILED key=${key} elapsed=${elapsed}ms post_err_body_type=${postBodyType} post_err_body_length=${postSize} error=${err.message}`);
+    throw err;
+  }
 }
 
 /**
