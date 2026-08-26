@@ -79,8 +79,12 @@ const _b2Port = _b2Url?.port ? Number(_b2Url.port) : 443;
  * Encode an S3-style "bucket/key" path for use in an HTTP request URI.
  * Splits on "/", percent-encodes each segment (spaces → %20, etc.),
  * then rejoins with "/".  Preserves slash separators.
+ *
+ * Used only for the wire path in https.request().  The SigV4 signer
+ * receives the RAW (unencoded) path and encodes it internally during
+ * canonical URI construction — this avoids double-encoding.
  */
-function encodeS3Path(bucket, key) {
+function encodePathForWire(bucket, key) {
   return '/' + bucket + '/' + key.split('/').map(encodeURIComponent).join('/');
 }
 
@@ -108,7 +112,12 @@ export async function uploadToB2(key, body, contentType, cid) {
   }
 
   const t0 = Date.now();
-  const path = encodeS3Path(B2_BUCKET_NAME, key);
+  // rawPath: unencoded, passed to SigV4 signer.  The signer's getCanonicalPath()
+  // encodes spaces → %20 internally during canonical URI construction.
+  const rawPath = '/' + B2_BUCKET_NAME + '/' + key;
+  // wirePath: percent-encoded, passed to https.request().  Node.js rejects
+  // raw spaces, and B2 expects %20 on the wire.
+  const wirePath = encodePathForWire(B2_BUCKET_NAME, key);
   const bodyLength = body.length;
 
   try {
@@ -116,7 +125,7 @@ export async function uploadToB2(key, body, contentType, cid) {
       method: 'PUT',
       hostname: _b2Hostname,
       port: _b2Port,
-      path,
+      path: rawPath,
       headers: {
         'host':                  _b2Hostname,
         'content-type':          contentType,
@@ -133,7 +142,7 @@ export async function uploadToB2(key, body, contentType, cid) {
       const req = https.request({
         hostname: _b2Hostname,
         port:     _b2Port,
-        path,
+        path:     wirePath,
         method:   'PUT',
         headers:  signedHeaders,
       }, (res) => {

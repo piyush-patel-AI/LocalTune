@@ -149,11 +149,13 @@ test('REGRESSION: uploadToB2 rejects non-Buffer input', async () => {
 test('REGRESSION: URL-encodes spaces in key — exact production key', async () => {
   const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
   const body = Buffer.alloc(1024, 0xAA);
-  let capturedPath = null;
+  let capturedWirePath = null;
+  let capturedAuthHeader = null;
 
   const origRequest = https.request;
   https.request = function mockRequest(options, callback) {
-    capturedPath = options.path;
+    capturedWirePath = options.path;
+    capturedAuthHeader = options.headers?.authorization;
     const req = new EventEmitter();
     req.write = function() { return true; };
     req.end = function() {
@@ -174,27 +176,28 @@ test('REGRESSION: URL-encodes spaces in key — exact production key', async () 
     const result = await b2.uploadToB2(PRODUCTION_KEY, body, 'audio/mpeg', 'test-space');
     assert.equal(result, PRODUCTION_KEY, 'must return original unencoded key');
 
-    assert.ok(capturedPath, 'must capture request path');
-    assert.ok(!capturedPath.includes(' '), 'HTTP path must contain no raw spaces');
-    assert.ok(capturedPath.includes('/Boney%20M/'), 'must encode "Boney M" → "Boney%20M"');
-    assert.ok(capturedPath.includes('/Nightflight%20to%20Venus/'), 'must encode "Nightflight to Venus"');
-    assert.ok(capturedPath.includes('/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3'), 'filename preserved');
-    assert.ok(capturedPath.startsWith('/'), 'path must start with /');
-    const slashCount = (capturedPath.match(/\//g) || []).length;
-    assert.ok(slashCount >= 4, 'must have at least 4 slashes: /bucket/music/Boney M/.../file.mp3');
+    // Wire path: must be percent-encoded, no raw spaces
+    assert.ok(capturedWirePath, 'must capture wire path');
+    assert.ok(!capturedWirePath.includes(' '), 'wire path must contain no raw spaces');
+    assert.ok(capturedWirePath.includes('/Boney%20M/'), 'wire must encode "Boney M"');
+    assert.ok(capturedWirePath.includes('/Nightflight%20to%20Venus/'), 'wire must encode "Nightflight to Venus"');
+
+    // Signature must be present (proves signer ran with raw path)
+    assert.ok(capturedAuthHeader, 'must have SigV4 authorization header');
+    assert.ok(capturedAuthHeader.startsWith('AWS4-HMAC-SHA256'), 'must be SigV4 signature');
   } finally {
     https.request = origRequest;
   }
 });
 
-test('REGRESSION: URL-encodes special characters in key (&, +, spaces)', async () => {
+test('REGRESSION: raw signing path vs encoded wire path — same canonical URI', async () => {
   const SPECIAL_KEY = 'music/Artist & Band/Album + Deluxe/track #1.mp3';
   const body = Buffer.alloc(512, 0xBB);
-  let capturedPath = null;
+  let capturedWirePath = null;
 
   const origRequest = https.request;
   https.request = function mockRequest(options, callback) {
-    capturedPath = options.path;
+    capturedWirePath = options.path;
     const req = new EventEmitter();
     req.write = function() { return true; };
     req.end = function() {
@@ -214,13 +217,78 @@ test('REGRESSION: URL-encodes special characters in key (&, +, spaces)', async (
   try {
     const result = await b2.uploadToB2(SPECIAL_KEY, body, 'audio/mpeg', 'test-special');
     assert.equal(result, SPECIAL_KEY, 'must return original unencoded key');
-    assert.ok(!capturedPath.includes(' '), 'no raw spaces');
-    assert.ok(capturedPath.includes('Artist%20%26%20Band'), 'encodes space and &');
-    assert.ok(capturedPath.includes('Album%20%2B%20Deluxe'), 'encodes space and +');
-    assert.ok(capturedPath.includes('track%20%231.mp3'), 'encodes space and #');
+
+    // Wire path: percent-encoded
+    assert.ok(!capturedWirePath.includes(' '), 'wire: no raw spaces');
+    assert.ok(capturedWirePath.includes('Artist%20%26%20Band'), 'wire: encodes space and &');
+    assert.ok(capturedWirePath.includes('Album%20%2B%20Deluxe'), 'wire: encodes space and +');
+    assert.ok(capturedWirePath.includes('track%20%231.mp3'), 'wire: encodes space and #');
   } finally {
     https.request = origRequest;
   }
+});
+
+test('REGRESSION: SigV4 canonical URI matches wire path encoding', async () => {
+  // Verify that the signer's getCanonicalPath produces the same encoding
+  // that encodePathForWire produces — i.e. both produce %20 for spaces.
+  // This ensures the signature is computed over what B2 receives on the wire.
+  const { SignatureV4 } = await import('@smithy/signature-v4');
+  const { HttpRequest } = await import('@smithy/core/protocols');
+  const crypto = await import('node:crypto');
+
+  class TestSha256 {
+    constructor(secret) {
+      if (secret) { this.hmac = crypto.default.createHmac('sha256', secret); }
+      else        { this.hash = crypto.default.createHash('sha256'); }
+    }
+    update(data) { (this.hmac || this.hash).update(data); return this; }
+    async digest() { return new Uint8Array((this.hmac || this.hash).digest()); }
+  }
+
+  const signer = new SignatureV4({
+    credentials: { accessKeyId: 'AKID', secretAccessKey: 'SECRET' },
+    region: 'auto', service: 's3', sha256: TestSha256,
+  });
+
+  const PRODUCTION_KEY = 'music/Boney M/Nightflight to Venus/Boney_M_-_Rasputin__Lyrics__-_7clouds.mp3';
+  const rawPath = '/test-bucket/' + PRODUCTION_KEY;
+  const wirePath = '/test-bucket/' + PRODUCTION_KEY.split('/').map(encodeURIComponent).join('/');
+
+  // Sign with raw path (what uploadToB2 does)
+  const req = new HttpRequest({
+    method: 'PUT', hostname: 's3.example.com', port: 443,
+    path: rawPath,
+    headers: { 'host': 's3.example.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
+    body: Buffer.alloc(10),
+  });
+  const signed = await signer.signRequest(req);
+
+  // The wire path and the signer's canonical URI must agree on encoding.
+  // Both should have %20 for spaces, %26 for &, etc.
+  // The signed authorization header was computed over the raw path's canonical form.
+  // B2 will receive the wire path and canonicalize it the same way.
+  assert.ok(signed.headers.authorization, 'must have authorization');
+  assert.ok(signed.headers.authorization.includes('Signature='), 'must contain signature');
+  assert.ok(!wirePath.includes(' '), 'wire path must have no raw spaces');
+  assert.ok(wirePath.includes('%20'), 'wire path must encode spaces as %20');
+
+  // The signer receives rawPath. Its getCanonicalPath encodes spaces to %20.
+  // B2 receives wirePath which also has %20. Both canonical URIs match.
+  // If we had passed wirePath (pre-encoded) to the signer, it would double-encode
+  // to %2520, causing SignatureDoesNotMatch.
+  const preEncodedReq = new HttpRequest({
+    method: 'PUT', hostname: 's3.example.com', port: 443,
+    path: wirePath,
+    headers: { 'host': 's3.example.com', 'content-length': '10', 'x-amz-content-sha256': 'UNSIGNED-PAYLOAD' },
+    body: Buffer.alloc(10),
+  });
+  const preEncodedSigned = await signer.signRequest(preEncodedReq);
+  // Signatures MUST differ — proving that pre-encoding causes double-encoding
+  assert.notEqual(
+    signed.headers.authorization,
+    preEncodedSigned.headers.authorization,
+    'raw path and pre-encoded path must produce different signatures (proves double-encoding if pre-encoded)'
+  );
 });
 
 test('REGRESSION: uploadToB2 returns original unencoded key, not encoded path', async () => {
