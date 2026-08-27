@@ -151,7 +151,12 @@ router.post('/logout', (req, res) => {
     if (err) {
       return res.status(500).json({ error: 'Failed to logout' });
     }
-    res.clearCookie('connect.sid');
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('connect.sid', {
+      path: '/',
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+    });
     return res.json({ success: true, message: 'Logged out successfully' });
   });
 });

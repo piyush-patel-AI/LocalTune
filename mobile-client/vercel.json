@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://localtune.onrender.com/api/:path*"
+    },
+    {
+      "source": "/stream/:path*",
+      "destination": "https://localtune.onrender.com/stream/:path*"
+    }
+  ]
+}

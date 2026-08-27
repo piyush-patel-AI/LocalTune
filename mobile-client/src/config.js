@@ -2,15 +2,12 @@
  * API Configuration
  *
  * In development the Vite dev-server proxy (vite.config.js) forwards /api and
- * /stream requests to localhost:5000, so API_BASE stays empty.
+ * /stream requests to localhost:5000.
  *
- * In production VITE_API_BASE_URL is set via the hosting platform's environment
- * variables (e.g. Vercel). Do NOT hardcode a backend URL here.
+ * In production the Vercel rewrites (vercel.json) proxy /api and /stream to the
+ * backend. Using a relative path (empty base) keeps cookies first-party so that
+ * mobile Chrome does not block them as third-party cookies.
  */
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
-
 export function apiUrl(path) {
-  return `${API_BASE}${path}`;
+  return path;
 }
-
-export default API_BASE;
