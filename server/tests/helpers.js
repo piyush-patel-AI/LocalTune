@@ -54,3 +54,7 @@ export async function initTestDb() {
   await initDatabase();
   await cleanAllTables();
 }
+
+// Backward compatibility alias for test files
+export const useTempDb = () => {};
+
