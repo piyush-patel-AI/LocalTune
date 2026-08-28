@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logo from '../../Assets/logo.png';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { getArtworkUrl } from './services/MediaMetadataProvider';
@@ -164,7 +165,7 @@ function AppContent() {
       {/* Top Mobile Header */}
       <header className="mobile-header">
         <div className="header-brand">
-          <img src="/logo.png" alt="Octave Logo" className="brand-logo-img" />
+          <img src={logo} alt="Octave Logo" className="brand-logo-img" />
           <span className="brand-title">Octave</span>
         </div>
 
@@ -212,7 +213,7 @@ function AppContent() {
               src={getArtworkUrl(currentTrack, 128)}
               alt={currentTrack.title}
               className="mini-art"
-              onError={(e) => { e.target.src = '/logo.png'; }}
+              onError={(e) => { e.target.src = logo; }}
             />
             <div className="mini-text">
               <span className="mini-title">{currentTrack.title}</span>

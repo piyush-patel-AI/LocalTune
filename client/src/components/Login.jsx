@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logo from '../../../Assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -74,7 +75,7 @@ export default function Login() {
             />
           ) : (
             <img
-              src="/api/logo"
+              src={logo}
               alt="Octave Logo"
               style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem' }}
             />

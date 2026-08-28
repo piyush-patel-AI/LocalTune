@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import TrackActionSheet from '../components/TrackActionSheet';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
@@ -38,7 +39,7 @@ const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, 
                 src={getArtworkUrl(track, 256)}
                 alt={track.title}
                 className="tile-art"
-                onError={(e) => { e.target.src = '/logo.png'; }}
+                onError={(e) => { e.target.src = logo; }}
               />
               <div className="tile-gradient-overlay">
                 <span className="tile-overlay-text">{track.title}</span>
@@ -207,7 +208,7 @@ export default function MobileHomeView() {
                  alt={heroTrack.title}
                  className="hero-art-img"
                  eager
-                 onError={(e) => { e.target.src = '/logo.png'; }}
+                 onError={(e) => { e.target.src = logo; }}
                />
               <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
                 {currentTrack && currentTrack.id === heroTrack.id && isPlaying ? (
@@ -245,7 +246,7 @@ export default function MobileHomeView() {
                   src={getArtworkUrl(track, 256)}
                   alt={track.title}
                   className="media-card-art"
-                  onError={(e) => { e.target.src = '/logo.png'; }}
+                  onError={(e) => { e.target.src = logo; }}
                 />
                 <div className="media-card-play-hover">
                   <IconPlay size={18} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
@@ -390,7 +391,7 @@ export default function MobileHomeView() {
                        src={getArtworkUrl(track, 256)}
                        alt={track.title}
                        className="row-art"
-                       onError={(e) => { e.target.src = '/logo.png'; }}
+                       onError={(e) => { e.target.src = logo; }}
                      />
                     <div className="row-text">
                       <span className="row-title">{track.title}</span>

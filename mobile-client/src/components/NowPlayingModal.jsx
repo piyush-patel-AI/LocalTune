@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import AddToPlaylistModal from './AddToPlaylistModal';
@@ -179,7 +180,7 @@ export default function NowPlayingModal() {
                   src={getArtworkUrl(currentTrack, 512)}
                   alt={currentTrack.title}
                   className="now-playing-art-img"
-                  onError={(e) => { e.target.src = '/logo.png'; }}
+                  onError={(e) => { e.target.src = logo; }}
                 />
               ) : (
                 <div className="now-playing-art-fallback">

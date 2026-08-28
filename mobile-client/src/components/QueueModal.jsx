@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import BottomSheet from './BottomSheet';
@@ -130,7 +131,7 @@ export default function QueueModal() {
                       src={getArtworkUrl(track, 128)}
                       alt={track.title}
                       className="row-art"
-                      onError={(e) => { e.target.src = '/logo.png'; }}
+                      onError={(e) => { e.target.src = logo; }}
                     />
                     <div className="row-text">
                       <span className="row-title">{track.title}</span>

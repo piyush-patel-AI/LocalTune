@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect } from 'react';
+import logo from '../../../Assets/logo.png';
 import { useAuth } from './AuthContext';
 import { extractColorsFromAlbumArt, applyAmbientColorsToDOM, getDefaultAmbientColors } from '../utils/colorExtractor';
 import { apiClient } from '../services/apiClient';
@@ -596,7 +597,7 @@ export const PlayerProvider = ({ children }) => {
     if (currentTrack) {
       const artUrl = currentTrack.cover_art_path
         ? `${window.location.origin}/api/tracks/${currentTrack.id}/art`
-        : `${window.location.origin}/logo.png`;
+        : logo;
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title || 'Unknown Title',

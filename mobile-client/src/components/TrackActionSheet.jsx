@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import AddToPlaylistModal from './AddToPlaylistModal';
@@ -22,7 +23,7 @@ export default function TrackActionSheet({ track, onClose }) {
             src={getArtworkUrl(track, 256)}
             alt={track.title}
             className="action-sheet-art"
-            onError={(e) => { e.target.src = '/logo.png'; }}
+            onError={(e) => { e.target.src = logo; }}
           />
           <div className="action-sheet-text">
             <span className="action-sheet-title">{track.title}</span>

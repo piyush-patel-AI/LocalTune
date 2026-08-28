@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import logo from '../../../Assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import { apiUrl } from '../config';
 
@@ -99,7 +100,7 @@ export default function MobileLoginView() {
             />
           ) : (
             <img
-              src="/logo.png"
+              src={logo}
               alt="Octave Logo"
               style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '14px', marginBottom: '0.75rem', filter: 'drop-shadow(0 4px 12px rgba(245,158,11,0.3))' }}
             />

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import logo from '../../../Assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import {
   IconHome,
@@ -54,7 +55,7 @@ export default function Navbar({ activeView, setActiveView }) {
       <div className="sidebar-top-container">
         <div className="brand-header">
           <img
-            src="/api/logo"
+            src={logo}
             alt="Octave Logo"
             style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: 'var(--radius-md)' }}
           />
