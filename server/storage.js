@@ -89,9 +89,15 @@ export async function uploadToStorage(storagePath, buffer, contentType, options 
  */
 export async function uploadToStorageVerified(storagePath, buffer, contentType) {
   const result = await uploadToStorage(storagePath, buffer, contentType, { upsert: true });
-  if (!result) return null;
+  if (!result) {
+    throw new Error(`Storage upload failed: ${storagePath}`);
+  }
 
   const verified = await existsInStorage(storagePath);
+  if (!verified) {
+    throw new Error(`Storage upload verification failed: ${storagePath}`);
+  }
+
   return { path: result.path, verified };
 }
 
@@ -298,8 +304,50 @@ export async function listAllAudioObjects(prefix = 'music') {
  * Build the storage key for an audio file.
  * Same format as the old buildAudioKey from b2.js.
  */
+/**
+ * Supabase Storage only accepts the character set enforced by its `isValidKey`
+ * validation: ASCII alphanumerics, `_`, and a small allow-list of symbols plus
+ * whitespace (`! * ' ( ) space & $ @ = ; : + , ? .`). Anything outside that set —
+ * non-ASCII letters such as accents (é, ñ) or symbols like `÷` — makes the whole
+ * key invalid and the upload fails with `InvalidKey`.
+ *
+ * We normalize/transliterate where possible (é -> e) and replace the remaining
+ * disallowed characters with a hyphen. Every already-accepted character
+ * (including spaces, apostrophes and hyphens) is kept untouched, so keys already
+ * stored in the bucket keep resolving and are never silently re-keyed. `/` is
+ * excluded because it is the folder delimiter and may only appear between
+ * components, never inside one.
+ */
+export function sanitizeStorageComponent(input) {
+  if (input == null) return 'unknown';
+  const normalized = String(input)
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '');
+  const kept = normalized.replace(/[^A-Za-z0-9_!.*'() &$@=;:+?,-]/g, '-');
+  const collapsed = kept.replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '').trim();
+  return collapsed.length ? collapsed : 'unknown';
+}
+
+/**
+ * Sanitize the file-name portion of an audio key.
+ *
+ * The uploader has always replaced any character outside `[A-Za-z0-9_-]` with an
+ * underscore. We preserve that exact behaviour so audio keys already in the
+ * bucket (which used this scheme) keep matching.
+ */
+export function sanitizeStorageFileName(input) {
+  if (input == null) return 'unknown';
+  const sanitized = String(input).replace(/[^A-Za-z0-9_-]/g, '_');
+  return sanitized.length ? sanitized : 'unknown';
+}
+
 export function buildAudioKey(artist, album, filename) {
-  return `music/${artist}/${album}/${filename}`;
+  const str = String(filename);
+  const dotIdx = str.lastIndexOf('.');
+  const stem = dotIdx > 0 ? str.slice(0, dotIdx) : str;
+  const ext = dotIdx > 0 ? str.slice(dotIdx) : '';
+  const safeName = `${sanitizeStorageFileName(stem)}${ext}`;
+  return `music/${sanitizeStorageComponent(artist)}/${sanitizeStorageComponent(album)}/${safeName}`;
 }
 
 /**
@@ -315,7 +363,7 @@ export function buildArtworkKey(trackId, ext) {
  * Same format as buildArtistKey from b2.js.
  */
 export function buildArtistKey(artistName, ext) {
-  return `artists/${artistName}.${ext}`;
+  return `artists/${sanitizeStorageComponent(artistName)}.${ext}`;
 }
 
 /**
@@ -323,7 +371,7 @@ export function buildArtistKey(artistName, ext) {
  * Same format as buildAvatarKey from b2.js.
  */
 export function buildAvatarKey(userId, ext) {
-  return `avatars/${userId}.${ext}`;
+  return `avatars/${sanitizeStorageComponent(userId)}.${ext}`;
 }
 
 // ============================================================
