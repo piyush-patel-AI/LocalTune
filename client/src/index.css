@@ -1,3 +1,21 @@
+@property --accent-primary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f59e0b;
+}
+
+@property --accent-glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(245, 158, 11, 0.22);
+}
+
+@property --accent-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d97706;
+}
+
 :root {
   --bg-main: #0b0b0e;
   --bg-sidebar: rgba(14, 14, 18, 0.88);
@@ -31,6 +49,9 @@
 
   --player-height: 90px;
   --sidebar-width: 250px;
+
+  /* Smoothly animate the dynamic accent so it never snaps/flashes between tracks */
+  transition: --accent-primary 0.6s ease, --accent-glow 0.6s ease, --accent-hover 0.6s ease;
 }
 
 * {

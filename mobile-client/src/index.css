@@ -1,3 +1,21 @@
+@property --accent-primary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f59e0b;
+}
+
+@property --accent-glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(245, 158, 11, 0.25);
+}
+
+@property --accent-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d97706;
+}
+
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
@@ -33,6 +51,9 @@
   --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-slow: 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Smoothly animate the dynamic accent so it never snaps/flashes between tracks */
+  transition: --accent-primary 0.6s ease, --accent-glow 0.6s ease, --accent-hover 0.6s ease;
 }
 
 * {
