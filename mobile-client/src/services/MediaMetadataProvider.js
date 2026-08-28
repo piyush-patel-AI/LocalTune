@@ -7,7 +7,7 @@ import { apiUrl } from '../config';
 
 export function getArtworkUrl(track, requestedSize = 512) {
   if (!track) return '';
-  let url = track.coverUrl || track.cover_art_url || apiUrl(`/api/tracks/${track.id}/art?size=${requestedSize}`);
+  let url = track.coverUrl || track.cover_art_url || apiUrl(`/api/tracks/${track.id}/art`);
 
   if (typeof window !== 'undefined' && !url.startsWith('http://') && !url.startsWith('https://')) {
     try {

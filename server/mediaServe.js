@@ -7,7 +7,23 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getSignedUrl, isStorageConfigured } from './storage.js';
+import crypto from 'crypto';
+import { getBufferFromStorage, isStorageConfigured } from './storage.js';
+
+const ARTWORK_MAX_AGE = 31536000; // 1 year
+
+function contentTypeFromPath(storagePath) {
+  const ext = (String(storagePath).split('.').pop() || '').toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    case 'gif': return 'image/gif';
+    case 'avif': return 'image/avif';
+    default: return 'image/jpeg';
+  }
+}
 
 export async function serveStoredImage(res, storedPath, fallbackLocalFile = null) {
   const sendFallback = () => {
@@ -26,22 +42,30 @@ export async function serveStoredImage(res, storedPath, fallbackLocalFile = null
   }
 
   try {
-    const url = await getSignedUrl(storedPath, 3600);
-    if (!url) {
+    // Fetch the bytes server-side. The signed URL never reaches the browser, so the
+    // Storage bucket stays private while the browser only ever sees this stable,
+    // same-origin URL. That lets its HTTP cache reuse the artwork across view
+    // navigations (Explore -> Home -> Library -> Home) instead of re-downloading.
+    const buf = await getBufferFromStorage(storedPath);
+    if (!buf) {
       return sendFallback();
     }
-    // The underlying stored object is immutable per track/artist, and the signed
-    // URL is valid for ~1h. Cache the redirect for a window safely under the
-    // signed-URL TTL so the browser can serve repeat artwork straight from its
-    // HTTP cache — no DB lookup (getTrackById) and no Supabase signing call on
-    // every artwork request. We stay well under the 3600s signed TTL and use
-    // stale-while-revalidate so a briefly stale redirect still resolves to a
-    // valid signed URL. Artwork is not personalized/session-sensitive, so
-    // public caching is safe.
-    res.setHeader('Cache-Control', 'public, max-age=3000, stale-while-revalidate=86400');
-    return res.redirect(302, url);
+
+    const etag = `"${crypto.createHash('sha256').update(buf).digest('hex').slice(0, 32)}"`;
+    const ifNoneMatch = res.req && res.req.headers && res.req.headers['if-none-match'];
+    if (ifNoneMatch && ifNoneMatch === etag) {
+      return res.status(304).end();
+    }
+
+    // Artwork is immutable per track/artist/avatar and is not personalized or
+    // session-sensitive, so public, long-lived caching is safe.
+    res.setHeader('Cache-Control', `public, max-age=${ARTWORK_MAX_AGE}, immutable`);
+    res.setHeader('ETag', etag);
+    res.setHeader('Content-Type', contentTypeFromPath(storedPath));
+    res.setHeader('Content-Length', buf.length);
+    return res.status(200).send(buf);
   } catch (err) {
-    console.error('[Media] Failed to resolve storage URL:', err.message);
-    return res.status(502).json({ error: 'Failed to resolve media URL.' });
+    console.error('[Media] Failed to serve stored image:', err.message);
+    return res.status(502).json({ error: 'Failed to serve media.' });
   }
 }
