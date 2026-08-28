@@ -55,11 +55,11 @@ export default function Navbar({ activeView, setActiveView }) {
         <div className="brand-header">
           <img
             src="/api/logo"
-            alt="LocalTune Logo"
+            alt="Octave Logo"
             style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: 'var(--radius-md)' }}
           />
           <div>
-            <div className="brand-title">LocalTune</div>
+            <div className="brand-title">Octave</div>
             <div className="brand-subtitle">Your Library</div>
           </div>
         </div>

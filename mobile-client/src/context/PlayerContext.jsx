@@ -321,7 +321,7 @@ export function PlayerProvider({ children }) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title || 'Unknown Title',
         artist: currentTrack.artist || 'Unknown Artist',
-        album: currentTrack.album || 'LocalTune',
+        album: currentTrack.album || 'Octave',
           artwork: currentTrack.cover_art_path ? [
             { src: apiUrl(`/api/tracks/${currentTrack.id}/art`), sizes: '512x512', type: 'image/jpeg' }
         ] : []

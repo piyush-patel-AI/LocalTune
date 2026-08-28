@@ -147,7 +147,7 @@ function AppContent() {
         fontSize: '1.1rem',
         fontWeight: 600
       }}>
-        Loading LocalTune...
+        Loading Octave...
       </div>
     );
   }
@@ -164,8 +164,8 @@ function AppContent() {
       {/* Top Mobile Header */}
       <header className="mobile-header">
         <div className="header-brand">
-          <img src="/logo.png" alt="LocalTune Logo" className="brand-logo-img" />
-          <span className="brand-title">LocalTune</span>
+          <img src="/logo.png" alt="Octave Logo" className="brand-logo-img" />
+          <span className="brand-title">Octave</span>
         </div>
 
         <div className="header-actions">

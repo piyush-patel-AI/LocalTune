@@ -100,12 +100,12 @@ export default function MobileLoginView() {
           ) : (
             <img
               src="/logo.png"
-              alt="LocalTune Logo"
+              alt="Octave Logo"
               style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '14px', marginBottom: '0.75rem', filter: 'drop-shadow(0 4px 12px rgba(245,158,11,0.3))' }}
             />
           )}
           <h1 style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {selectedUser && !isRegister ? selectedUser.displayName : 'LocalTune'}
+            {selectedUser && !isRegister ? selectedUser.displayName : 'Octave'}
           </h1>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
             {isRegister ? 'Create your LAN music profile' : 'Sign in to access your music'}

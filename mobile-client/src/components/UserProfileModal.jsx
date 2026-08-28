@@ -33,7 +33,7 @@ export default function UserProfileModal({ onClose }) {
     }
   };
 
-  const displayName = user ? (user.displayName || user.username) : 'LocalTune User';
+  const displayName = user ? (user.displayName || user.username) : 'Octave User';
   const initial = displayName.charAt(0).toUpperCase();
 
   return (

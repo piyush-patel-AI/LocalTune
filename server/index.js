@@ -119,7 +119,7 @@ app.get('/api/tracks/:id/art', async (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'LocalTune server is running' });
+    res.json({ status: 'ok', message: 'Octave server is running' });
 });
 
 let currentPlaybackState = {

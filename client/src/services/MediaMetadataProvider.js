@@ -34,7 +34,7 @@ export function updateMediaSessionMetadata(track) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Unknown Title',
       artist: track.artist || 'Unknown Artist',
-      album: track.album || 'LocalTune',
+      album: track.album || 'Octave',
       artwork: getMultiSizeArtwork(track)
     });
   } catch (err) {

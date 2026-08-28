@@ -49,7 +49,7 @@ export function updateMediaSessionMetadata(track) {
     syncServerPlaybackState({
       title: track.title || 'Unknown Title',
       artist: track.artist || 'Unknown Artist',
-      album: track.album || 'LocalTune',
+      album: track.album || 'Octave',
       artUrl: getArtworkUrl(track, 512)
     });
   }
@@ -62,7 +62,7 @@ export function updateMediaSessionMetadata(track) {
         window.AndroidMediaBridge.updateMetadata(
           track.title || 'Unknown Title',
           track.artist || 'Unknown Artist',
-          track.album || 'LocalTune',
+          track.album || 'Octave',
           getArtworkUrl(track, 512),
           dur
         );
@@ -83,7 +83,7 @@ export function updateMediaSessionMetadata(track) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Unknown Title',
       artist: track.artist || 'Unknown Artist',
-      album: track.album || 'LocalTune',
+      album: track.album || 'Octave',
       artwork: getMultiSizeArtwork(track)
     });
   } catch (err) {

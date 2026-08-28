@@ -93,7 +93,7 @@ function MainApp() {
     return (
       <div className="login-container">
         <div style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
-          Loading LocalTune...
+          Loading Octave...
         </div>
       </div>
     );

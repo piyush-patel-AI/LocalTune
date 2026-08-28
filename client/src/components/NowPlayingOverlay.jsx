@@ -143,7 +143,7 @@ export default function NowPlayingOverlay({ onClose }) {
         </button>
         <div className="np-header-title">
           <span className="np-header-label">PLAYING FROM</span>
-          <span className="np-header-source">LocalTune Library</span>
+          <span className="np-header-source">Octave Library</span>
         </div>
         <button className="np-close-btn-secondary" onClick={handleClose} title="Close (Esc)">
           <IconClose size={20} color="var(--text-muted)" />
@@ -287,7 +287,7 @@ export default function NowPlayingOverlay({ onClose }) {
               </div>
               <span className="np-queue-count">{queue.length} Tracks</span>
             </div>
-            <div className="np-queue-subtitle">Playing From LocalTune Library</div>
+            <div className="np-queue-subtitle">Playing From Octave Library</div>
 
             <div className="np-queue-scrollable">
               {queue.length === 0 ? (

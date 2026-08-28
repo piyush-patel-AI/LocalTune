@@ -236,7 +236,7 @@ export default function HomeView() {
             <span className="bento-pill">
               {isPlaying && currentTrack ? '⚡ NOW PLAYING' : '✨ RECOMMENDED TODAY'}
             </span>
-            <h2 className="bento-hero-title">{heroTrack ? heroTrack.title : 'Welcome to LocalTune'}</h2>
+            <h2 className="bento-hero-title">{heroTrack ? heroTrack.title : 'Welcome to Octave'}</h2>
             <p className="bento-hero-subtitle">{heroTrack ? `${heroTrack.artist} • ${heroTrack.album || 'Single'}` : 'High Fidelity Music Streaming'}</p>
             {heroTrack && (
               <div className="bento-hero-actions">

@@ -75,13 +75,13 @@ export default function Login() {
           ) : (
             <img
               src="/api/logo"
-              alt="LocalTune Logo"
+              alt="Octave Logo"
               style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem' }}
             />
           )}
 
           <div className="brand-title" style={{ fontSize: '1.75rem' }}>
-            {selectedUser && !isRegister ? selectedUser.displayName : 'LocalTune'}
+            {selectedUser && !isRegister ? selectedUser.displayName : 'Octave'}
           </div>
         </div>
 

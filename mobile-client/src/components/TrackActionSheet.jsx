@@ -26,7 +26,7 @@ export default function TrackActionSheet({ track, onClose }) {
           />
           <div className="action-sheet-text">
             <span className="action-sheet-title">{track.title}</span>
-            <span className="action-sheet-artist">{track.artist} • {track.album || 'LocalTune'}</span>
+            <span className="action-sheet-artist">{track.artist} • {track.album || 'Octave'}</span>
           </div>
         </div>
 

@@ -159,7 +159,7 @@ export default function NowPlayingModal() {
             </button>
             <div className="now-playing-header-title">
               <span className="header-subtitle">PLAYING FROM LIBRARY</span>
-              <span className="header-album">{currentTrack.album || 'LocalTune Stream'}</span>
+              <span className="header-album">{currentTrack.album || 'Octave Stream'}</span>
             </div>
             <button
               className="header-icon-btn"

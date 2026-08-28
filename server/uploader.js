@@ -474,7 +474,7 @@ function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtit
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LocalTune — Music & Artist Uploader</title>
+  <title>Octave — Music & Artist Uploader</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -727,7 +727,7 @@ function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtit
   <div class="upload-card">
     <div class="header">
       <div class="logo">🎵</div>
-      <h1 class="title">LocalTune Portal</h1>
+      <h1 class="title">Octave Portal</h1>
       <p class="subtitle">${subtitle}</p>
     </div>
 
@@ -856,7 +856,7 @@ function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtit
         </div>
       </div>
 
-      <button type="submit" id="submitSongBtn" class="btn-submit">Upload Song to LocalTune</button>
+      <button type="submit" id="submitSongBtn" class="btn-submit">Upload Song to Octave</button>
     </form>
 
     <!-- SECTION 2: Add Standalone Artist Profile Form -->
@@ -936,7 +936,7 @@ function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtit
     <div id="resultAlert" class="result-alert"></div>
 
     <a href="${webPlayerUrl}" target="_blank" class="nav-link">
-      🎧 Open LocalTune Web Player &rarr;
+      🎧 Open Octave Web Player &rarr;
     </a>
   </div>
 
@@ -1312,7 +1312,7 @@ function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtit
 
       xhr.onload = () => {
         submitSongBtn.disabled = false;
-        submitSongBtn.textContent = 'Upload Song to LocalTune';
+        submitSongBtn.textContent = 'Upload Song to Octave';
         progressWrap.style.display = 'none';
 
         if (xhr.status === 200) {
@@ -1343,7 +1343,7 @@ function generateUploaderHtml({ uploadUrl = '/upload', webPlayerUrl = '', subtit
 
       xhr.onerror = () => {
         submitSongBtn.disabled = false;
-        submitSongBtn.textContent = 'Upload Song to LocalTune';
+        submitSongBtn.textContent = 'Upload Song to Octave';
         progressWrap.style.display = 'none';
         resultAlert.className = 'result-alert error';
         resultAlert.textContent = 'Network error during upload.';
@@ -1436,7 +1436,7 @@ if (isDirectRun) {
   initDatabase()
     .then(() => {
       app.listen(UPLOAD_PORT, '0.0.0.0', () => {
-        console.log(`🚀 LocalTune Music Uploader running on http://0.0.0.0:${UPLOAD_PORT}`);
+        console.log(`🚀 Octave Music Uploader running on http://0.0.0.0:${UPLOAD_PORT}`);
       });
     })
     .catch((err) => {

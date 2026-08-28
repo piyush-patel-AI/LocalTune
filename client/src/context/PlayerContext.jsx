@@ -600,8 +600,8 @@ export const PlayerProvider = ({ children }) => {
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title || 'Unknown Title',
-        artist: currentTrack.artist || 'LocalTune',
-        album: currentTrack.album || 'LocalTune Library',
+        artist: currentTrack.artist || 'Octave',
+        album: currentTrack.album || 'Octave Library',
         artwork: [
           { src: artUrl, sizes: '96x96', type: 'image/jpeg' },
           { src: artUrl, sizes: '128x128', type: 'image/jpeg' },
