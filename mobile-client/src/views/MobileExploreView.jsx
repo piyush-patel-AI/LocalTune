@@ -453,8 +453,10 @@ export default function MobileExploreView() {
           {loading ? (
             <div style={{ color: 'var(--text-muted)', padding: '1rem 0', textAlign: 'center' }}>Loading catalog...</div>
           ) : filteredCatalog.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', padding: '2rem 0', textAlign: 'center', fontSize: '0.9rem' }}>
-              No matching tracks found for "{searchQuery}".
+            <div className="empty-state">
+              <div className="empty-state-icon"><IconMusic size={26} /></div>
+              <p className="empty-state-title">No matching tracks found</p>
+              <p className="empty-state-sub">We couldn't find anything for "{searchQuery}". Try a different title, artist, or album.</p>
             </div>
           ) : (
             <div className="quick-picks-list">

@@ -161,10 +161,10 @@ export default function MobileSearchView({ onClose }) {
                   ))}
                 </div>
               ) : (
-                <div style={{ textAlignment: 'center', textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-                  <IconMusic size={42} color="var(--text-muted)" style={{ marginBottom: '0.75rem' }} />
-                  <p style={{ fontWeight: 700, fontSize: '1rem', color: '#ffffff' }}>No matching songs found</p>
-                  <p style={{ fontSize: '0.82rem', marginTop: '0.25rem' }}>Try searching by track title, artist name, or album.</p>
+                <div className="empty-state" style={{ padding: '3rem 1rem' }}>
+                  <div className="empty-state-icon"><IconMusic size={26} /></div>
+                  <p className="empty-state-title">No matching songs found</p>
+                  <p className="empty-state-sub">Try searching by track title, artist name, or album.</p>
                 </div>
               )}
             </div>

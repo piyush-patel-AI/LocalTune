@@ -490,8 +490,10 @@ export default function MobileLibraryView() {
             ))}
           </div>
         ) : (
-          <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem 0', fontSize: '0.88rem' }}>
-            No tracks in this playlist yet.
+          <div className="empty-state" style={{ padding: '1.5rem 1.5rem' }}>
+            <div className="empty-state-icon"><IconMusic size={26} /></div>
+            <p className="empty-state-title">This playlist is empty</p>
+            <p className="empty-state-sub">Add tracks from your library to build this playlist.</p>
           </div>
         )}
       </div>
@@ -636,35 +638,43 @@ export default function MobileLibraryView() {
           </div>
 
           {activeTab === 'liked' && (
-            <div className="quick-picks-list" style={{ marginTop: '0.75rem' }}>
-              {likedTracks.map((track) => (
-                <div
-                  key={track.id}
-                  className="quick-pick-row"
-                  onClick={() => playTrack(track, likedTracks)}
-                >
-                  <div className="row-main-info">
-                    {track.cover_art_path ? (
-                      <img
-                        src={apiUrl(`/api/tracks/${track.id}/art`)}
-                        alt={track.title}
-                        className="row-art"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="row-art-fallback">
-                        <IconMusic size={22} color="var(--accent-primary)" />
+            likedTracks.length === 0 ? (
+              <div className="empty-state" style={{ marginTop: '0.5rem' }}>
+                <div className="empty-state-icon"><IconHeart size={26} /></div>
+                <p className="empty-state-title">No liked songs yet</p>
+                <p className="empty-state-sub">Tap the heart on any track to save it here.</p>
+              </div>
+            ) : (
+              <div className="quick-picks-list" style={{ marginTop: '0.75rem' }}>
+                {likedTracks.map((track) => (
+                  <div
+                    key={track.id}
+                    className="quick-pick-row"
+                    onClick={() => playTrack(track, likedTracks)}
+                  >
+                    <div className="row-main-info">
+                      {track.cover_art_path ? (
+                        <img
+                          src={apiUrl(`/api/tracks/${track.id}/art`)}
+                          alt={track.title}
+                          className="row-art"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="row-art-fallback">
+                          <IconMusic size={22} color="var(--accent-primary)" />
+                        </div>
+                      )}
+                      <div className="row-text">
+                        <span className="row-title">{track.title}</span>
+                        <span className="row-artist">{track.artist}</span>
                       </div>
-                    )}
-                    <div className="row-text">
-                      <span className="row-title">{track.title}</span>
-                      <span className="row-artist">{track.artist}</span>
                     </div>
+                    <IconHeart size={18} color="var(--accent-primary)" fill="var(--accent-primary)" />
                   </div>
-                  <IconHeart size={18} color="var(--accent-primary)" fill="var(--accent-primary)" />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )
           )}
         </section>
       )}
@@ -711,8 +721,10 @@ export default function MobileLibraryView() {
               </div>
             )
           ) : (
-            <div style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: 'var(--radius-md)', padding: '1.25rem', textAlign: 'center', border: '1px dashed var(--glass-border)' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No playlists created yet.</p>
+            <div className="empty-state">
+              <div className="empty-state-icon"><IconListPlus size={26} /></div>
+              <p className="empty-state-title">No playlists yet</p>
+              <p className="empty-state-sub">Create a playlist to start organizing your library.</p>
             </div>
           )}
         </section>

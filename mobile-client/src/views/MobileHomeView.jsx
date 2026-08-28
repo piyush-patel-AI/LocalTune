@@ -349,7 +349,11 @@ export default function MobileHomeView() {
             </div>
           </>
         ) : (
-          <div style={{ color: 'var(--text-muted)' }}>No tracks in library.</div>
+          <div className="empty-state">
+            <div className="empty-state-icon"><IconMusic size={26} /></div>
+            <p className="empty-state-title">Your library is empty</p>
+            <p className="empty-state-sub">Add some music to start building your Speed Dial and recommendations.</p>
+          </div>
         )}
       </section>
 

@@ -301,7 +301,7 @@ export default function MobileSettingsView() {
 
       {/* Audio Playback Settings Group (Spotify Style) */}
       <section className="section-container">
-        <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+        <span className="settings-section-label">
           Audio Playback
         </span>
 
@@ -401,7 +401,7 @@ export default function MobileSettingsView() {
 
       {/* Recommendation Engine Preset Control */}
       <section className="section-container">
-        <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+        <span className="settings-section-label">
           Recommendation Tuning
         </span>
 
@@ -467,7 +467,7 @@ export default function MobileSettingsView() {
 
       {/* Dynamic Ambient Background Appearance */}
       <section className="section-container">
-        <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+        <span className="settings-section-label">
           Appearance
         </span>
 
@@ -490,7 +490,7 @@ export default function MobileSettingsView() {
 
       {/* Library Rescan & Storage */}
       <section className="section-container">
-        <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+        <span className="settings-section-label">
           Library & Management
         </span>
 
@@ -559,7 +559,7 @@ export default function MobileSettingsView() {
 
       {/* System Server Info */}
       <section className="section-container">
-        <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+        <span className="settings-section-label">
           Server System Info
         </span>
 
