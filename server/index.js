@@ -5,7 +5,6 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import pg from 'pg';
 import connectPgSimple from 'connect-pg-simple';
 
 import authRoutes from './routes/auth.js';
@@ -15,7 +14,7 @@ import playlistsRoutes from './routes/playlists.js';
 import favoritesRoutes from './routes/favorites.js';
 import streamRoutes from './routes/stream.js';
 import statsRoutes from './routes/stats.js';
-import { getTrackById, initDatabase } from './db.js';
+import { getTrackById, initDatabase, getPool } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { uploadFieldsMiddleware, handleUploadTrack, uploaderRouter } from './uploader.js';
 import { serveStoredImage } from './mediaServe.js';
@@ -58,16 +57,15 @@ app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Session middleware with PostgreSQL-backed store
+// Session middleware with PostgreSQL-backed store.
+// Shares the single application pool so total connections stay within
+// the Supabase/Render session-mode limit (pool_size: 15).
 const PgSession = connectPgSimple(session);
-const pgPool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 10,
-});
+const sharedPool = getPool();
 
 app.use(session({
   store: new PgSession({
-    pool: pgPool,
+    pool: sharedPool,
     tableName: 'user_sessions',
     createTableIfMissing: true,
   }),

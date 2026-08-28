@@ -19,27 +19,48 @@ const { Pool } = pg;
 
 let pool = null;
 
+// Cap the shared pool safely under the Supabase/Render session-pool-mode
+// connection ceiling (pool_size: 15). Override with PG_POOL_MAX if needed.
+const MAX_POOL_CONNECTIONS = parseInt(process.env.PG_POOL_MAX, 10) || 10;
+
 /**
- * Initialize the PostgreSQL connection pool.
- * Idempotent; safe to call multiple times.
+ * Create the single PostgreSQL connection pool.
+ * Called exactly once; the returned instance is cached by getPool().
  */
-export async function initDatabase() {
-  if (pool) return pool;
-
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is required');
-  }
-
-  pool = new Pool({
-    connectionString,
-    max: 20,
+function createPool() {
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: MAX_POOL_CONNECTIONS,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });
+}
+
+/**
+ * Get the shared singleton pool, creating it exactly once per process.
+ * Safe to call from anywhere (app queries, connect-pg-simple, scripts).
+ */
+export function getPool() {
+  if (!pool) {
+    pool = createPool();
+  }
+  return pool;
+}
+
+/**
+ * Initialize the PostgreSQL connection pool and verify connectivity.
+ * Idempotent; safe to call multiple times. Always performs the
+ * connection test so the caller (index.js) can gate app.listen() on it.
+ */
+export async function initDatabase() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
+
+  const p = getPool();
 
   // Test the connection
-  const client = await pool.connect();
+  const client = await p.connect();
   try {
     await client.query('SELECT NOW()');
     console.log('[db.js] PostgreSQL connected successfully');
@@ -47,24 +68,14 @@ export async function initDatabase() {
     client.release();
   }
 
-  return pool;
-}
-
-/**
- * Get the active pool, initializing if needed.
- */
-async function getPool() {
-  if (!pool) {
-    await initDatabase();
-  }
-  return pool;
+  return p;
 }
 
 /**
  * Execute a query and return all rows.
  */
 async function queryAll(sql, params = []) {
-  const p = await getPool();
+  const p = getPool();
   const result = await p.query(sql, params);
   return result.rows;
 }
@@ -73,7 +84,7 @@ async function queryAll(sql, params = []) {
  * Execute a query and return the first row.
  */
 async function queryGet(sql, params = []) {
-  const p = await getPool();
+  const p = getPool();
   const result = await p.query(sql, params);
   return result.rows[0];
 }
@@ -83,7 +94,7 @@ async function queryGet(sql, params = []) {
  * Returns { changes: number, lastInsertRowid: number }.
  */
 async function queryRun(sql, params = []) {
-  const p = await getPool();
+  const p = getPool();
   const result = await p.query(sql, params);
   return {
     changes: result.rowCount || 0,
@@ -95,7 +106,7 @@ async function queryRun(sql, params = []) {
  * Execute raw SQL (for schema setup, migrations).
  */
 async function queryExec(sql) {
-  const p = await getPool();
+  const p = getPool();
   await p.query(sql);
 }
 
@@ -103,7 +114,7 @@ async function queryExec(sql) {
  * Execute a batch of statements in a transaction.
  */
 async function queryBatch(statements) {
-  const p = await getPool();
+  const p = getPool();
   const client = await p.connect();
   try {
     await client.query('BEGIN');
