@@ -2237,6 +2237,60 @@ body {
   font-weight: 400;
 }
 
+/* ==========================================================================
+   ARTWORK SKELETON / PROGRESSIVE LOADING
+   ArtworkImage wraps the real <img> (which keeps the card's exact size via its
+   class) with a shimmering placeholder that fades out as the image fades in.
+   ========================================================================== */
+.artwork-img-wrap {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.artwork-img-wrap > img {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.3s ease;
+}
+
+.artwork-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: artworkShimmer 1.4s ease-in-out infinite;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+@keyframes artworkShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Album cards render the cover into a padding-box; give the box a matching
+   shimmer placeholder so it is not an empty block while the cover decodes. */
+.album-art-box {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: artworkShimmer 1.4s ease-in-out infinite;
+}
+
 
 
 

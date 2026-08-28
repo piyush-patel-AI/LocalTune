@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import TrackActionSheet from '../components/TrackActionSheet';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
+import ArtworkImage from '../components/ArtworkImage';
 import {
   IconChevronRight,
   IconMoreVertical,
@@ -33,12 +34,10 @@ const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, 
               className={`speed-dial-tile ${isHeroTile ? 'large' : ''} ${isCurrent ? 'active' : ''}`}
               onClick={() => onActivate(track, isCurrent)}
             >
-              <img
+              <ArtworkImage
                 src={getArtworkUrl(track, 256)}
                 alt={track.title}
                 className="tile-art"
-                loading="lazy"
-                decoding="async"
                 onError={(e) => { e.target.src = '/logo.png'; }}
               />
               <div className="tile-gradient-overlay">
@@ -203,12 +202,11 @@ export default function MobileHomeView() {
 
           <div className="hero-content-flex" style={{ alignItems: 'center' }}>
             <div className="hero-art-wrapper" style={{ width: '64px', height: '64px', flexShrink: 0 }}>
-               <img
+               <ArtworkImage
                  src={getArtworkUrl(heroTrack, 256)}
                  alt={heroTrack.title}
                  className="hero-art-img"
-                 loading="lazy"
-                 decoding="async"
+                 eager
                  onError={(e) => { e.target.src = '/logo.png'; }}
                />
               <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
@@ -243,12 +241,10 @@ export default function MobileHomeView() {
               onClick={() => playTrack(track, madeForYouList)}
             >
               <div className="media-card-art-box">
-                <img
+                <ArtworkImage
                   src={getArtworkUrl(track, 256)}
                   alt={track.title}
                   className="media-card-art"
-                  loading="lazy"
-                  decoding="async"
                   onError={(e) => { e.target.src = '/logo.png'; }}
                 />
                 <div className="media-card-play-hover">
@@ -281,12 +277,10 @@ export default function MobileHomeView() {
               >
                 <div className="artist-avatar-ring">
                   {art.artist_image_path ? (
-                     <img
+                     <ArtworkImage
                        src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
                        alt={art.artist}
                        className="artist-avatar-img"
-                       loading="lazy"
-                       decoding="async"
                        onError={(e) => { e.target.style.display = 'none'; }}
                      />
                   ) : (
@@ -388,12 +382,10 @@ export default function MobileHomeView() {
                   onClick={() => playTrack(track, quickPickTracks)}
                 >
                   <div className="row-main-info">
-                     <img
+                     <ArtworkImage
                        src={getArtworkUrl(track, 256)}
                        alt={track.title}
                        className="row-art"
-                       loading="lazy"
-                       decoding="async"
                        onError={(e) => { e.target.src = '/logo.png'; }}
                      />
                     <div className="row-text">
