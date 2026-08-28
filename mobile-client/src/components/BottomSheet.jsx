@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function BottomSheet({
   onClose,
@@ -58,7 +59,7 @@ export default function BottomSheet({
 
   const overlayOpacity = Math.max(0, 1 - dragY / 300);
 
-  return (
+  return createPortal(
     <div
       className="mobile-modal-overlay"
       onClick={onClose}
@@ -98,6 +99,7 @@ export default function BottomSheet({
         />
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
