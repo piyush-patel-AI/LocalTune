@@ -3,10 +3,30 @@ import { apiUrl } from '../config';
 
 const AuthContext = createContext();
 
+const REMEMBERED_KEY = 'localTune_rememberedAccounts';
+
+function loadRememberedAccounts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REMEMBERED_KEY));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [rememberedAccounts, setRememberedAccounts] = useState(loadRememberedAccounts);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(REMEMBERED_KEY, JSON.stringify(rememberedAccounts));
+    } catch {
+      // ignore storage failures (e.g. private mode)
+    }
+  }, [rememberedAccounts]);
 
   const checkAuthStatus = async () => {
     try {
@@ -28,6 +48,24 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
+  const rememberAccount = (account) => {
+    if (!account || !account.username) return;
+    setRememberedAccounts((prev) => {
+      const next = prev.filter((a) => a.username !== account.username);
+      next.unshift({
+        username: account.username,
+        displayName: account.displayName || account.username,
+        avatarUrl: account.avatarUrl || null
+      });
+      return next.slice(0, 50);
+    });
+  };
+
+  const forgetAccount = (username) => {
+    if (!username) return;
+    setRememberedAccounts((prev) => prev.filter((a) => a.username !== username));
+  };
+
   const login = async (username, password) => {
     setError(null);
     try {
@@ -44,6 +82,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       setUser(data.user);
+      rememberAccount(data.user);
       return data.user;
     } catch (err) {
       setError(err.message);
@@ -67,6 +106,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       setUser(data.user);
+      rememberAccount(data.user);
       return data.user;
     } catch (err) {
       setError(err.message);
@@ -75,11 +115,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    const currentUser = user;
     try {
       await fetch(apiUrl('/api/logout'), { method: 'POST', credentials: 'include' });
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
+      if (currentUser && currentUser.username) forgetAccount(currentUser.username);
       setUser(null);
     }
   };
@@ -110,7 +152,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, register, logout, uploadAvatar, refreshAuth: checkAuthStatus }}>
+    <AuthContext.Provider value={{ user, loading, error, login, register, logout, uploadAvatar, refreshAuth: checkAuthStatus, rememberedAccounts, rememberAccount, forgetAccount }}>
       {children}
     </AuthContext.Provider>
   );

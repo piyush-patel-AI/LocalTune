@@ -1,35 +1,53 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import logo from '../../../Assets/logo.png';
 import { useAuth } from '../context/AuthContext';
-import { apiUrl } from '../config';
+import { IconChevronRight } from './Icons';
+
+function AccountAvatar({ acc }) {
+  const [failed, setFailed] = useState(false);
+  if (!acc.avatarUrl || failed) {
+    return (acc.displayName || acc.username).charAt(0).toUpperCase();
+  }
+  return <img src={acc.avatarUrl} alt={acc.displayName} onError={() => setFailed(true)} />;
+}
 
 export default function MobileLoginView() {
-  const { login, register } = useAuth();
-  const [isRegister, setIsRegister] = useState(false);
+  const { login, register, rememberedAccounts } = useAuth();
+  const remembered = rememberedAccounts;
+
+  const [view, setView] = useState(() => (remembered.length > 0 ? 'picker' : 'signin'));
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [errMsg, setErrMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [publicUsers, setPublicUsers] = useState([]);
+
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+  const [focusTarget, setFocusTarget] = useState(remembered.length > 0 ? null : 'username');
 
   useEffect(() => {
-    fetch(apiUrl('/api/users/public'))
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.users) {
-          setPublicUsers(data.users);
-          if (data.users.length > 0 && !username) {
-            setUsername(data.users[0].username);
-          }
-        }
-      })
-      .catch((err) => console.error('Failed to fetch public users:', err));
-  }, []);
+    if (!focusTarget) return;
+    const el = focusTarget === 'username' ? usernameRef.current : passwordRef.current;
+    if (el) el.focus();
+    setFocusTarget(null);
+  }, [focusTarget, view]);
 
-  const selectedUser = publicUsers.find(
-    (u) => u.username.toLowerCase() === username.trim().toLowerCase()
-  );
+  const selectAccount = (acc) => {
+    setUsername(acc.username);
+    setPassword('');
+    setErrMsg('');
+    setView('signin');
+    setFocusTarget('password');
+  };
+
+  const useAnother = () => {
+    setUsername('');
+    setPassword('');
+    setErrMsg('');
+    setView('signin');
+    setFocusTarget('username');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,282 +55,263 @@ export default function MobileLoginView() {
     setLoading(true);
 
     try {
-      if (isRegister) {
+      if (view === 'register') {
         await register(username, password, displayName);
       } else {
         await login(username, password);
       }
     } catch (err) {
-      setErrMsg(err.message || (isRegister ? 'Registration failed' : 'Invalid username or password'));
+      setErrMsg(err.message || (view === 'register' ? 'Registration failed' : 'Invalid username or password'));
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleMode = (registerMode) => {
-    setIsRegister(registerMode);
-    setErrMsg('');
+  const isRegister = view === 'register';
+
+  const inputStyle = {
+    width: '100%',
+    background: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid var(--glass-border-hover)',
+    borderRadius: 'var(--radius-md)',
+    padding: '0.8rem 0.9rem',
+    color: '#ffffff',
+    fontSize: '0.95rem',
+    outline: 'none',
+    boxSizing: 'border-box'
   };
 
-  const activeAvatarUrl = selectedUser?.avatarUrl;
+  const labelStyle = {
+    display: 'block',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+    marginBottom: '0.4rem'
+  };
 
   return (
     <div
       style={{
         minHeight: '100vh',
         width: '100%',
-        background: 'linear-gradient(145deg, #07090e 0%, #0f131d 50%, #151b29 100%)',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         padding: '1.5rem',
+        overflowY: 'auto',
+        boxSizing: 'border-box',
+        background: 'linear-gradient(155deg, #06080d 0%, #0c1018 55%, #121826 100%)',
         color: '#ffffff'
       }}
     >
       <div
         style={{
           width: '100%',
-          maxWidth: '380px',
-          background: 'rgba(255, 255, 255, 0.03)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid var(--glass-border-hover)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '1.75rem 1.25rem',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)'
+          maxWidth: '360px',
+          margin: 'auto',
+          background: 'rgba(255, 255, 255, 0.035)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '20px',
+          padding: '2rem 1.5rem',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.55)',
+          boxSizing: 'border-box'
         }}
       >
-        {/* Brand Header & Selected User Avatar */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1.25rem' }}>
-          {activeAvatarUrl ? (
-            <img
-              src={activeAvatarUrl}
-              alt={selectedUser.displayName || selectedUser.username}
-              style={{
-                width: '72px',
-                height: '72px',
-                objectFit: 'cover',
-                borderRadius: '50%',
-                marginBottom: '0.75rem',
-                border: '3px solid var(--accent-primary)',
-                boxShadow: '0 4px 20px rgba(245,158,11,0.4)'
-              }}
-            />
-          ) : (
-            <img
-              src={logo}
-              alt="Octave Logo"
-              style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '14px', marginBottom: '0.75rem', filter: 'drop-shadow(0 4px 12px rgba(245,158,11,0.3))' }}
-            />
-          )}
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {selectedUser && !isRegister ? selectedUser.displayName : 'Octave'}
-          </h1>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-            {isRegister ? 'Create your LAN music profile' : 'Sign in to access your music'}
-          </p>
-        </div>
-
-        {/* Account Selection Pills */}
-        {!isRegister && publicUsers.length > 0 && (
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem', textAlign: 'center' }}>
-              Select Account
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {publicUsers.map((u) => {
-                const isSelected = u.username.toLowerCase() === username.trim().toLowerCase();
-                const init = (u.displayName || u.username).charAt(0).toUpperCase();
-                return (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => setUsername(u.username)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      background: isSelected ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                      border: isSelected ? '1px solid var(--accent-primary)' : '1px solid var(--glass-border)',
-                      borderRadius: 'var(--radius-pill)',
-                      padding: '0.3rem 0.65rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      color: isSelected ? 'var(--accent-primary)' : '#ffffff'
-                    }}
-                  >
-                    <div style={{ width: '22px', height: '22px', borderRadius: '50%', overflow: 'hidden', background: 'var(--accent-primary)', color: '#000', fontWeight: 800, fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {u.avatarUrl ? (
-                        <img src={u.avatarUrl} alt={u.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        init
-                      )}
-                    </div>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{u.displayName}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Auth Mode Toggle Pills */}
+        {/* Brand Header */}
         <div
           style={{
             display: 'flex',
-            background: 'rgba(0, 0, 0, 0.3)',
-            padding: '4px',
-            borderRadius: 'var(--radius-pill)',
-            marginBottom: '1.25rem',
-            border: '1px solid var(--glass-border)'
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            marginBottom: view === 'picker' ? '1.5rem' : '1.75rem'
           }}
         >
-          <button
-            type="button"
-            onClick={() => toggleMode(false)}
+          <img
+            src={logo}
+            alt="Octave"
             style={{
-              flex: 1,
-              padding: '0.45rem',
-              borderRadius: 'var(--radius-pill)',
-              border: 'none',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: !isRegister ? 'var(--accent-primary)' : 'transparent',
-              color: !isRegister ? '#000000' : 'var(--text-secondary)',
-              transition: 'all 0.2s ease'
+              width: '54px',
+              height: '54px',
+              objectFit: 'contain',
+              borderRadius: '14px',
+              marginBottom: '14px',
+              filter: 'drop-shadow(0 6px 16px rgba(245, 158, 11, 0.3))'
+            }}
+          />
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '1.55rem',
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+              margin: 0,
+              color: '#ffffff'
             }}
           >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => toggleMode(true)}
-            style={{
-              flex: 1,
-              padding: '0.45rem',
-              borderRadius: 'var(--radius-pill)',
-              border: 'none',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: isRegister ? 'var(--accent-primary)' : 'transparent',
-              color: isRegister ? '#000000' : 'var(--text-secondary)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            Create Account
-          </button>
+            {view === 'picker' ? 'Welcome back' : isRegister ? 'Create your account' : 'Sign in'}
+          </h1>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0' }}>
+            {view === 'picker'
+              ? 'Choose an account to continue'
+              : isRegister
+              ? 'Join Octave to listen on your network'
+              : 'Sign in to continue listening'}
+          </p>
         </div>
 
-        {/* Error Alert */}
-        {errMsg && (
-          <div
-            style={{
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
-              color: '#fca5a5',
-              padding: '0.65rem 0.85rem',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.82rem',
-              marginBottom: '1.25rem',
-              textAlign: 'center'
-            }}
-          >
-            {errMsg}
-          </div>
+        {/* Remembered account switcher */}
+        {view === 'picker' && (
+          <section>
+            <div className="auth-section-label">
+              {remembered.length > 1 ? 'Your accounts' : 'Your account'}
+            </div>
+            <div className="account-list">
+              {remembered.map((acc) => (
+                <button
+                  type="button"
+                  key={acc.username}
+                  className="account-row"
+                  onClick={() => selectAccount(acc)}
+                >
+                  <span className="account-row-avatar">
+                    <AccountAvatar acc={acc} />
+                  </span>
+                    <span className="account-row-meta">
+                      <span className="account-row-name">{acc.displayName || acc.username}</span>
+                      <span className="account-row-handle">@{acc.username}</span>
+                    </span>
+                    <IconChevronRight size={18} className="account-row-chevron" />
+                  </button>
+              ))}
+            </div>
+            <button type="button" className="ghost-btn" onClick={useAnother}>
+              Use another account
+            </button>
+          </section>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-              Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username"
-              required
-              autoFocus
+        {/* Credential form */}
+        {view !== 'picker' && (
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Mode toggle */}
+            <div
               style={{
-                width: '100%',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid var(--glass-border-hover)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.75rem 0.9rem',
-                color: '#ffffff',
-                fontSize: '0.9rem',
-                outline: 'none'
+                display: 'flex',
+                background: 'rgba(0, 0, 0, 0.3)',
+                padding: '4px',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid var(--glass-border)'
               }}
-            />
-          </div>
-
-          {isRegister && (
-            <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                Display Name <span style={{ opacity: 0.6, fontWeight: 400 }}>(Optional)</span>
-              </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Piyush"
+            >
+              <button
+                type="button"
+                onClick={() => setView('signin')}
                 style={{
-                  width: '100%',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid var(--glass-border-hover)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '0.75rem 0.9rem',
-                  color: '#ffffff',
-                  fontSize: '0.9rem',
-                  outline: 'none'
+                  flex: 1,
+                  padding: '0.45rem',
+                  border: 'none',
+                  borderRadius: 'var(--radius-pill)',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: !isRegister ? 'var(--accent-primary)' : 'transparent',
+                  color: !isRegister ? '#000000' : 'var(--text-secondary)'
                 }}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('register')}
+                style={{
+                  flex: 1,
+                  padding: '0.45rem',
+                  border: 'none',
+                  borderRadius: 'var(--radius-pill)',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: isRegister ? 'var(--accent-primary)' : 'transparent',
+                  color: isRegister ? '#000000' : 'var(--text-secondary)'
+                }}
+              >
+                Create Account
+              </button>
+            </div>
+
+            {errMsg && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  color: '#fca5a5',
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.82rem',
+                  textAlign: 'center'
+                }}
+              >
+                {errMsg}
+              </div>
+            )}
+
+            <div>
+              <label style={labelStyle}>Username</label>
+              <input
+                ref={usernameRef}
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username"
+                required
+                style={inputStyle}
               />
             </div>
-          )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
+            {isRegister && (
+              <div>
+                <label style={labelStyle}>
+                  Display Name <span style={{ opacity: 0.6, fontWeight: 400 }}>(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="e.g. Piyush"
+                  style={inputStyle}
+                />
+              </div>
+            )}
+
+            <div>
+              <label style={labelStyle}>Password</label>
+              <input
+                ref={passwordRef}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary"
               style={{
                 width: '100%',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid var(--glass-border-hover)',
-                borderRadius: 'var(--radius-md)',
-                padding: '0.75rem 0.9rem',
-                color: '#ffffff',
-                fontSize: '0.9rem',
-                outline: 'none'
+                padding: '0.8rem',
+                fontSize: '0.92rem',
+                fontWeight: 800,
+                marginTop: '0.25rem'
               }}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary"
-            style={{
-              width: '100%',
-              padding: '0.8rem',
-              fontSize: '0.9rem',
-              fontWeight: 800,
-              marginTop: '0.5rem',
-              borderRadius: 'var(--radius-pill)',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {loading ? (isRegister ? 'Creating Account...' : 'Signing in...') : (isRegister ? 'Create Account' : 'Sign In')}
-          </button>
-        </form>
+            >
+              {loading ? (isRegister ? 'Creating...' : 'Signing in...') : isRegister ? 'Create Account' : 'Sign In'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
