@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import TrackActionSheet from '../components/TrackActionSheet';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
@@ -16,6 +16,42 @@ import { apiUrl } from '../config';
 
 const CATEGORIES = ['All', 'Chill', 'Energy', 'Focus', 'Workout', 'Late Night', 'Acoustic'];
 
+// Memoized so the Speed Dial tiles do not re-render during a swipe when only
+// the active page indicator (activePage) changes. Props are stable while the
+// user scrolls: track data is unchanged and currentTrackId only changes on
+// playback events, not on scroll.
+const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, onActivate }) {
+  return (
+    <div className="speed-dial-page">
+      <div className="speed-dial-asymmetric-grid">
+        {pageTracks.map((track, trackIdx) => {
+          const isCurrent = currentTrackId && currentTrackId === track.id;
+          const isHeroTile = trackIdx === 0;
+          return (
+            <div
+              key={track.id}
+              className={`speed-dial-tile ${isHeroTile ? 'large' : ''} ${isCurrent ? 'active' : ''}`}
+              onClick={() => onActivate(track, isCurrent)}
+            >
+              <img
+                src={getArtworkUrl(track, 256)}
+                alt={track.title}
+                className="tile-art"
+                loading="lazy"
+                decoding="async"
+                onError={(e) => { e.target.src = '/logo.png'; }}
+              />
+              <div className="tile-gradient-overlay">
+                <span className="tile-overlay-text">{track.title}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export default function MobileHomeView() {
   const { currentTrack, isPlaying, playTrack, togglePlay, recentlyPlayed, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
@@ -29,6 +65,7 @@ export default function MobileHomeView() {
   const [selectedTrackForAction, setSelectedTrackForAction] = useState(null);
 
   const carouselRef = useRef(null);
+  const scrollTickRef = useRef(false);
 
   useEffect(() => {
     fetchHomeData();
@@ -102,14 +139,30 @@ export default function MobileHomeView() {
     setSpeedDialTracks(shuffled.slice(0, 18));
   };
 
-  const handleScroll = () => {
-    if (!carouselRef.current) return;
-    const { scrollLeft, clientWidth } = carouselRef.current;
-    if (clientWidth > 0) {
-      const pageIndex = Math.round(scrollLeft / clientWidth);
-      setActivePage(pageIndex);
+  // Throttle scroll → state update to one per animation frame so React state
+  // is not updated on every scroll event. This also avoids re-rendering the
+  // whole view mid-swipe; only the active-page indicator changes, and the
+  // Speed Dial pages are memoized so they don't re-render.
+  const handleScroll = useCallback(() => {
+    if (!carouselRef.current || scrollTickRef.current) return;
+    scrollTickRef.current = true;
+    requestAnimationFrame(() => {
+      scrollTickRef.current = false;
+      const { scrollLeft, clientWidth } = carouselRef.current;
+      if (clientWidth > 0) {
+        const pageIndex = Math.round(scrollLeft / clientWidth);
+        setActivePage((prev) => (prev === pageIndex ? prev : pageIndex));
+      }
+    });
+  }, []);
+
+  const handleTileActivate = useCallback((track, isCurrent) => {
+    if (isCurrent) {
+      togglePlay();
+    } else {
+      playTrack(track, speedDialTracks);
     }
-  };
+  }, [togglePlay, playTrack, speedDialTracks]);
 
   const heroTrack = currentTrack || (recommendedTracks.length > 0 ? recommendedTracks[0] : allTracks[0]);
   const madeForYouList = recommendedTracks.slice(0, 10);
@@ -150,12 +203,14 @@ export default function MobileHomeView() {
 
           <div className="hero-content-flex" style={{ alignItems: 'center' }}>
             <div className="hero-art-wrapper" style={{ width: '64px', height: '64px', flexShrink: 0 }}>
-              <img
-                src={getArtworkUrl(heroTrack, 256)}
-                alt={heroTrack.title}
-                className="hero-art-img"
-                onError={(e) => { e.target.src = '/logo.png'; }}
-              />
+               <img
+                 src={getArtworkUrl(heroTrack, 256)}
+                 alt={heroTrack.title}
+                 className="hero-art-img"
+                 loading="lazy"
+                 decoding="async"
+                 onError={(e) => { e.target.src = '/logo.png'; }}
+               />
               <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
                 {currentTrack && currentTrack.id === heroTrack.id && isPlaying ? (
                   <IconPause size={14} color="#000000" fill="#000000" />
@@ -192,6 +247,8 @@ export default function MobileHomeView() {
                   src={getArtworkUrl(track, 256)}
                   alt={track.title}
                   className="media-card-art"
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => { e.target.src = '/logo.png'; }}
                 />
                 <div className="media-card-play-hover">
@@ -224,12 +281,14 @@ export default function MobileHomeView() {
               >
                 <div className="artist-avatar-ring">
                   {art.artist_image_path ? (
-                    <img
-                      src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
-                      alt={art.artist}
-                      className="artist-avatar-img"
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
+                     <img
+                       src={apiUrl(`/api/tracks/artist-image/${encodeURIComponent(art.artist)}`)}
+                       alt={art.artist}
+                       className="artist-avatar-img"
+                       loading="lazy"
+                       decoding="async"
+                       onError={(e) => { e.target.style.display = 'none'; }}
+                     />
                   ) : (
                     <div className="artist-avatar-fallback">
                       {art.artist ? art.artist.charAt(0).toUpperCase() : 'A'}
@@ -268,37 +327,12 @@ export default function MobileHomeView() {
           <>
             <div className="speed-dial-carousel-container" ref={carouselRef} onScroll={handleScroll}>
               {pages.map((pageTracks, pageIdx) => (
-                <div key={pageIdx} className="speed-dial-page">
-                  <div className="speed-dial-asymmetric-grid">
-                    {pageTracks.map((track, trackIdx) => {
-                      const isCurrent = currentTrack && currentTrack.id === track.id;
-                      const isHeroTile = trackIdx === 0;
-                      return (
-                        <div
-                          key={track.id}
-                          className={`speed-dial-tile ${isHeroTile ? 'large' : ''} ${isCurrent ? 'active' : ''}`}
-                          onClick={() => {
-                            if (isCurrent) {
-                              togglePlay();
-                            } else {
-                              playTrack(track, speedDialTracks);
-                            }
-                          }}
-                        >
-                          <img
-                            src={getArtworkUrl(track, 256)}
-                            alt={track.title}
-                            className="tile-art"
-                            onError={(e) => { e.target.src = '/logo.png'; }}
-                          />
-                          <div className="tile-gradient-overlay">
-                            <span className="tile-overlay-text">{track.title}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                <SpeedDialPage
+                  key={pageIdx}
+                  pageTracks={pageTracks}
+                  currentTrackId={currentTrack?.id}
+                  onActivate={handleTileActivate}
+                />
               ))}
             </div>
 
@@ -354,12 +388,14 @@ export default function MobileHomeView() {
                   onClick={() => playTrack(track, quickPickTracks)}
                 >
                   <div className="row-main-info">
-                    <img
-                      src={getArtworkUrl(track, 256)}
-                      alt={track.title}
-                      className="row-art"
-                      onError={(e) => { e.target.src = '/logo.png'; }}
-                    />
+                     <img
+                       src={getArtworkUrl(track, 256)}
+                       alt={track.title}
+                       className="row-art"
+                       loading="lazy"
+                       decoding="async"
+                       onError={(e) => { e.target.src = '/logo.png'; }}
+                     />
                     <div className="row-text">
                       <span className="row-title">{track.title}</span>
                       <span className="row-artist">{track.artist}</span>
