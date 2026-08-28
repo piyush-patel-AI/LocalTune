@@ -3,10 +3,10 @@ import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import AddToPlaylistModal from './AddToPlaylistModal';
 import BottomSheet from './BottomSheet';
-import { IconPlay, IconHeart, IconPlus, IconMusic } from './Icons';
+import { IconPlay, IconHeart, IconPlus, IconMusic, IconQueue } from './Icons';
 
 export default function TrackActionSheet({ track, onClose }) {
-  const { playTrack, toggleFavorite, favoritesMap } = usePlayer();
+  const { playTrack, toggleFavorite, addToQueue, favoritesMap } = usePlayer();
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
 
   if (!track) return null;
@@ -64,6 +64,17 @@ export default function TrackActionSheet({ track, onClose }) {
           >
             <IconPlus size={20} color="#ffffff" />
             <span>Add to Playlist</span>
+          </button>
+
+          <button
+            className="action-sheet-btn"
+            onClick={() => {
+              addToQueue(track);
+              onClose();
+            }}
+          >
+            <IconQueue size={20} color="var(--accent-primary)" />
+            <span>Add to Queue</span>
           </button>
         </div>
       </BottomSheet>

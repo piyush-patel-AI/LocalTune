@@ -46,7 +46,6 @@ export default function NowPlayingModal() {
     toggleFavorite,
     toggleShuffle,
     toggleRepeat,
-    addToQueue,
     openQueue
   } = usePlayer();
 
@@ -66,12 +65,6 @@ export default function NowPlayingModal() {
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 2500);
-  };
-
-  const handleAddToQueue = () => {
-    addToQueue(currentTrack);
-    setIsActionSheetOpen(false);
-    showToast(`Added "${currentTrack.title}" to Queue`);
   };
 
   const handleStart = (e) => {
@@ -329,17 +322,27 @@ export default function NowPlayingModal() {
               <button
                 className="action-sheet-btn"
                 onClick={() => {
+                  toggleFavorite(currentTrack.id);
+                  setIsActionSheetOpen(false);
+                }}
+              >
+                <IconHeart
+                  size={20}
+                  color={isFav ? 'var(--accent-primary)' : '#ffffff'}
+                  fill={isFav ? 'var(--accent-primary)' : 'none'}
+                />
+                <span>{isFav ? 'Remove from Liked Songs' : 'Save to Liked Songs'}</span>
+              </button>
+
+              <button
+                className="action-sheet-btn"
+                onClick={() => {
                   setIsActionSheetOpen(false);
                   setIsAddToPlaylistOpen(true);
                 }}
               >
                 <IconListPlus size={20} color="var(--accent-primary)" />
-                <span>1. Add to Playlist</span>
-              </button>
-
-              <button className="action-sheet-btn" onClick={handleAddToQueue}>
-                <IconPlus size={20} color="var(--accent-primary)" />
-                <span>2. Add to Queue</span>
+                <span>Add to Playlist</span>
               </button>
             </div>
           </div>
