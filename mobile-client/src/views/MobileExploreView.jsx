@@ -240,7 +240,7 @@ export default function MobileExploreView() {
 
       {/* Hero Header Banner */}
       {!searchQuery && (
-        <div className="explore-banner" style={{ margin: '0.5rem 1.25rem 1.25rem 1.25rem' }}>
+        <div className="explore-banner" style={{ margin: '0.75rem 1.25rem 1.5rem 1.25rem' }}>
           <div className="banner-icon-chip">
             <IconSparkles size={16} color="var(--accent-primary)" />
             <span>MUSIC DISCOVERY HUB</span>
@@ -252,10 +252,10 @@ export default function MobileExploreView() {
 
       {/* Featured Spotlight Hero Carousel */}
       {!searchQuery && (activeFilter === 'all' || activeFilter === 'spotlight') && (
-        <section className="section-container" style={{ marginBottom: '1.5rem' }}>
+        <section className="section-container">
           <div className="section-title-row">
             <h2 className="section-title">Featured Spotlight</h2>
-            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Swipe to discover</span>
+            <span className="section-helper">Swipe to discover</span>
           </div>
 
           <div className="spotlight-carousel">
@@ -307,7 +307,7 @@ export default function MobileExploreView() {
                 </span>
               )}
             </div>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Tap to play radio</span>
+            <span className="section-helper">Tap to play radio</span>
           </div>
 
           <div className="bento-genre-grid">
@@ -358,7 +358,7 @@ export default function MobileExploreView() {
 
       {/* Most Recommended Section */}
       {!searchQuery && (activeFilter === 'all' || activeFilter === 'recommended') && (
-        <section className="section-container" style={{ marginTop: '1.5rem' }}>
+        <section className="section-container">
           <div className="section-title-row">
             <div>
               <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -440,12 +440,12 @@ export default function MobileExploreView() {
 
       {/* Full Song Catalog List / Live Search Results */}
       {(activeFilter === 'all' || activeFilter === 'catalog' || searchQuery) && (
-        <section className="section-container" style={{ marginTop: '1.5rem' }}>
+        <section className="section-container">
           <div className="section-title-row">
             <h2 className="section-title">
               {searchQuery ? `Search Results ("${searchQuery}")` : 'Full Song Catalog'}
             </h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            <span className="section-helper">
               {filteredCatalog.length} {filteredCatalog.length === 1 ? 'track' : 'tracks'}
             </span>
           </div>

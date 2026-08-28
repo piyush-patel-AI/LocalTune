@@ -2258,6 +2258,51 @@ body {
   font-weight: 400;
 }
 
+/* ==========================================================================
+   EXPLORE & LIBRARY TYPOGRAPHY + SPACING POLISH
+   Scoped under .mobile-explore / .mobile-library so Home/Settings are untouched.
+   Rhythm tokens: 8 / 12 / 16 / 24 / 32px (0.5 / 0.75 / 1 / 1.5 / 2rem)
+   ========================================================================== */
+.mobile-explore .explore-title,
+.mobile-library .explore-title {
+  margin-bottom: 0.4rem;
+}
+
+.mobile-explore .explore-subtitle,
+.mobile-library .explore-subtitle {
+  line-height: 1.45;
+}
+
+.mobile-explore .banner-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mobile-explore .banner-icon-chip svg {
+  width: 14px;
+  height: 14px;
+}
+
+.section-helper {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mobile-explore .section-title-row,
+.mobile-library .section-title-row {
+  margin-bottom: 1rem;
+}
+
 .row-title {
   font-family: var(--font-sans);
   font-size: 0.88rem;

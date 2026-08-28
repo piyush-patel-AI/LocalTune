@@ -501,7 +501,7 @@ export default function MobileLibraryView() {
   return (
     <div className="mobile-library animate-fade-in" style={{ padding: '0 0 2.5rem 0' }}>
       {/* Header Row with View Mode Toggle & Create Playlist Action */}
-      <div style={{ padding: '0.75rem 1.25rem 0.5rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '0.75rem 1.25rem 0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 className="explore-title">Your Library</h1>
           <p className="explore-subtitle">Playlists, saved tracks, albums & artists</p>
@@ -572,10 +572,10 @@ export default function MobileLibraryView() {
       </div>
 
       {/* Pinned & Recents Row */}
-      <section className="section-container" style={{ marginBottom: '1.25rem' }}>
+      <section className="section-container" style={{ marginTop: '0.5rem' }}>
         <div className="section-title-row">
           <h2 className="section-title">Pinned & Quick Access</h2>
-          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Top favorites</span>
+          <span className="section-helper">Top favorites</span>
         </div>
 
         <div className="pinned-recents-row">
@@ -614,7 +614,7 @@ export default function MobileLibraryView() {
 
       {/* Liked Songs Hero / Track List */}
       {activeTab === 'liked' && (
-        <section className="section-container" style={{ marginBottom: '1.25rem' }}>
+        <section className="section-container">
           <div
             className="liked-songs-hero-banner"
             onClick={() => {
@@ -671,10 +671,10 @@ export default function MobileLibraryView() {
 
       {/* Playlists Section */}
       {(activeTab === 'all' || activeTab === 'playlists') && (
-        <section className="section-container" style={{ marginBottom: '1.25rem' }}>
-          <div className="section-title-row">
-            <h2 className="section-title">Playlists</h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{playlists.length} playlists</span>
+      <section className="section-container">
+        <div className="section-title-row">
+          <h2 className="section-title">Playlists</h2>
+          <span className="section-helper">{playlists.length} playlists</span>
           </div>
 
           {playlists.length > 0 ? (
@@ -720,10 +720,10 @@ export default function MobileLibraryView() {
 
       {/* Albums Section */}
       {(activeTab === 'all' || activeTab === 'albums') && albums.length > 0 && (
-        <section className="section-container" style={{ marginBottom: '1.25rem' }}>
-          <div className="section-title-row">
-            <h2 className="section-title">Albums</h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{albums.length} {albums.length === 1 ? 'album' : 'albums'}</span>
+      <section className="section-container">
+        <div className="section-title-row">
+          <h2 className="section-title">Albums</h2>
+          <span className="section-helper">{albums.length} {albums.length === 1 ? 'album' : 'albums'}</span>
           </div>
 
           {viewMode === 'grid' ? (
@@ -813,7 +813,7 @@ export default function MobileLibraryView() {
         <section className="section-container">
           <div className="section-title-row">
             <h2 className="section-title">Artists</h2>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{artists.length} artists</span>
+            <span className="section-helper">{artists.length} artists</span>
           </div>
 
           {viewMode === 'grid' ? (
