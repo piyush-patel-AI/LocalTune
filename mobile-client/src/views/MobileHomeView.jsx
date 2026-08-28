@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import TrackActionSheet from '../components/TrackActionSheet';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
@@ -37,7 +37,6 @@ const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, 
                 src={getArtworkUrl(track, 256)}
                 alt={track.title}
                 className="tile-art"
-                loading="lazy"
                 decoding="async"
                 onError={(e) => { e.target.src = '/logo.png'; }}
               />
@@ -168,17 +167,24 @@ export default function MobileHomeView() {
   const madeForYouList = recommendedTracks.slice(0, 10);
   const topArtists = artists.slice(0, 8);
 
-  // Asymmetric speed dial pagination (6 tracks per page: 1 Large + 5 Medium = 6 items filling 3x3 grid completely including corner piece)
-  const pages = [];
-  for (let i = 0; i < speedDialTracks.length; i += 6) {
-    let pageItems = speedDialTracks.slice(i, i + 6);
-    if (pageItems.length > 0 && pageItems.length < 6 && speedDialTracks.length >= 6) {
-      const extraNeeded = 6 - pageItems.length;
-      const padTracks = speedDialTracks.filter((t) => !pageItems.includes(t)).slice(0, extraNeeded);
-      pageItems = [...pageItems, ...padTracks];
+  // Asymmetric speed dial pagination (6 tracks per page: 1 Large + 5 Medium = 6 items filling 3x3 grid completely including corner piece).
+  // Memoized on speedDialTracks so the page array references stay stable across
+  // re-renders. This lets the memoized SpeedDialPage bail out of re-rendering its
+  // tiles when only activePage changes mid-swipe (a page boundary no longer
+  // triggers a full tile re-render).
+  const pages = useMemo(() => {
+    const result = [];
+    for (let i = 0; i < speedDialTracks.length; i += 6) {
+      let pageItems = speedDialTracks.slice(i, i + 6);
+      if (pageItems.length > 0 && pageItems.length < 6 && speedDialTracks.length >= 6) {
+        const extraNeeded = 6 - pageItems.length;
+        const padTracks = speedDialTracks.filter((t) => !pageItems.includes(t)).slice(0, extraNeeded);
+        pageItems = [...pageItems, ...padTracks];
+      }
+      result.push(pageItems);
     }
-    pages.push(pageItems);
-  }
+    return result;
+  }, [speedDialTracks]);
 
   return (
     <div className="mobile-home-view animate-fade-in">
