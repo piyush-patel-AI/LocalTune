@@ -1,24 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import {
-  IconRefresh,
-  IconUser,
-  IconMusic,
-  IconCheck,
-  IconDisc,
-  IconSparkles,
-  IconFlame,
-  IconHeart,
-  IconPlay
-} from '../components/Icons';
+import { useState, useRef } from 'react';
+import { IconCheck } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
 import { usePlayer } from '../context/PlayerContext';
-import { apiUrl } from '../config';
-
-const QUALITY_OPTIONS = [
-  { label: 'Normal (128 kbps)', value: 'Normal' },
-  { label: 'High (256 kbps)', value: 'High' },
-  { label: 'Very High (Lossless / 320 kbps)', value: 'Very High' }
-];
 
 const REC_MODES = [
   { name: 'Default', desc: 'Balanced personalized recommendations' },
@@ -43,42 +26,16 @@ export default function MobileSettingsView() {
     recommendationMode,
     setRecommendationMode,
     discoveryMode,
-    setDiscoveryMode,
-    audioQuality,
-    setAudioQuality
+    setDiscoveryMode
   } = usePlayer();
 
-  const [scanning, setScanning] = useState(false);
-  const [scanningMeta, setScanningMeta] = useState(false);
-  const [scanMessage, setScanMessage] = useState('');
-  const [stats, setStats] = useState({ totalTracks: 0, totalArtists: 0, totalAlbums: 0 });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3000);
-  };
-
-  const fetchStats = async () => {
-    try {
-      const res = await fetch(apiUrl('/api/stats'), { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setStats({
-          totalTracks: data.totalTracks || 0,
-          totalArtists: data.totalArtists || 0,
-          totalAlbums: data.totalAlbums || 0
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching stats:', err);
-    }
   };
 
   const handleAvatarFileSelect = async (e) => {
@@ -95,63 +52,7 @@ export default function MobileSettingsView() {
     }
   };
 
-  const handleRescan = async () => {
-    try {
-      setScanning(true);
-      setScanMessage('Scanning local music library directory...');
-      const res = await fetch(apiUrl('/api/scan'), {
-        method: 'POST',
-        credentials: 'include'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setScanMessage(`Scan complete! ${data.added || 0} new tracks indexed.`);
-        fetchStats();
-      } else {
-        setScanMessage('Scan completed.');
-      }
-    } catch (err) {
-      setScanMessage('Scan error occurred.');
-    } finally {
-      setTimeout(() => {
-        setScanning(false);
-        setScanMessage('');
-      }, 3500);
-    }
-  };
-
-  const handleRescanMetadata = async () => {
-    try {
-      setScanningMeta(true);
-      setScanMessage('Refreshing track metadata & artwork...');
-      const res = await fetch(apiUrl('/api/tracks/scan-missing-metadata'), {
-        method: 'POST',
-        credentials: 'include'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setScanMessage(`Metadata scan complete! Updated ${data.updatedCount || 0} tracks.`);
-        fetchStats();
-      } else {
-        setScanMessage('Metadata refresh done.');
-      }
-    } catch (err) {
-      setScanMessage('Metadata scan error.');
-    } finally {
-      setTimeout(() => {
-        setScanningMeta(false);
-        setScanMessage('');
-      }, 3500);
-    }
-  };
-
-  const handleResetRecCache = () => {
-    localStorage.removeItem('localTune_recentlyPlayed');
-    localStorage.removeItem('localTune_listeningHistory');
-    showToast('Recommendation listening history reset!');
-  };
-
-  const displayName = user ? (user.displayName || user.username) : 'LocalTune User';
+  const displayName = user ? (user.displayName || user.username) : 'Octave User';
   const usernameTag = user ? `@${user.username}` : '@user';
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -306,37 +207,6 @@ export default function MobileSettingsView() {
         </span>
 
         <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-          {/* Quality Selector */}
-          <div style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)' }}>
-            <div>
-              <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>Audio Streaming Quality</h3>
-              <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Sets streaming bitrate and audio fidelity</p>
-            </div>
-            <select
-              value={audioQuality}
-              onChange={(e) => {
-                setAudioQuality(e.target.value);
-                showToast(`Audio quality set to ${e.target.value}`);
-              }}
-              style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid var(--glass-border-hover)',
-                color: '#ffffff',
-                padding: '0.45rem 0.75rem',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                outline: 'none',
-                fontWeight: 600
-              }}
-            >
-              {QUALITY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value} style={{ background: '#0e121a' }}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Autoplay Similar Songs */}
           <div style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)' }}>
             <div>
@@ -488,96 +358,6 @@ export default function MobileSettingsView() {
         </div>
       </section>
 
-      {/* Library Rescan & Storage */}
-      <section className="section-container">
-        <span className="settings-section-label">
-          Library & Management
-        </span>
-
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', padding: '1.25rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', textAlign: 'center', marginBottom: '1.25rem' }}>
-            <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
-              <IconMusic size={18} color="var(--accent-primary)" />
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
-                {stats.totalTracks}
-              </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tracks</span>
-            </div>
-            <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
-              <IconUser size={18} color="var(--accent-primary)" />
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
-                {stats.totalArtists}
-              </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Artists</span>
-            </div>
-            <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '0.75rem 0.5rem', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem' }}>
-              <IconDisc size={18} color="var(--accent-primary)" />
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', fontWeight: 800, color: '#ffffff' }}>
-                {stats.totalAlbums}
-              </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Albums</span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            <button
-              className="btn-secondary"
-              onClick={handleRescan}
-              disabled={scanning}
-              style={{ width: '100%', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.88rem' }}
-            >
-              <IconRefresh size={16} color="#ffffff" className={scanning ? 'animate-spin' : ''} />
-              <span>{scanning ? 'Scanning Directory...' : 'Rescan Music Library'}</span>
-            </button>
-
-            <button
-              className="btn-secondary"
-              onClick={handleRescanMetadata}
-              disabled={scanningMeta}
-              style={{ width: '100%', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.88rem', background: 'rgba(255, 255, 255, 0.05)' }}
-            >
-              <IconSparkles size={16} color="var(--accent-primary)" className={scanningMeta ? 'animate-spin' : ''} />
-              <span>{scanningMeta ? 'Refreshing Tags...' : 'Refresh Track Metadata & Artwork'}</span>
-            </button>
-
-            <button
-              className="btn-secondary"
-              onClick={handleResetRecCache}
-              style={{ width: '100%', padding: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', background: 'transparent', border: '1px dashed var(--glass-border)' }}
-            >
-              <span>Reset Local Listening Cache</span>
-            </button>
-          </div>
-
-          {scanMessage && (
-            <p style={{ fontSize: '0.78rem', color: 'var(--accent-primary)', textAlign: 'center', marginTop: '0.75rem', fontWeight: 600 }}>
-              {scanMessage}
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* System Server Info */}
-      <section className="section-container">
-        <span className="settings-section-label">
-          Server System Info
-        </span>
-
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Backend Server Port</span>
-            <span style={{ color: '#ffffff', fontWeight: 700 }}>5000</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Mobile Client Port</span>
-            <span style={{ color: '#ffffff', fontWeight: 700 }}>5174</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>LocalTune Engine</span>
-            <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>v2.4.0 Spotify Experience</span>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
