@@ -1338,6 +1338,23 @@ body {
   box-shadow: 0 0 15px var(--accent-glow);
 }
 
+/* While a real horizontal scroll gesture is active, temporarily drop the
+   expensive per-frame paint effects (tile shadows + overlay gradient) and
+   promote the single scrolling container to its own compositor layer so the
+   movement is a translate-only operation. Everything is restored exactly at
+   rest via the removed .is-scrolling class. */
+.speed-dial-carousel-container.is-scrolling {
+  will-change: transform;
+}
+
+.speed-dial-carousel-container.is-scrolling .speed-dial-tile {
+  box-shadow: none;
+}
+
+.speed-dial-carousel-container.is-scrolling .tile-gradient-overlay {
+  opacity: 0.3;
+}
+
 .tile-art {
   width: 100% !important;
   height: 100% !important;

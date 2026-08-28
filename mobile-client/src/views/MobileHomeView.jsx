@@ -65,6 +65,8 @@ export default function MobileHomeView() {
 
   const carouselRef = useRef(null);
   const scrollTickRef = useRef(false);
+  const scrollEndTimerRef = useRef(null);
+  const [isScrolling, setIsScrolling] = useState(false);
 
   useEffect(() => {
     fetchHomeData();
@@ -73,6 +75,12 @@ export default function MobileHomeView() {
   useEffect(() => {
     filterAndOrganize(activeCategory);
   }, [recommendedTracks, allTracks, activeCategory]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+    };
+  }, []);
 
   const fetchHomeData = async () => {
     try {
@@ -142,6 +150,12 @@ export default function MobileHomeView() {
   // is not updated on every scroll event. This also avoids re-rendering the
   // whole view mid-swipe; only the active-page indicator changes, and the
   // Speed Dial pages are memoized so they don't re-render.
+  //
+  // isScrolling is toggled only inside the rAF (so it is also throttled to one
+  // state update per frame) and cleared by a short debounce once the gesture
+  // settles. It drives a temporary visual state that drops expensive nonessential
+  // paint effects (tile shadows / overlay gradient) while the carousel is moving,
+  // then restores the exact resting appearance.
   const handleScroll = useCallback(() => {
     if (!carouselRef.current || scrollTickRef.current) return;
     scrollTickRef.current = true;
@@ -152,6 +166,9 @@ export default function MobileHomeView() {
         const pageIndex = Math.round(scrollLeft / clientWidth);
         setActivePage((prev) => (prev === pageIndex ? prev : pageIndex));
       }
+      setIsScrolling(true);
+      if (scrollEndTimerRef.current) clearTimeout(scrollEndTimerRef.current);
+      scrollEndTimerRef.current = setTimeout(() => setIsScrolling(false), 140);
     });
   }, []);
 
@@ -319,7 +336,7 @@ export default function MobileHomeView() {
           <div style={{ color: 'var(--text-muted)', padding: '1rem 0' }}>Loading tracks...</div>
         ) : pages.length > 0 ? (
           <>
-            <div className="speed-dial-carousel-container" ref={carouselRef} onScroll={handleScroll}>
+            <div className={`speed-dial-carousel-container${isScrolling ? ' is-scrolling' : ''}`} ref={carouselRef} onScroll={handleScroll}>
               {pages.map((pageTracks, pageIdx) => (
                 <SpeedDialPage
                   key={pageIdx}
