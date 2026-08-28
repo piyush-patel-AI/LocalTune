@@ -1247,13 +1247,6 @@ body {
   scrollbar-width: none;
   margin-bottom: 0.75rem;
   width: 100%;
-  /* Promote the scroller to its own compositor layer so the horizontal pan is
-     handled off the main thread. This is the single biggest win for smooth
-     swiping in Android WebView, where an unlayered scroller repaints its image
-     children on every frame of the gesture. */
-  -webkit-overflow-scrolling: touch;
-  transform: translateZ(0);
-  contain: content;
 }
 
 .speed-dial-carousel-container::-webkit-scrollbar {
