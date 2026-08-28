@@ -13,6 +13,7 @@ import NowPlayingModal from './components/NowPlayingModal';
 import QueueModal from './components/QueueModal';
 import UserProfileModal from './components/UserProfileModal';
 import AddToPlaylistModal from './components/AddToPlaylistModal';
+import StartupSkeleton from './components/StartupSkeleton';
 import {
   IconSearch,
   IconPlay,
@@ -137,20 +138,7 @@ function AppContent() {
   };
 
   if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: '#07090e',
-        color: 'var(--text-secondary)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '1.1rem',
-        fontWeight: 600
-      }}>
-        Loading Octave...
-      </div>
-    );
+    return <StartupSkeleton />;
   }
 
   if (!user) {
