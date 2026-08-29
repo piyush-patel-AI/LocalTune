@@ -29,8 +29,14 @@ export const AuthProvider = ({ children }) => {
   }, [rememberedAccounts]);
 
   const checkAuthStatus = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const res = await fetch(apiUrl('/api/me'), { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/me'), {
+        credentials: 'include',
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -40,6 +46,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       setUser(null);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };
