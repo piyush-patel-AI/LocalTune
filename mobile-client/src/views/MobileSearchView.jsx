@@ -1,19 +1,52 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePlayer } from '../context/PlayerContext';
-import { IconSearch, IconMusic, IconPlay, IconUser, IconFlame } from '../components/Icons';
+import { IconSearch, IconMusic, IconPlay, IconFlame, IconClock, IconX } from '../components/Icons';
 import { apiUrl } from '../config';
 import { fuzzySearch } from '../utils/fuzzySearch';
+import { getArtworkUrl } from '../services/MediaMetadataProvider';
+import ArtworkImage from '../components/ArtworkImage';
+import logo from '../../../Assets/logo.png';
 
-const RECENT_SEARCHES = ['Coldplay', 'Electronic Synth', 'Post Malone', 'Chill Beats', 'Instrumental'];
-const QUICK_MOODS = ['Acoustic Vibes', 'Focus & Deep Study', 'Late Night Vinyl', 'High Energy Workout'];
+const RECENT_KEY = 'localTune_recentSearches';
+const MAX_RECENT = 10;
+
+function loadRecentSearches() {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentSearches(list) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch { /* quota exceeded — silent */ }
+}
+
+function addRecentSearch(list, query) {
+  const trimmed = query.trim();
+  if (!trimmed) return list;
+  const norm = trimmed.toLowerCase().replace(/\s+/g, ' ');
+  const filtered = list.filter((item) => item.toLowerCase().replace(/\s+/g, ' ') !== norm);
+  return [{ raw: trimmed }, ...filtered].slice(0, MAX_RECENT);
+}
+
+function removeRecentSearch(list, query) {
+  const norm = query.toLowerCase().replace(/\s+/g, ' ');
+  return list.filter((item) => item.toLowerCase().replace(/\s+/g, ' ') !== norm);
+}
 
 export default function MobileSearchView({ onClose }) {
-  const { playTrack } = usePlayer();
+  const { playTrack, recentlyPlayed } = usePlayer();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [trendingArtists, setTrendingArtists] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [recentSearches, setRecentSearches] = useState(loadRecentSearches);
   const allTracksRef = useRef([]);
+  const committedRef = useRef(false);
 
   useEffect(() => {
     fetchAllTracks();
@@ -23,6 +56,7 @@ export default function MobileSearchView({ onClose }) {
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
+      committedRef.current = false;
       return;
     }
     const timer = setTimeout(() => {
@@ -65,6 +99,46 @@ export default function MobileSearchView({ onClose }) {
     setResults(matches);
   };
 
+  const commitSearch = useCallback((q) => {
+    const trimmed = (q || query).trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const next = addRecentSearch(prev, trimmed);
+      saveRecentSearches(next);
+      return next;
+    });
+  }, [query]);
+
+  const handleResultClick = useCallback((track) => {
+    commitSearch(query);
+    playTrack(track, results);
+    onClose();
+  }, [commitSearch, query, playTrack, results, onClose]);
+
+  const handleSearchKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && query.trim()) {
+      commitSearch(query);
+    }
+  }, [commitSearch, query]);
+
+  const handleRecentClick = useCallback((raw) => {
+    setQuery(raw);
+    committedRef.current = true;
+    setTimeout(() => commitSearch(raw), 0);
+  }, [commitSearch]);
+
+  const handleRecentRemove = useCallback((raw) => {
+    setRecentSearches((prev) => {
+      const next = removeRecentSearch(prev, raw);
+      saveRecentSearches(next);
+      return next;
+    });
+  }, []);
+
+  const recentlyPlayedTracks = (recentlyPlayed || []).filter(
+    (t) => t && t.id && t.title
+  ).slice(0, 5);
+
   return (
     <div className="mobile-modal-overlay" style={{ alignItems: 'flex-start' }} onClick={onClose}>
       <div
@@ -98,6 +172,7 @@ export default function MobileSearchView({ onClose }) {
               placeholder="Search tracks, artists, or albums..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               autoFocus
               style={{
                 background: 'transparent',
@@ -111,7 +186,7 @@ export default function MobileSearchView({ onClose }) {
             />
             {query && (
               <button
-                onClick={() => setQuery('')}
+                onClick={() => { setQuery(''); committedRef.current = false; }}
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem' }}
               >
                 ✕
@@ -140,10 +215,7 @@ export default function MobileSearchView({ onClose }) {
                     <div
                       key={track.id}
                       className="quick-pick-row"
-                      onClick={() => {
-                        playTrack(track, results);
-                        onClose();
-                      }}
+                      onClick={() => handleResultClick(track)}
                     >
                       <div className="row-main-info">
                         {track.cover_art_path ? (
@@ -179,45 +251,81 @@ export default function MobileSearchView({ onClose }) {
               )}
             </div>
           ) : (
-            /* Empty State / Discovery Suggestions */
+            /* Empty State — Real Data Only */
             <div>
-              {/* Recent Searches Tag Pills */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
-                  Recent Searches
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {RECENT_SEARCHES.map((tag) => (
-                    <button
-                      key={tag}
-                      className="chip-btn"
-                      onClick={() => setQuery(tag)}
-                      style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
-                    >
-                      {tag}
-                    </button>
-                  ))}
+              {/* Recent Searches */}
+              {recentSearches.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+                    Recent Searches
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {recentSearches.map((item) => (
+                      <button
+                        key={item.raw}
+                        className="chip-btn"
+                        onClick={() => handleRecentClick(item.raw)}
+                        style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                      >
+                        <IconClock size={12} color="var(--text-muted)" />
+                        {item.raw}
+                        <span
+                          onClick={(e) => { e.stopPropagation(); handleRecentRemove(item.raw); }}
+                          style={{ marginLeft: '0.15rem', opacity: 0.5, cursor: 'pointer' }}
+                        >
+                          <IconX size={11} color="var(--text-muted)" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Quick Mood Categories */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-primary)', marginBottom: '0.65rem', display: 'block' }}>
-                  Quick Categories
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {QUICK_MOODS.map((mood) => (
-                    <button
-                      key={mood}
-                      className="chip-btn active"
-                      onClick={() => setQuery(mood.split(' ')[0])}
-                      style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
-                    >
-                      {mood}
-                    </button>
-                  ))}
+              {recentSearches.length === 0 && (
+                <div style={{ marginBottom: '1.5rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                  <IconSearch size={22} color="var(--text-muted)" style={{ marginBottom: '0.5rem' }} />
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Search your music library
+                  </p>
                 </div>
-              </div>
+              )}
+
+              {/* Recently Played — Real Playback History */}
+              {recentlyPlayedTracks.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.65rem', display: 'block' }}>
+                    Recently Played
+                  </span>
+                  <div className="quick-picks-list">
+                    {recentlyPlayedTracks.map((track) => (
+                      <div
+                        key={track.id}
+                        className="quick-pick-row"
+                        onClick={() => {
+                          playTrack(track, recentlyPlayedTracks);
+                          onClose();
+                        }}
+                      >
+                        <div className="row-main-info">
+                          <ArtworkImage
+                            src={getArtworkUrl(track, 256)}
+                            alt={track.title}
+                            className="row-art"
+                            onError={(e) => { e.target.src = logo; }}
+                          />
+                          <div className="row-text">
+                            <span className="row-title">{track.title}</span>
+                            <span className="row-artist">{track.artist} • {track.album || 'Single'}</span>
+                          </div>
+                        </div>
+                        <div className="mini-btn">
+                          <IconPlay size={18} color="var(--text-primary)" fill="var(--text-primary)" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Trending Artists */}
               {trendingArtists.length > 0 && (

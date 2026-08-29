@@ -13,7 +13,8 @@ import {
   IconPause,
   IconSparkles,
   IconHeart,
-  IconZap
+  IconZap,
+  IconClock
 } from '../components/Icons';
 import { apiUrl } from '../config';
 
@@ -68,6 +69,11 @@ export default function MobileHomeView() {
   const carouselRef = useRef(null);
   const scrollTickRef = useRef(false);
   const scrollSettleRef = useRef(null);
+
+  // Continue Listening carousel state
+  const continueRef = useRef(null);
+  const [continueIdx, setContinueIdx] = useState(0);
+  const pointerRef = useRef({ active: false, startX: 0, startY: 0, dx: 0 });
 
   useEffect(() => {
     fetchHomeData();
@@ -176,7 +182,63 @@ export default function MobileHomeView() {
     }
   }, [togglePlay, playTrack, speedDialTracks]);
 
-  const heroTrack = currentTrack || (recommendedTracks.length > 0 ? recommendedTracks[0] : allTracks[0]);
+  const continueListeningTracks = (recentlyPlayed || []).filter(
+    (t) => t && t.id && t.title
+  );
+  const continueCount = continueListeningTracks.length;
+
+  // Clamp continue index when list shrinks
+  useEffect(() => {
+    if (continueCount === 0) {
+      setContinueIdx(0);
+    } else if (continueIdx >= continueCount) {
+      setContinueIdx(continueCount - 1);
+    }
+  }, [continueCount, continueIdx]);
+
+  // Continue Listening carousel — simple pointer-based horizontal drag
+  const SNAP_W = 320; // approx card + gap, recalculated per-card in handler
+
+  const continuePointerDown = useCallback((e) => {
+    if (continueCount <= 1) return;
+    const el = continueRef.current;
+    if (!el) return;
+    pointerRef.current = { active: true, startX: e.clientX, startY: e.clientY, dx: 0 };
+    el.style.transition = 'none';
+  }, [continueCount]);
+
+  const continuePointerMove = useCallback((e) => {
+    if (!pointerRef.current.active) return;
+    const el = continueRef.current;
+    if (!el) return;
+    const dx = e.clientX - pointerRef.current.startX;
+    const dy = e.clientY - pointerRef.current.startY;
+    // Only intercept horizontal swipes — let vertical scroll pass through
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(pointerRef.current.dx) < 8) return;
+    pointerRef.current.dx = dx;
+    const cardW = el.children[0] ? el.children[0].getBoundingClientRect().width + 16 : SNAP_W;
+    const offset = -(continueIdx * cardW) + dx;
+    el.style.transform = `translate3d(${offset}px, 0, 0)`;
+  }, [continueIdx]);
+
+  const continuePointerUp = useCallback(() => {
+    if (!pointerRef.current.active) return;
+    pointerRef.current.active = false;
+    const el = continueRef.current;
+    if (!el) return;
+    const dx = pointerRef.current.dx;
+    const cardW = el.children[0] ? el.children[0].getBoundingClientRect().width + 16 : SNAP_W;
+    let next = continueIdx;
+    if (Math.abs(dx) > cardW * 0.18) {
+      next = dx < 0
+        ? Math.min(continueIdx + 1, continueCount - 1)
+        : Math.max(continueIdx - 1, 0);
+    }
+    setContinueIdx(next);
+    el.style.transition = 'transform 0.32s cubic-bezier(0.25, 1, 0.5, 1)';
+    el.style.transform = `translate3d(${-(next * cardW)}px, 0, 0)`;
+  }, [continueIdx, continueCount]);
+
   const madeForYouList = recommendedTracks.slice(0, 10);
   const topArtists = artists.slice(0, 8);
 
@@ -194,47 +256,91 @@ export default function MobileHomeView() {
 
   return (
     <div className="mobile-home-view animate-fade-in">
-      {/* Hero "Continue Listening" Section (~10% reduced height, vertically centered layout) */}
-      {heroTrack && (
-        <div
-          className="hero-continue-card"
-          style={{ minHeight: '130px', padding: '1rem' }}
-          onClick={() => {
-            if (currentTrack && currentTrack.id === heroTrack.id) {
-              togglePlay();
-            } else {
-              playTrack(heroTrack, allTracks);
-            }
-          }}
-        >
-          <div className="hero-tag">
-            <IconSparkles size={13} color="var(--accent-primary)" />
-            <span>{currentTrack ? 'CONTINUE LISTENING' : 'SPOTLIGHT TRACK'}</span>
+      {/* Hero "Continue Listening" Carousel */}
+      {continueListeningTracks.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div className="section-title-row" style={{ padding: '0 1.25rem' }}>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconClock size={15} color="var(--text-muted)" />
+              Continue Listening
+            </h2>
+            {continueListeningTracks.length > 1 && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {continueIdx + 1} / {continueListeningTracks.length}
+              </span>
+            )}
           </div>
 
-          <div className="hero-content-flex" style={{ alignItems: 'center' }}>
-            <div className="hero-art-wrapper" style={{ width: '64px', height: '64px', flexShrink: 0 }}>
-               <ArtworkImage
-                 src={getArtworkUrl(heroTrack, 256)}
-                 alt={heroTrack.title}
-                 className="hero-art-img"
-                 eager
-                 onError={(e) => { e.target.src = logo; }}
-               />
-              <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
-                {currentTrack && currentTrack.id === heroTrack.id && isPlaying ? (
-                  <IconPause size={14} color="#000000" fill="#000000" />
-                ) : (
-                  <IconPlay size={14} color="#000000" fill="#000000" style={{ marginLeft: '1px' }} />
-                )}
-              </div>
-            </div>
+          <div
+            className="continue-listening-viewport"
+            onPointerDown={continuePointerDown}
+            onPointerMove={continuePointerMove}
+            onPointerUp={continuePointerUp}
+            onPointerCancel={continuePointerUp}
+          >
+            <div
+              className="continue-listening-track"
+              ref={continueRef}
+              style={{ transform: `translate3d(0, 0, 0)` }}
+            >
+              {continueListeningTracks.map((track) => {
+                const isCurrent = currentTrack && currentTrack.id === track.id;
+                return (
+                  <div
+                    key={track.id}
+                    className="hero-continue-card"
+                    onClick={() => {
+                      if (isCurrent) {
+                        togglePlay();
+                      } else {
+                        playTrack(track, continueListeningTracks);
+                      }
+                    }}
+                  >
+                    <div className="hero-tag">
+                      <IconSparkles size={13} color="var(--accent-primary)" />
+                      <span>{isCurrent && isPlaying ? 'NOW PLAYING' : 'CONTINUE LISTENING'}</span>
+                    </div>
 
-            <div className="hero-info-text" style={{ flex: 1, minWidth: 0 }}>
-              <h2 className="hero-title" style={{ fontSize: '1.05rem' }}>{heroTrack.title}</h2>
-              <p className="hero-artist" style={{ fontSize: '0.8rem' }}>{heroTrack.artist} • {heroTrack.album || 'Single'}</p>
+                    <div className="hero-content-flex" style={{ alignItems: 'center' }}>
+                      <div className="hero-art-wrapper" style={{ width: '64px', height: '64px', flexShrink: 0 }}>
+                        <ArtworkImage
+                          src={getArtworkUrl(track, 256)}
+                          alt={track.title}
+                          className="hero-art-img"
+                          eager
+                          onError={(e) => { e.target.src = logo; }}
+                        />
+                        <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
+                          {isCurrent && isPlaying ? (
+                            <IconPause size={14} color="#000000" fill="#000000" />
+                          ) : (
+                            <IconPlay size={14} color="#000000" fill="#000000" style={{ marginLeft: '1px' }} />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="hero-info-text" style={{ flex: 1, minWidth: 0 }}>
+                        <h2 className="hero-title" style={{ fontSize: '1.05rem' }}>{track.title}</h2>
+                        <p className="hero-artist" style={{ fontSize: '0.8rem' }}>{track.artist} • {track.album || 'Single'}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
+
+          {continueListeningTracks.length > 1 && (
+            <div className="continue-listening-dots">
+              {continueListeningTracks.map((_, dotIdx) => (
+                <span
+                  key={dotIdx}
+                  className={`continue-dot ${continueIdx === dotIdx ? 'active' : ''}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

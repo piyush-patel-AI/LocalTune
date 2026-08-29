@@ -417,6 +417,46 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Continue Listening carousel */
+.continue-listening-viewport {
+  overflow: hidden;
+  touch-action: pan-y;
+  padding: 0 1.25rem;
+}
+
+.continue-listening-track {
+  display: flex;
+  gap: 16px;
+  will-change: transform;
+}
+
+.continue-listening-track > .hero-continue-card {
+  flex: 0 0 calc(100% - 0px);
+  min-width: 0;
+  margin: 0;
+}
+
+.continue-listening-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 0.65rem;
+}
+
+.continue-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.35;
+  transition: opacity 0.25s ease, background 0.25s ease;
+}
+
+.continue-dot.active {
+  opacity: 1;
+  background: var(--accent-primary);
+}
+
 /* Horizontal Carousels ("Made For You" & "Selected Hits") */
 .section-container {
   padding: 0 1.25rem 1.75rem 1.25rem;
