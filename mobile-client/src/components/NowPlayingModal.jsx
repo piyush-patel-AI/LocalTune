@@ -62,57 +62,8 @@ export default function NowPlayingModal() {
   const artDragRef = useRef({ active: false, startX: 0, startY: 0, dx: 0, decided: false });
   const artImgRef = useRef(null);
 
-  if (!isNowPlayingOpen || !currentTrack) return null;
-
-  const isFav = !!favoritesMap[currentTrack.id];
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 2500);
-  };
-
-  const handleStart = (e) => {
-    if (e.target.closest('button, input, a, range')) return;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    startYRef.current = clientY;
-    currentYRef.current = 0;
-    isDraggingRef.current = true;
-    if (overlayRef.current) {
-      overlayRef.current.style.transition = 'none';
-    }
-  };
-
-  const handleMove = (e) => {
-    if (!isDraggingRef.current) return;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const deltaY = clientY - startYRef.current;
-    if (deltaY > 0) {
-      currentYRef.current = deltaY;
-      if (overlayRef.current) {
-        overlayRef.current.style.transform = `translate3d(0, ${deltaY}px, 0)`;
-      }
-    }
-  };
-
-  const handleEnd = () => {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    if (overlayRef.current) {
-      overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-      if (currentYRef.current > 120) {
-        overlayRef.current.style.transform = 'translate3d(0, 100vh, 0)';
-        setTimeout(() => {
-          closeNowPlaying();
-          if (overlayRef.current) overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
-        }, 180);
-      } else {
-        overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
-      }
-    }
-  };
-
   // --- Album art swipe: horizontal drag to change track ---
+  // MUST be before the early return to satisfy React hooks rules
   const handleArtStart = useCallback((e) => {
     if (e.target.closest('button, input, a')) return;
     e.stopPropagation();
@@ -177,6 +128,56 @@ export default function NowPlayingModal() {
       img.style.transform = 'translate3d(0, 0, 0)';
     }
   }, [nextTrack, prevTrack]);
+
+  if (!isNowPlayingOpen || !currentTrack) return null;
+
+  const isFav = !!favoritesMap[currentTrack.id];
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 2500);
+  };
+
+  const handleStart = (e) => {
+    if (e.target.closest('button, input, a, range')) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startYRef.current = clientY;
+    currentYRef.current = 0;
+    isDraggingRef.current = true;
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = 'none';
+    }
+  };
+
+  const handleMove = (e) => {
+    if (!isDraggingRef.current) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaY = clientY - startYRef.current;
+    if (deltaY > 0) {
+      currentYRef.current = deltaY;
+      if (overlayRef.current) {
+        overlayRef.current.style.transform = `translate3d(0, ${deltaY}px, 0)`;
+      }
+    }
+  };
+
+  const handleEnd = () => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      if (currentYRef.current > 120) {
+        overlayRef.current.style.transform = 'translate3d(0, 100vh, 0)';
+        setTimeout(() => {
+          closeNowPlaying();
+          if (overlayRef.current) overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
+        }, 180);
+      } else {
+        overlayRef.current.style.transform = 'translate3d(0, 0, 0)';
+      }
+    }
+  };
 
   return (
     <>
