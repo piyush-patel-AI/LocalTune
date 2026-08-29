@@ -67,6 +67,7 @@ export default function MobileHomeView() {
 
   const carouselRef = useRef(null);
   const scrollTickRef = useRef(false);
+  const scrollSettleRef = useRef(null);
 
   useEffect(() => {
     fetchHomeData();
@@ -154,6 +155,16 @@ export default function MobileHomeView() {
         const pageIndex = Math.round(scrollLeft / clientWidth);
         setActivePage((prev) => (prev === pageIndex ? prev : pageIndex));
       }
+      if (scrollSettleRef.current) clearTimeout(scrollSettleRef.current);
+      scrollSettleRef.current = setTimeout(() => {
+        if (carouselRef.current) {
+          const { scrollLeft: sl, clientWidth: cw } = carouselRef.current;
+          if (cw > 0) {
+            const idx = Math.round(sl / cw);
+            setActivePage((prev) => (prev === idx ? prev : idx));
+          }
+        }
+      }, 180);
     });
   }, []);
 
