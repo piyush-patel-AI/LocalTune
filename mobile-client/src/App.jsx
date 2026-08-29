@@ -274,7 +274,7 @@ function AppContent() {
           className={`nav-tab-item ${activeTab === 'home' ? 'active' : ''}`}
           onClick={() => handleNavTabClick('home')}
         >
-          <IconHome size={20} color={activeTab === 'home' ? '#ffffff' : 'var(--text-muted)'} />
+          <IconHome size={20} color={activeTab === 'home' ? 'var(--accent-primary)' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Home</span>
         </button>
 
@@ -282,7 +282,7 @@ function AppContent() {
           className={`nav-tab-item ${activeTab === 'explore' ? 'active' : ''}`}
           onClick={() => handleNavTabClick('explore')}
         >
-          <IconExplore size={20} color={activeTab === 'explore' ? '#ffffff' : 'var(--text-muted)'} />
+          <IconExplore size={20} color={activeTab === 'explore' ? 'var(--accent-primary)' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Explore</span>
         </button>
 
@@ -290,7 +290,7 @@ function AppContent() {
           className={`nav-tab-item ${activeTab === 'library' ? 'active' : ''}`}
           onClick={() => handleNavTabClick('library')}
         >
-          <IconLibrary size={20} color={activeTab === 'library' ? '#ffffff' : 'var(--text-muted)'} />
+          <IconLibrary size={20} color={activeTab === 'library' ? 'var(--accent-primary)' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Library</span>
         </button>
 
@@ -298,7 +298,7 @@ function AppContent() {
           className={`nav-tab-item ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => handleNavTabClick('settings')}
         >
-          <IconMusic size={20} color={activeTab === 'settings' ? '#ffffff' : 'var(--text-muted)'} />
+          <IconMusic size={20} color={activeTab === 'settings' ? 'var(--accent-primary)' : 'var(--text-muted)'} />
           <span className="nav-tab-label">Settings</span>
         </button>
       </nav>
