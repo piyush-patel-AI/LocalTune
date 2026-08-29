@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { IconSearch, IconMusic, IconPlay, IconUser, IconFlame } from '../components/Icons';
 import { apiUrl } from '../config';
+import { fuzzySearch } from '../utils/fuzzySearch';
 
 const RECENT_SEARCHES = ['Coldplay', 'Electronic Synth', 'Post Malone', 'Chill Beats', 'Instrumental'];
 const QUICK_MOODS = ['Acoustic Vibes', 'Focus & Deep Study', 'Late Night Vinyl', 'High Energy Workout'];
@@ -12,8 +13,10 @@ export default function MobileSearchView({ onClose }) {
   const [results, setResults] = useState([]);
   const [trendingArtists, setTrendingArtists] = useState([]);
   const [loading, setLoading] = useState(false);
+  const allTracksRef = useRef([]);
 
   useEffect(() => {
+    fetchAllTracks();
     fetchTrendingArtists();
   }, []);
 
@@ -24,9 +27,21 @@ export default function MobileSearchView({ onClose }) {
     }
     const timer = setTimeout(() => {
       performSearch(query);
-    }, 250);
+    }, 150);
     return () => clearTimeout(timer);
   }, [query]);
+
+  const fetchAllTracks = async () => {
+    try {
+      const res = await fetch(apiUrl('/api/tracks'), { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        allTracksRef.current = data.tracks || [];
+      }
+    } catch (err) {
+      console.error('Error loading tracks for search:', err);
+    }
+  };
 
   const fetchTrendingArtists = async () => {
     try {
@@ -40,19 +55,14 @@ export default function MobileSearchView({ onClose }) {
     }
   };
 
-  const performSearch = async (q) => {
-    try {
-      setLoading(true);
-      const res = await fetch(apiUrl(`/api/tracks?search=${encodeURIComponent(q)}`), { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setResults(data.tracks || []);
-      }
-    } catch (err) {
-      console.error('Search query error:', err);
-    } finally {
-      setLoading(false);
+  const performSearch = (q) => {
+    const tracks = allTracksRef.current;
+    if (tracks.length === 0) {
+      setResults([]);
+      return;
     }
+    const matches = fuzzySearch(tracks, q, 30);
+    setResults(matches);
   };
 
   return (

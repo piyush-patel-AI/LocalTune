@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import { fuzzySearch } from '../utils/fuzzySearch';
 import {
   IconFlame,
   IconMusic,
@@ -173,13 +174,9 @@ export default function MobileExploreView() {
 
   const mostRecommended = recommendedTracks.length > 0 ? recommendedTracks.slice(0, 10) : allTracks.slice(0, 10);
 
-  // Filtered tracks based on live search query
+  // Filtered tracks based on live search query (fuzzy matching)
   const filteredCatalog = searchQuery.trim()
-    ? allTracks.filter((t) =>
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (t.album && t.album.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
+    ? fuzzySearch(allTracks, searchQuery, 50)
     : allTracks;
 
   return (
