@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
@@ -58,6 +58,10 @@ export default function NowPlayingModal() {
   const currentYRef = useRef(0);
   const isDraggingRef = useRef(false);
 
+  // Album art swipe gesture state
+  const artDragRef = useRef({ active: false, startX: 0, startY: 0, dx: 0, decided: false });
+  const artImgRef = useRef(null);
+
   if (!isNowPlayingOpen || !currentTrack) return null;
 
   const isFav = !!favoritesMap[currentTrack.id];
@@ -107,6 +111,72 @@ export default function NowPlayingModal() {
       }
     }
   };
+
+  // --- Album art swipe: horizontal drag to change track ---
+  const handleArtStart = useCallback((e) => {
+    if (e.target.closest('button, input, a')) return;
+    e.stopPropagation();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    artDragRef.current = { active: true, startX: clientX, startY: clientY, dx: 0, decided: false };
+    const img = artImgRef.current;
+    if (img) img.style.transition = 'none';
+  }, []);
+
+  const handleArtMove = useCallback((e) => {
+    if (!artDragRef.current.active) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dx = clientX - artDragRef.current.startX;
+    const dy = clientY - artDragRef.current.startY;
+
+    if (!artDragRef.current.decided) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        artDragRef.current.decided = true;
+      } else if (Math.abs(dy) > 10) {
+        artDragRef.current.active = false;
+        return;
+      }
+      return;
+    }
+
+    e.preventDefault();
+    artDragRef.current.dx = dx;
+    const img = artImgRef.current;
+    if (img) {
+      img.style.transform = `translate3d(${dx}px, 0, 0)`;
+    }
+  }, []);
+
+  const handleArtEnd = useCallback(() => {
+    if (!artDragRef.current.active) return;
+    artDragRef.current.active = false;
+
+    const dx = artDragRef.current.dx;
+    const img = artImgRef.current;
+
+    if (artDragRef.current.decided && Math.abs(dx) > 60) {
+      const direction = dx < 0 ? -1 : 1;
+      if (img) {
+        img.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
+        img.style.transform = `translate3d(${direction * 500}px, 0, 0)`;
+      }
+      setTimeout(() => {
+        if (dx < 0) nextTrack();
+        else prevTrack();
+        requestAnimationFrame(() => {
+          const el = artImgRef.current;
+          if (el) {
+            el.style.transition = 'none';
+            el.style.transform = 'translate3d(0, 0, 0)';
+          }
+        });
+      }, 220);
+    } else if (img) {
+      img.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      img.style.transform = 'translate3d(0, 0, 0)';
+    }
+  }, [nextTrack, prevTrack]);
 
   return (
     <>
@@ -174,12 +244,23 @@ export default function NowPlayingModal() {
           {/* Centered Main Player Block */}
           <div className="now-playing-center-group">
             {/* Big Artwork Box */}
-            <div className="now-playing-art-container">
+            <div
+              className="now-playing-art-container"
+              onTouchStart={handleArtStart}
+              onTouchMove={handleArtMove}
+              onTouchEnd={handleArtEnd}
+              onMouseDown={handleArtStart}
+              onMouseMove={handleArtMove}
+              onMouseUp={handleArtEnd}
+              onMouseLeave={handleArtEnd}
+            >
               {currentTrack.cover_art_path ? (
                 <img
+                  ref={artImgRef}
                   src={getArtworkUrl(currentTrack, 512)}
                   alt={currentTrack.title}
                   className="now-playing-art-img"
+                  draggable={false}
                   onError={(e) => { e.target.src = logo; }}
                 />
               ) : (

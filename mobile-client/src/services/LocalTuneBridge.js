@@ -30,7 +30,8 @@ class LocalTuneNativeBridge {
         next: () => this.playback.next(),
         prev: () => this.playback.prev(),
         toggle: () => this.playback.toggle(),
-        seek: (seconds) => this.playback.seek(seconds)
+        seek: (seconds) => this.playback.seek(seconds),
+        handleMediaButton: (action, clickCount) => this.handleMediaButton(action, clickCount)
       };
     }
 
@@ -67,8 +68,41 @@ class LocalTuneNativeBridge {
   }
 
   /**
-   * Playback Operations Sub-namespace
+   * Media Button Handler — for native Android wrappers to forward
+   * pre-detected multi-click media button events.
+   *
+   * The native side should intercept KeyEvent.KEYCODE_MEDIA_*,
+   * implement double/triple click detection with a 300ms window,
+   * then call: localTuneBridge.handleMediaButton('next', clickCount)
+   *
+   * clickCount: 1 = single press, 2 = double press, 3 = triple press
+   *
+   * Mapping:
+   *   'play'    → toggle playback
+   *   'next'    → single: next track, double: next track, triple: no-op
+   *   'previous'→ single: previous track, double: previous track, triple: no-op
    */
+  handleMediaButton(action, clickCount = 1) {
+    if (!this.controllerRef) return;
+    const count = Math.max(1, Math.min(3, Math.floor(clickCount)));
+
+    switch (action) {
+      case 'play':
+      case 'pause':
+      case 'toggle':
+        this.controllerRef.toggle();
+        break;
+      case 'next':
+        if (count >= 1) this.controllerRef.nextTrack();
+        break;
+      case 'previous':
+      case 'prev':
+        if (count >= 1) this.controllerRef.prevTrack();
+        break;
+      default:
+        break;
+    }
+  }
   playback = {
     play: () => this.controllerRef?.play(),
     pause: () => this.controllerRef?.pause(),
