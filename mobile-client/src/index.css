@@ -1,19 +1,19 @@
 @property --accent-primary {
   syntax: '<color>';
   inherits: true;
-  initial-value: #f59e0b;
+  initial-value: #4ea8de;
 }
 
 @property --accent-glow {
   syntax: '<color>';
   inherits: true;
-  initial-value: rgba(245, 158, 11, 0.25);
+  initial-value: rgba(78, 168, 222, 0.25);
 }
 
 @property --accent-hover {
   syntax: '<color>';
   inherits: true;
-  initial-value: #d97706;
+  initial-value: #3890c8;
 }
 
 :root {
@@ -21,8 +21,8 @@
   --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
   
   /* Color System: 95% Deep Dark + 5% Dynamic Accent Glow */
-  --accent-primary: #f59e0b;
-  --accent-glow: rgba(245, 158, 11, 0.25);
+  --accent-primary: #4ea8de;
+  --accent-glow: rgba(78, 168, 222, 0.25);
   --bg-dark: #07090e;
   --bg-surface: #0e121a;
   --bg-card: rgba(255, 255, 255, 0.035);
@@ -74,6 +74,8 @@ body {
 
 .mobile-content {
   padding-bottom: 160px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Master Mobile Container & Dynamic Ambient Canvas */
@@ -2108,7 +2110,7 @@ body {
   height: 90px;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--accent-primary), #f59e0b);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
   color: #000000;
   font-family: var(--font-display);
   font-weight: 800;

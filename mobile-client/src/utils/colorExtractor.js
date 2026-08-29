@@ -10,12 +10,23 @@ export async function extractColorsFromAlbumArt(imageUrl) {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'Anonymous';
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(getDefaultAmbientColors());
+      }
+    }, 8000);
 
     img.onload = () => {
+      if (settled) return;
+      clearTimeout(timeout);
+      settled = true;
       try {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const size = 48; // Fast sampling size
+        const size = 48;
         canvas.width = size;
         canvas.height = size;
         ctx.drawImage(img, 0, 0, size, size);
@@ -31,24 +42,20 @@ export async function extractColorsFromAlbumArt(imageUrl) {
           const b = data[i + 2];
           const a = data[i + 3];
 
-          if (a < 128) continue; // Skip transparent
+          if (a < 128) continue;
 
-          // Calculate Saturation & Lightness
           const max = Math.max(r, g, b);
           const min = Math.min(r, g, b);
           const lum = (max + min) / 510;
           const sat = max === min ? 0 : (max - min) / (255 - Math.abs(max + min - 255));
 
-          // Ignore extreme black, pure white, or non-saturated grays to get true colorful hues
           if (lum < 0.08 || lum > 0.94) continue;
 
-          // Quantize RGB values into 24-step buckets
           const qr = Math.floor(r / 24) * 24;
           const qg = Math.floor(g / 24) * 24;
           const qb = Math.floor(b / 24) * 24;
           const key = `${qr},${qg},${qb}`;
 
-          // Weight colorful/vibrant pixels higher
           const weight = 1 + sat * 3;
 
           if (!colorMap[key]) {
@@ -64,7 +71,6 @@ export async function extractColorsFromAlbumArt(imageUrl) {
         }
 
         const primary = sortedColors[0];
-        // Pick secondary color that is visually distinct from primary
         let secondary = sortedColors.find((c) => {
           const diff = Math.abs(c.r - primary.r) + Math.abs(c.g - primary.g) + Math.abs(c.b - primary.b);
           return diff > 60;
@@ -76,6 +82,12 @@ export async function extractColorsFromAlbumArt(imageUrl) {
           return diffP > 50 && diffS > 50;
         }) || sortedColors[2] || secondary;
 
+        const accentResult = deriveAccentColor(primary.r, primary.g, primary.b);
+
+        if (!accentResult.valid) {
+          return resolve(getDefaultAmbientColors());
+        }
+
         resolve({
           c1: `rgba(${primary.r}, ${primary.g}, ${primary.b}, 0.28)`,
           c2: `rgba(${secondary.r}, ${secondary.g}, ${secondary.b}, 0.20)`,
@@ -83,7 +95,7 @@ export async function extractColorsFromAlbumArt(imageUrl) {
           rawPrimary: `rgb(${primary.r}, ${primary.g}, ${primary.b})`,
           rawSecondary: `rgb(${secondary.r}, ${secondary.g}, ${secondary.b})`,
           rawTertiary: `rgb(${tertiary.r}, ${tertiary.g}, ${tertiary.b})`,
-          ...deriveAccentColor(primary.r, primary.g, primary.b)
+          ...accentResult
         });
       } catch (err) {
         console.warn('[ColorExtractor] Failed to extract canvas color:', err);
@@ -92,6 +104,9 @@ export async function extractColorsFromAlbumArt(imageUrl) {
     };
 
     img.onerror = () => {
+      if (settled) return;
+      clearTimeout(timeout);
+      settled = true;
       resolve(getDefaultAmbientColors());
     };
 
@@ -99,17 +114,21 @@ export async function extractColorsFromAlbumArt(imageUrl) {
   });
 }
 
+const DEFAULT_ACCENT = 'rgb(78, 168, 222)';
+const DEFAULT_ACCENT_GLOW = 'rgba(78, 168, 222, 0.25)';
+const DEFAULT_ACCENT_HOVER = 'rgb(56, 144, 200)';
+
 export function getDefaultAmbientColors() {
   return {
-    c1: 'rgba(245, 158, 11, 0.18)',
+    c1: 'rgba(78, 168, 222, 0.18)',
     c2: 'rgba(168, 85, 247, 0.12)',
     c3: 'rgba(239, 68, 68, 0.08)',
-    rawPrimary: 'rgb(245, 158, 11)',
+    rawPrimary: 'rgb(78, 168, 222)',
     rawSecondary: 'rgb(168, 85, 247)',
     rawTertiary: 'rgb(239, 68, 68)',
-    accent: 'rgb(245, 158, 11)',
-    accentGlow: 'rgba(245, 158, 11, 0.25)',
-    accentHover: 'rgb(217, 119, 6)'
+    accent: DEFAULT_ACCENT,
+    accentGlow: DEFAULT_ACCENT_GLOW,
+    accentHover: DEFAULT_ACCENT_HOVER
   };
 }
 
@@ -169,24 +188,32 @@ function hslToRgb(h, s, l) {
 
 /**
  * Derive a controlled, readable accent from a raw extracted RGB.
- * - Low-saturation (gray / white / black) artwork falls back to the default amber accent.
- * - Otherwise saturation/lightness are clamped to a pleasant range so neon, muddy,
- *   extremely dark, or extremely bright art never produces an ugly UI accent.
+ * Returns { accent, accentGlow, accentHover, valid }.
+ * valid=false means the extracted color is unusable and caller should fallback.
  */
 function deriveAccentColor(r, g, b) {
   const { h, s, l } = rgbToHsl(r, g, b);
-  if (s < 0.3) {
-    return {
-      accent: 'rgb(245, 158, 11)',
-      accentGlow: 'rgba(245, 158, 11, 0.25)',
-      accentHover: 'rgb(217, 119, 6)'
-    };
+
+  if (s < 0.25) {
+    return { valid: false };
   }
+
+  if (l < 0.12 || l > 0.92) {
+    return { valid: false };
+  }
+
   const cs = Math.min(0.85, Math.max(0.5, s));
   const cl = Math.min(0.6, Math.max(0.48, l));
   const main = hslToRgb(h, cs, cl);
+
+  const mainLum = (Math.max(main.r, main.g, main.b) + Math.min(main.r, main.g, main.b)) / 510;
+  if (mainLum < 0.15 || mainLum > 0.9) {
+    return { valid: false };
+  }
+
   const hover = hslToRgb(h, cs, Math.max(0.4, cl - 0.12));
   return {
+    valid: true,
     accent: `rgb(${main.r}, ${main.g}, ${main.b})`,
     accentGlow: `rgba(${main.r}, ${main.g}, ${main.b}, 0.28)`,
     accentHover: `rgb(${hover.r}, ${hover.g}, ${hover.b})`

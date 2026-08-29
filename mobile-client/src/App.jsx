@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import logo from '../../Assets/logo.png';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlayerProvider, usePlayer } from './context/PlayerContext';
@@ -49,6 +50,7 @@ function AppContent() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(false);
+  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     if (selectedArtistForView) {
@@ -118,7 +120,8 @@ function AppContent() {
   const handleNavTabClick = (tab) => {
     if (activeTab !== tab) {
       try { window.history.pushState({ localTuneTab: tab }, ''); } catch (e) {}
-      setActiveTab(tab);
+      flushSync(() => { setActiveTab(tab); });
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
     }
   };
 
@@ -186,11 +189,19 @@ function AppContent() {
       </header>
 
       {/* Main View Content */}
-      <main className="mobile-content">
-        {activeTab === 'home' && <MobileHomeView />}
-        {activeTab === 'explore' && <MobileExploreView />}
-        {activeTab === 'library' && <MobileLibraryView />}
-        {activeTab === 'settings' && <MobileSettingsView />}
+      <main className="mobile-content" ref={scrollContainerRef}>
+        <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
+          <MobileHomeView />
+        </div>
+        <div style={{ display: activeTab === 'explore' ? 'block' : 'none' }}>
+          <MobileExploreView />
+        </div>
+        <div style={{ display: activeTab === 'library' ? 'block' : 'none' }}>
+          <MobileLibraryView />
+        </div>
+        <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
+          <MobileSettingsView />
+        </div>
       </main>
 
       {/* Floating Mini Player */}

@@ -3,6 +3,15 @@ import { IconCheck } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
 import { usePlayer } from '../context/PlayerContext';
 
+const ACCENT_PRESETS = [
+  { label: 'Blue', color: '#4ea8de' },
+  { label: 'Purple', color: '#a855f7' },
+  { label: 'Rose', color: '#f43f5e' },
+  { label: 'Emerald', color: '#10b981' },
+  { label: 'Amber', color: '#f59e0b' },
+  { label: 'Cyan', color: '#06b6d4' }
+];
+
 const REC_MODES = [
   { name: 'Default', desc: 'Balanced personalized recommendations' },
   { name: 'Discover', desc: 'Surfaces obscure & new artists' },
@@ -26,7 +35,11 @@ export default function MobileSettingsView() {
     recommendationMode,
     setRecommendationMode,
     discoveryMode,
-    setDiscoveryMode
+    setDiscoveryMode,
+    accentMode,
+    setAccentMode,
+    customAccentColor,
+    setCustomAccentColor
   } = usePlayer();
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -68,7 +81,7 @@ export default function MobileSettingsView() {
         <div style={{
           margin: '0 1.25rem 1rem 1.25rem',
           padding: '0.75rem 1rem',
-          background: 'rgba(245, 158, 11, 0.2)',
+          background: 'rgba(78, 168, 222, 0.2)',
           border: '1px solid var(--accent-primary)',
           borderRadius: 'var(--radius-md)',
           color: '#ffffff',
@@ -84,7 +97,7 @@ export default function MobileSettingsView() {
       <section className="section-container">
         <div
           style={{
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.9))',
+            background: 'linear-gradient(135deg, rgba(78, 168, 222, 0.15), rgba(15, 23, 42, 0.9))',
             border: '1px solid var(--glass-border-hover)',
             borderRadius: 'var(--radius-lg)',
             padding: '1.25rem',
@@ -294,7 +307,7 @@ export default function MobileSettingsView() {
                     showToast(`Recommendation preset set to ${mode.name}`);
                   }}
                   style={{
-                    background: selected ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                    background: selected ? 'rgba(78, 168, 222, 0.15)' : 'rgba(255, 255, 255, 0.04)',
                     border: selected ? '1px solid var(--accent-primary)' : '1px solid var(--glass-border)',
                     borderRadius: 'var(--radius-md)',
                     padding: '0.75rem',
@@ -341,19 +354,161 @@ export default function MobileSettingsView() {
           Appearance
         </span>
 
-        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>Dynamic Ambient Lighting</h3>
-            <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Extract color palette from current album art for fluid background glow</p>
+        <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)' }}>
+            <div>
+              <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff' }}>Dynamic Ambient Lighting</h3>
+              <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Extract color palette from current album art for fluid background glow</p>
+            </div>
+            <div
+              className={`custom-toggle-switch ${ambientBgEnabled ? 'active' : ''}`}
+              onClick={() => {
+                setAmbientBgEnabled(!ambientBgEnabled);
+                showToast(`Ambient background ${!ambientBgEnabled ? 'enabled' : 'disabled'}`);
+              }}
+            >
+              <div className="toggle-thumb" />
+            </div>
           </div>
-          <div
-            className={`custom-toggle-switch ${ambientBgEnabled ? 'active' : ''}`}
-            onClick={() => {
-              setAmbientBgEnabled(!ambientBgEnabled);
-              showToast(`Ambient background ${!ambientBgEnabled ? 'enabled' : 'disabled'}`);
-            }}
-          >
-            <div className="toggle-thumb" />
+
+          {/* Accent Color Mode */}
+          <div style={{ padding: '1rem 1.25rem' }}>
+            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.3rem' }}>Accent Color</h3>
+            <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>Controls the accent used for active icons, buttons, and highlights</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {/* Dynamic */}
+              <div
+                onClick={() => {
+                  setAccentMode('dynamic');
+                  showToast('Accent set to Dynamic');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.7rem 0.85rem',
+                  background: accentMode === 'dynamic' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.03)',
+                  border: accentMode === 'dynamic' ? '1px solid var(--accent-primary)' : '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: 'conic-gradient(from 0deg, #f43f5e, #f59e0b, #10b981, #3b82f6, #a855f7, #f43f5e)',
+                  flexShrink: 0
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: accentMode === 'dynamic' ? 'var(--accent-primary)' : '#ffffff' }}>Dynamic</span>
+                  <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '1px' }}>Uses artwork colors</span>
+                </div>
+                {accentMode === 'dynamic' && <IconCheck size={14} color="var(--accent-primary)" />}
+              </div>
+
+              {/* Default Blue */}
+              <div
+                onClick={() => {
+                  setAccentMode('blue');
+                  showToast('Accent set to Default Blue');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.7rem 0.85rem',
+                  background: accentMode === 'blue' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.03)',
+                  border: accentMode === 'blue' ? '1px solid var(--accent-primary)' : '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#4ea8de', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: accentMode === 'blue' ? 'var(--accent-primary)' : '#ffffff' }}>Default Blue</span>
+                  <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '1px' }}>#4ea8de</span>
+                </div>
+                {accentMode === 'blue' && <IconCheck size={14} color="var(--accent-primary)" />}
+              </div>
+
+              {/* Custom */}
+              <div
+                onClick={() => setAccentMode('custom')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.7rem 0.85rem',
+                  background: accentMode === 'custom' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.03)',
+                  border: accentMode === 'custom' ? '1px solid var(--accent-primary)' : '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ position: 'relative', width: 28, height: 28, flexShrink: 0 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: customAccentColor, border: '2px solid rgba(255,255,255,0.15)' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem', color: accentMode === 'custom' ? 'var(--accent-primary)' : '#ffffff' }}>Custom</span>
+                  <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '1px' }}>Choose your own color</span>
+                </div>
+                {accentMode === 'custom' && <IconCheck size={14} color="var(--accent-primary)" />}
+              </div>
+            </div>
+
+            {/* Custom Color Picker */}
+            {accentMode === 'custom' && (
+              <div style={{ marginTop: '0.85rem', padding: '0.85rem', background: 'rgba(255, 255, 255, 0.04)', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                  <label htmlFor="accent-color-input" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Pick a color</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{customAccentColor}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  {ACCENT_PRESETS.map((preset) => (
+                    <div
+                      key={preset.color}
+                      onClick={() => {
+                        setCustomAccentColor(preset.color);
+                        showToast(`Custom accent set to ${preset.label}`);
+                      }}
+                      title={preset.label}
+                      style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: preset.color,
+                        border: customAccentColor === preset.color ? '2px solid #ffffff' : '2px solid rgba(255,255,255,0.1)',
+                        cursor: 'pointer',
+                        transition: 'border-color 0.15s ease',
+                        flexShrink: 0
+                      }}
+                    />
+                  ))}
+                  <label
+                    htmlFor="accent-color-input"
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%',
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '2px dashed rgba(255,255,255,0.2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-muted)',
+                      flexShrink: 0
+                    }}
+                    title="Pick custom color"
+                  >
+                    +
+                  </label>
+                  <input
+                    id="accent-color-input"
+                    type="color"
+                    value={customAccentColor}
+                    onChange={(e) => setCustomAccentColor(e.target.value)}
+                    style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

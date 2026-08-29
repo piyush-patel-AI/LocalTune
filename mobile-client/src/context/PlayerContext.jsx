@@ -36,6 +36,16 @@ function getTrackAmbientColors(track) {
   };
 }
 
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return null;
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+  return { r, g, b };
+}
+
 export function PlayerProvider({ children }) {
   // Restore initial state from localStorage if available
   const [currentTrack, setCurrentTrack] = useState(() => {
@@ -119,6 +129,12 @@ export function PlayerProvider({ children }) {
   const [audioQuality, setAudioQuality] = useState(() => {
     return localStorage.getItem('localTune_audioQuality') || 'High';
   });
+  const [accentMode, setAccentMode] = useState(() => {
+    return localStorage.getItem('localTune_accentMode') || 'dynamic';
+  });
+  const [customAccentColor, setCustomAccentColor] = useState(() => {
+    return localStorage.getItem('localTune_customAccentColor') || '#4ea8de';
+  });
 
   const navigateToArtist = (artistData) => {
     if (!artistData) return;
@@ -196,6 +212,37 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     let isCancelled = false;
 
+    if (accentMode === 'blue') {
+      applyAmbientColorsToDOM(getDefaultAmbientColors());
+      return;
+    }
+
+    if (accentMode === 'custom') {
+      const c = hexToRgb(customAccentColor);
+      if (c) {
+        const root = document.documentElement;
+        root.style.setProperty('--accent-primary', `rgb(${c.r}, ${c.g}, ${c.b})`);
+        root.style.setProperty('--accent-glow', `rgba(${c.r}, ${c.g}, ${c.b}, 0.25)`);
+        root.style.setProperty('--accent-hover', `rgb(${Math.max(0, c.r - 22)}, ${Math.max(0, c.g - 22)}, ${Math.max(0, c.b - 22)})`);
+      }
+      if (ambientBgEnabled && currentTrack) {
+        const artUrl = currentTrack.coverUrl || currentTrack.cover_art_url || apiUrl(`/api/tracks/${currentTrack.id}/art`);
+        extractColorsFromAlbumArt(artUrl).then((colors) => {
+          if (!isCancelled) {
+            const root = document.documentElement;
+            root.style.setProperty('--ambient-color-1', colors.c1);
+            root.style.setProperty('--ambient-color-2', colors.c2);
+            root.style.setProperty('--ambient-color-3', colors.c3);
+            root.style.setProperty('--ambient-raw-1', colors.rawPrimary);
+            root.style.setProperty('--ambient-raw-2', colors.rawSecondary);
+            root.style.setProperty('--ambient-raw-3', colors.rawTertiary);
+          }
+        });
+      }
+      return () => { isCancelled = true; };
+    }
+
+    // accentMode === 'dynamic'
     if (!ambientBgEnabled) {
       applyAmbientColorsToDOM(getDefaultAmbientColors());
       return;
@@ -218,7 +265,7 @@ export function PlayerProvider({ children }) {
     return () => {
       isCancelled = true;
     };
-  }, [currentTrack, ambientBgEnabled]);
+  }, [currentTrack, ambientBgEnabled, accentMode, customAccentColor]);
 
   useEffect(() => {
     localStorage.setItem('localTune_ambientBgEnabled', ambientBgEnabled ? 'true' : 'false');
@@ -247,6 +294,14 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('localTune_audioQuality', audioQuality);
   }, [audioQuality]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_accentMode', accentMode);
+  }, [accentMode]);
+
+  useEffect(() => {
+    localStorage.setItem('localTune_customAccentColor', customAccentColor);
+  }, [customAccentColor]);
 
   useEffect(() => {
     localStorage.setItem('localTune_queue', JSON.stringify(queue));
@@ -685,6 +740,10 @@ export function PlayerProvider({ children }) {
         setDiscoveryMode,
         audioQuality,
         setAudioQuality,
+        accentMode,
+        setAccentMode,
+        customAccentColor,
+        setCustomAccentColor,
         isRepeating: repeatMode !== 'off',
         isNowPlayingOpen,
         isQueueOpen,
