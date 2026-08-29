@@ -334,14 +334,30 @@ export function PlayerProvider({ children }) {
     }
   }, [currentTrack]);
 
+  const buildFallbackQueue = async (track) => {
+    try {
+      const res = await apiClient.get('/api/tracks');
+      const allTracks = res.tracks || [];
+      if (allTracks.length > 0) {
+        const rest = allTracks.filter((t) => t.id !== track.id);
+        setQueue([track, ...rest]);
+      } else {
+        setQueue([track]);
+      }
+    } catch (err) {
+      console.error('[Fallback Queue] Failed to fetch library:', err);
+      setQueue([track]);
+    }
+  };
+
   const playTrack = (track, newQueue = null, autoOpenNowPlaying = true) => {
     if (!track) return;
     setCurrentTrack(track);
 
-    if (newQueue) {
+    if (newQueue && newQueue.length > 0) {
       setQueue(newQueue);
     } else if (queue.length === 0) {
-      setQueue([track]);
+      buildFallbackQueue(track);
     }
 
     if (track.artist) {
@@ -451,11 +467,10 @@ export function PlayerProvider({ children }) {
   };
 
   const addToQueue = (track) => {
-    if (!track) return;
-    setQueue((prev) => {
-      if (prev.some((t) => t.id === track.id)) return prev;
-      return [...prev, track];
-    });
+    if (!track) return false;
+    if (queueRef.current.some((t) => t.id === track.id)) return false;
+    setQueue((prev) => [...prev, track]);
+    return true;
   };
 
   const playNextInQueue = (track) => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
@@ -9,6 +9,14 @@ import { IconPlay, IconHeart, IconPlus, IconMusic, IconQueue } from './Icons';
 export default function TrackActionSheet({ track, onClose }) {
   const { playTrack, toggleFavorite, addToQueue, favoritesMap } = usePlayer();
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const toastTimerRef = useRef(null);
+
+  const showToast = (msg) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    toastTimerRef.current = setTimeout(() => setToastMessage(''), 2500);
+  };
 
   if (!track) return null;
 
@@ -70,14 +78,39 @@ export default function TrackActionSheet({ track, onClose }) {
           <button
             className="action-sheet-btn"
             onClick={() => {
-              addToQueue(track);
-              onClose();
+              const wasAdded = addToQueue(track);
+              if (wasAdded) {
+                onClose();
+              } else {
+                showToast('Already in Queue');
+              }
             }}
           >
             <IconQueue size={20} color="var(--accent-primary)" />
             <span>Add to Queue</span>
           </button>
         </div>
+
+        {toastMessage && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '100px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 700,
+              background: 'rgba(245, 158, 11, 0.95)',
+              color: '#000000',
+              padding: '0.4rem 1rem',
+              borderRadius: '20px',
+              fontWeight: 800,
+              fontSize: '0.8rem',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+            }}
+          >
+            {toastMessage}
+          </div>
+        )}
       </BottomSheet>
 
       {showPlaylistModal && (
