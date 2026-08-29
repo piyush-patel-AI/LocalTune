@@ -338,15 +338,20 @@ export function PlayerProvider({ children }) {
     try {
       const res = await apiClient.get('/api/tracks');
       const allTracks = res.tracks || [];
-      if (allTracks.length > 0) {
-        const rest = allTracks.filter((t) => t.id !== track.id);
-        setQueue([track, ...rest]);
-      } else {
-        setQueue([track]);
-      }
+      setQueue((prev) => {
+        if (prev.length > 0) return prev;
+        if (allTracks.length > 0) {
+          const rest = allTracks.filter((t) => t.id !== track.id);
+          return [track, ...rest];
+        }
+        return [track];
+      });
     } catch (err) {
       console.error('[Fallback Queue] Failed to fetch library:', err);
-      setQueue([track]);
+      setQueue((prev) => {
+        if (prev.length > 0) return prev;
+        return [track];
+      });
     }
   };
 
@@ -356,7 +361,7 @@ export function PlayerProvider({ children }) {
 
     if (newQueue && newQueue.length > 0) {
       setQueue(newQueue);
-    } else if (queue.length === 0) {
+    } else if (queueRef.current.length === 0) {
       buildFallbackQueue(track);
     }
 
