@@ -254,7 +254,10 @@ export default function MobileExploreView() {
       {!searchQuery && (activeFilter === 'all' || activeFilter === 'spotlight') && (
         <section className="section-container">
           <div className="section-title-row">
-            <h2 className="section-title">Featured Spotlight</h2>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconSparkles size={15} color="var(--text-muted)" />
+              Featured Spotlight
+            </h2>
             <span className="section-helper">Swipe to discover</span>
           </div>
 
@@ -300,7 +303,10 @@ export default function MobileExploreView() {
         <section className="section-container">
           <div className="section-title-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h2 className="section-title">Browse by Mood & Genre</h2>
+              <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <IconFlame size={15} color="var(--text-muted)" />
+                Browse by Mood & Genre
+              </h2>
               {activeMood && (
                 <span style={{ fontSize: '0.72rem', background: 'var(--accent-primary)', color: '#000000', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-pill)', fontWeight: 800 }}>
                   ▶ {activeMood} ({activeMoodCount} queued)
@@ -362,10 +368,11 @@ export default function MobileExploreView() {
           <div className="section-title-row">
             <div>
               <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <IconSparkles size={15} color="var(--text-muted)" />
                 Most Recommended For You
               </h2>
             </div>
-            <span style={{ fontSize: '0.74rem', background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-primary)', padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.74rem', background: 'rgba(78, 168, 222, 0.15)', color: 'var(--accent-primary)', padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>
               🔥 Top Rec Score
             </span>
           </div>
@@ -442,7 +449,8 @@ export default function MobileExploreView() {
       {(activeFilter === 'all' || activeFilter === 'catalog' || searchQuery) && (
         <section className="section-container">
           <div className="section-title-row">
-            <h2 className="section-title">
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconMusic size={15} color="var(--text-muted)" />
               {searchQuery ? `Search Results ("${searchQuery}")` : 'Full Song Catalog'}
             </h2>
             <span className="section-helper">

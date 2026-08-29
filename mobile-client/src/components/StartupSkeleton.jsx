@@ -36,7 +36,6 @@ export default function StartupSkeleton() {
         <div className="mobile-home-view animate-fade-in">
           {/* Continue Listening / Hero */}
           <div className="hero-continue-card">
-            <div className="hero-bg-glow" />
             <div className="hero-tag">
               <Sk width={130} height={10} />
             </div>

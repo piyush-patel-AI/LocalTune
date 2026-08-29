@@ -12,7 +12,8 @@ import {
   IconPlay,
   IconPause,
   IconSparkles,
-  IconHeart
+  IconHeart,
+  IconZap
 } from '../components/Icons';
 import { apiUrl } from '../config';
 
@@ -195,7 +196,6 @@ export default function MobileHomeView() {
             }
           }}
         >
-          <div className="hero-bg-glow" />
           <div className="hero-tag">
             <IconSparkles size={13} color="var(--accent-primary)" />
             <span>{currentTrack ? 'CONTINUE LISTENING' : 'SPOTLIGHT TRACK'}</span>
@@ -230,7 +230,10 @@ export default function MobileHomeView() {
       {/* "Made For You" Horizontal Carousel */}
       <section className="section-container">
         <div className="section-title-row">
-          <h2 className="section-title">Made For You</h2>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <IconSparkles size={15} color="var(--text-muted)" />
+            Made For You
+          </h2>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Personalized</span>
         </div>
 
@@ -263,7 +266,10 @@ export default function MobileHomeView() {
       {topArtists.length > 0 && (
         <section className="section-container">
           <div className="section-title-row">
-            <h2 className="section-title">Favorite Artists</h2>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconMusic size={15} color="var(--text-muted)" />
+              Favorite Artists
+            </h2>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Personalized</span>
           </div>
 
@@ -303,7 +309,10 @@ export default function MobileHomeView() {
       <section className="section-container">
         <div className="section-title-row" style={{ marginBottom: '0.85rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h2 className="section-title">Speed Dial</h2>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconZap size={15} color="var(--text-muted)" />
+              Speed Dial
+            </h2>
             <button
               className="icon-btn"
               onClick={handleRefreshSpeedDial}
@@ -361,7 +370,10 @@ export default function MobileHomeView() {
       {/* Quick Picks Track List (Compact Apple Music Style Row Height) */}
       <section className="section-container" style={{ paddingBottom: '2rem' }}>
         <div className="section-title-row">
-          <h2 className="section-title">Quick Picks</h2>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <IconPlay size={15} color="var(--text-muted)" />
+            Quick Picks
+          </h2>
           <button
             className="btn-secondary"
             onClick={() => {

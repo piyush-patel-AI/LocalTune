@@ -115,7 +115,6 @@ export async function extractColorsFromAlbumArt(imageUrl) {
 }
 
 const DEFAULT_ACCENT = 'rgb(78, 168, 222)';
-const DEFAULT_ACCENT_GLOW = 'rgba(78, 168, 222, 0.25)';
 const DEFAULT_ACCENT_HOVER = 'rgb(56, 144, 200)';
 
 export function getDefaultAmbientColors() {
@@ -127,7 +126,6 @@ export function getDefaultAmbientColors() {
     rawSecondary: 'rgb(168, 85, 247)',
     rawTertiary: 'rgb(239, 68, 68)',
     accent: DEFAULT_ACCENT,
-    accentGlow: DEFAULT_ACCENT_GLOW,
     accentHover: DEFAULT_ACCENT_HOVER
   };
 }
@@ -142,7 +140,6 @@ export function applyAmbientColorsToDOM(colors) {
   root.style.setProperty('--ambient-raw-2', colors.rawSecondary);
   root.style.setProperty('--ambient-raw-3', colors.rawTertiary);
   if (colors.accent) root.style.setProperty('--accent-primary', colors.accent);
-  if (colors.accentGlow) root.style.setProperty('--accent-glow', colors.accentGlow);
   if (colors.accentHover) root.style.setProperty('--accent-hover', colors.accentHover);
 }
 
@@ -215,7 +212,6 @@ function deriveAccentColor(r, g, b) {
   return {
     valid: true,
     accent: `rgb(${main.r}, ${main.g}, ${main.b})`,
-    accentGlow: `rgba(${main.r}, ${main.g}, ${main.b}, 0.28)`,
     accentHover: `rgb(${hover.r}, ${hover.g}, ${hover.b})`
   };
 }

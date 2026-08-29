@@ -222,7 +222,6 @@ export function PlayerProvider({ children }) {
       if (c) {
         const root = document.documentElement;
         root.style.setProperty('--accent-primary', `rgb(${c.r}, ${c.g}, ${c.b})`);
-        root.style.setProperty('--accent-glow', `rgba(${c.r}, ${c.g}, ${c.b}, 0.25)`);
         root.style.setProperty('--accent-hover', `rgb(${Math.max(0, c.r - 22)}, ${Math.max(0, c.g - 22)}, ${Math.max(0, c.b - 22)})`);
       }
       if (ambientBgEnabled && currentTrack) {

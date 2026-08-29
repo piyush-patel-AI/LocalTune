@@ -14,7 +14,10 @@ import {
   IconDisc,
   IconImage,
   IconGrid,
-  IconList
+  IconList,
+  IconClock,
+  IconMic,
+  IconListMusic
 } from '../components/Icons';
 import { apiUrl } from '../config';
 
@@ -576,7 +579,10 @@ export default function MobileLibraryView() {
       {/* Pinned & Recents Row */}
       <section className="section-container" style={{ marginTop: '0.5rem' }}>
         <div className="section-title-row">
-          <h2 className="section-title">Pinned & Quick Access</h2>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <IconHeart size={15} color="var(--text-muted)" />
+            Pinned & Quick Access
+          </h2>
           <span className="section-helper">Top favorites</span>
         </div>
 
@@ -683,7 +689,10 @@ export default function MobileLibraryView() {
       {(activeTab === 'all' || activeTab === 'playlists') && (
       <section className="section-container">
         <div className="section-title-row">
-          <h2 className="section-title">Playlists</h2>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <IconListMusic size={15} color="var(--text-muted)" />
+            Playlists
+          </h2>
           <span className="section-helper">{playlists.length} playlists</span>
           </div>
 
@@ -734,7 +743,10 @@ export default function MobileLibraryView() {
       {(activeTab === 'all' || activeTab === 'albums') && albums.length > 0 && (
       <section className="section-container">
         <div className="section-title-row">
-          <h2 className="section-title">Albums</h2>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <IconDisc size={15} color="var(--text-muted)" />
+            Albums
+          </h2>
           <span className="section-helper">{albums.length} {albums.length === 1 ? 'album' : 'albums'}</span>
           </div>
 
@@ -824,7 +836,10 @@ export default function MobileLibraryView() {
       {(activeTab === 'all' || activeTab === 'artists') && artists.length > 0 && (
         <section className="section-container">
           <div className="section-title-row">
-            <h2 className="section-title">Artists</h2>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconMic size={15} color="var(--text-muted)" />
+              Artists
+            </h2>
             <span className="section-helper">{artists.length} artists</span>
           </div>
 

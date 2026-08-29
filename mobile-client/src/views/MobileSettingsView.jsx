@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { IconCheck } from '../components/Icons';
+import { IconCheck, IconMusic, IconSparkles, IconDisc } from '../components/Icons';
 import { useAuth } from '../context/AuthContext';
 import { usePlayer } from '../context/PlayerContext';
 
@@ -216,6 +216,7 @@ export default function MobileSettingsView() {
       {/* Audio Playback Settings Group (Spotify Style) */}
       <section className="section-container">
         <span className="settings-section-label">
+          <IconMusic size={13} color="var(--text-muted)" />
           Audio Playback
         </span>
 
@@ -285,6 +286,7 @@ export default function MobileSettingsView() {
       {/* Recommendation Engine Preset Control */}
       <section className="section-container">
         <span className="settings-section-label">
+          <IconSparkles size={13} color="var(--text-muted)" />
           Recommendation Tuning
         </span>
 
@@ -351,6 +353,7 @@ export default function MobileSettingsView() {
       {/* Dynamic Ambient Background Appearance */}
       <section className="section-container">
         <span className="settings-section-label">
+          <IconDisc size={13} color="var(--text-muted)" />
           Appearance
         </span>
 

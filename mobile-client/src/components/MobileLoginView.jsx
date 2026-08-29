@@ -134,8 +134,7 @@ export default function MobileLoginView() {
               height: '54px',
               objectFit: 'contain',
               borderRadius: '14px',
-              marginBottom: '14px',
-              filter: 'drop-shadow(0 6px 16px rgba(245, 158, 11, 0.3))'
+              marginBottom: '14px'
             }}
           />
           <h1

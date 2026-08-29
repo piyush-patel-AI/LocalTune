@@ -4,12 +4,6 @@
   initial-value: #4ea8de;
 }
 
-@property --accent-glow {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: rgba(78, 168, 222, 0.25);
-}
-
 @property --accent-hover {
   syntax: '<color>';
   inherits: true;
@@ -22,7 +16,6 @@
   
   /* Color System: 95% Deep Dark + 5% Dynamic Accent Glow */
   --accent-primary: #4ea8de;
-  --accent-glow: rgba(78, 168, 222, 0.25);
   --bg-dark: #07090e;
   --bg-surface: #0e121a;
   --bg-card: rgba(255, 255, 255, 0.035);
@@ -45,7 +38,7 @@
   /* Shadows & Lighting */
   --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.35);
   --shadow-ambient: 0 12px 40px rgba(0, 0, 0, 0.6);
-  --shadow-pill: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 20px rgba(245, 158, 11, 0.12);
+  --shadow-pill: 0 10px 30px rgba(0, 0, 0, 0.55);
   
   /* Transitions */
   --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
@@ -53,7 +46,7 @@
   --transition-slow: 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Smoothly animate the dynamic accent so it never snaps/flashes between tracks */
-  transition: --accent-primary 0.6s ease, --accent-glow 0.6s ease, --accent-hover 0.6s ease;
+  transition: --accent-primary 0.6s ease, --accent-hover 0.6s ease;
 }
 
 * {
@@ -123,11 +116,6 @@ body {
   }
 }
 
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.05); }
-}
-
 @keyframes slideUpSheet {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
@@ -166,7 +154,6 @@ body {
   height: 32px;
   border-radius: var(--radius-pill);
   object-fit: cover;
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
   transition: transform var(--transition-fast);
 }
 
@@ -284,7 +271,6 @@ body {
   white-space: nowrap;
   cursor: pointer;
   transition: all var(--transition-fast);
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
 }
 
 .btn-primary:active {
@@ -348,20 +334,6 @@ body {
 
 .hero-continue-card:active {
   transform: scale(0.98);
-}
-
-.hero-bg-glow {
-  position: absolute;
-  top: -30px;
-  right: -30px;
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-  filter: blur(60px);
-  opacity: 0.25;
-  pointer-events: none;
-  animation: pulseGlow 4s ease-in-out infinite;
 }
 
 .hero-tag {
@@ -915,7 +887,6 @@ body {
   height: 4px;
   border-radius: 50%;
   background: var(--accent-primary);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .nav-tab-label {
@@ -1380,7 +1351,6 @@ body {
 
 .speed-dial-tile.active {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 15px var(--accent-glow);
 }
 
 /* Promote the single Speed Dial scroll container to its own compositor layer
@@ -1457,7 +1427,6 @@ body {
   width: 22px;
   border-radius: 4px;
   background: var(--accent-primary);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
 }
 
 /* Quick Picks Rows */
@@ -1729,7 +1698,6 @@ body {
 
 .explore-search-bar:focus-within {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
   transform: translateY(-1px);
 }
 
@@ -1795,7 +1763,6 @@ body {
   background: var(--accent-primary);
   color: #000000;
   border-color: var(--accent-primary);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
 }
 
 /* Featured Hero Spotlight Carousel */
@@ -1968,7 +1935,6 @@ body {
 .view-mode-btn.active {
   background: var(--accent-primary);
   color: #000000;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
 }
 
 /* Pinned Recents Row */
@@ -2119,13 +2085,12 @@ body {
   align-items: center;
   justify-content: center;
   border: 3px solid var(--accent-primary);
-  box-shadow: 0 0 30px rgba(245, 158, 11, 0.45), 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .profile-avatar-container:active .profile-large-avatar {
   transform: scale(0.96);
-  box-shadow: 0 0 40px rgba(245, 158, 11, 0.6);
 }
 
 .profile-avatar-overlay {
@@ -2232,7 +2197,6 @@ body {
   background: var(--accent-primary);
   padding: 0.2rem 0.65rem;
   border-radius: var(--radius-pill);
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
   letter-spacing: 0.02em;
 }
 
@@ -2268,7 +2232,6 @@ body {
   font-size: 0.88rem;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
   transition: all var(--transition-fast);
 }
 
@@ -2304,16 +2267,6 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-}
-
-.section-title::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background: var(--accent-primary);
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--accent-primary);
 }
 
 .media-card-title {
@@ -2527,16 +2480,6 @@ body {
   letter-spacing: 0.07em;
   color: var(--text-muted);
   margin-bottom: 0.65rem;
-}
-
-.settings-section-label::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-  box-shadow: 0 0 8px var(--accent-glow);
-  flex-shrink: 0;
 }
 
 /* Account switcher (remembered accounts) */
