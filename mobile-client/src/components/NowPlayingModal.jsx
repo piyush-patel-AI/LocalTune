@@ -31,14 +31,14 @@ function formatTime(seconds) {
 
 const ArtSlide = memo(function ArtSlide({ track }) {
   if (!track) {
-    return <div className="art-slide-card-empty" />;
+    return <div className="art-slide-empty" />;
   }
   if (track.cover_art_path) {
     return (
       <img
         src={getArtworkUrl(track, 512)}
         alt={track.title}
-        className="art-slide-card-img"
+        className="art-slide-img"
         draggable={false}
         loading="eager"
         decoding="async"
@@ -47,7 +47,7 @@ const ArtSlide = memo(function ArtSlide({ track }) {
     );
   }
   return (
-    <div className="art-slide-card-fallback">
+    <div className="art-slide-fallback">
       <IconMusic size={80} color="var(--accent-primary)" />
     </div>
   );
@@ -322,18 +322,9 @@ export default function NowPlayingModal() {
               onMouseLeave={handleArtEnd}
             >
               <div className="art-carousel-track" ref={trackRef}>
-                {/* Previous slide */}
-                <div className="art-slide-card" key={`prev-${prevTrackItem?.id || 'none'}`}>
-                  <ArtSlide track={prevTrackItem} />
-                </div>
-                {/* Current slide */}
-                <div className="art-slide-card" key={`cur-${currentTrack.id}`}>
-                  <ArtSlide track={currentTrack} />
-                </div>
-                {/* Next slide */}
-                <div className="art-slide-card" key={`next-${nextTrackItem?.id || 'none'}`}>
-                  <ArtSlide track={nextTrackItem} />
-                </div>
+                <ArtSlide key={`prev-${prevTrackItem?.id || 'none'}`} track={prevTrackItem} />
+                <ArtSlide key={`cur-${currentTrack.id}`} track={currentTrack} />
+                <ArtSlide key={`next-${nextTrackItem?.id || 'none'}`} track={nextTrackItem} />
               </div>
             </div>
 
