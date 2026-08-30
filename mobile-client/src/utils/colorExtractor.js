@@ -139,8 +139,15 @@ export function applyAmbientColorsToDOM(colors) {
   root.style.setProperty('--ambient-raw-1', colors.rawPrimary);
   root.style.setProperty('--ambient-raw-2', colors.rawSecondary);
   root.style.setProperty('--ambient-raw-3', colors.rawTertiary);
-  if (colors.accent) root.style.setProperty('--accent-primary', colors.accent);
-  if (colors.accentHover) root.style.setProperty('--accent-hover', colors.accentHover);
+
+  // EXPERIMENT: the app-wide accent is pinned to the static Octave blue
+  // (#4EA8DE defined in :root). Extracted artwork colors are still computed and
+  // exposed above (--ambient-*) for Now Playing / effects, but do not override
+  // the global --accent-primary / --accent-hover so the app shell keeps its
+  // subtle blue accents regardless of the playing artwork.
+  // To restore dynamic accents, uncomment the two lines below.
+  // if (colors.accent) root.style.setProperty('--accent-primary', colors.accent);
+  // if (colors.accentHover) root.style.setProperty('--accent-hover', colors.accentHover);
 }
 
 function rgbToHsl(r, g, b) {

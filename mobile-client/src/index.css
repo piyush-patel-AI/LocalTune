@@ -23,6 +23,11 @@
   --glass-bg: rgba(14, 18, 26, 0.75);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.16);
+
+  /* Experiment: static near-black app shell background (Spotify-like).
+     The artwork keeps providing visual personality via its own card/art and
+     the Now Playing art-blur; the normal app-shell background stays neutral. */
+  --app-background: #08090B;
   
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
@@ -57,7 +62,7 @@
 }
 
 body {
-  background-color: var(--bg-dark);
+  background-color: var(--app-background);
   color: var(--text-primary);
   font-family: var(--font-sans);
   min-height: 100vh;
@@ -79,12 +84,16 @@ body {
   position: relative;
 }
 
-/* The ambient gradient is painted once into a fixed, centered layer instead of
-   using `background-attachment: fixed` on the scrolling container. The latter
-   forces the browser to re-rasterize the gradient on every scroll frame, which
-   is the single biggest source of jank on Android WebView. A position:fixed
-   pseudo-element is composited once and stays put during scroll, preserving the
-   same pinned-glow appearance. */
+/* The app-shell background is painted once into a fixed, centered layer
+   instead of using `background-attachment: fixed` on the scrolling container.
+   The latter forces the browser to re-rasterize the background on every scroll
+   frame, which is the single biggest source of jank on Android WebView. A
+   position:fixed pseudo-element is composited once and stays put during scroll.
+
+   EXPERIMENT: this layer is now STATIC near-black (var(--app-background)) so the
+   normal app shell stays neutral regardless of the playing artwork. The dynamic
+   artwork colors remain available (--ambient-color-*) for Now Playing effects
+   but no longer drive the app-shell background. */
 .mobile-app::before {
   content: "";
   position: fixed;
@@ -96,12 +105,7 @@ body {
   max-width: 480px;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 20% 10%, var(--ambient-color-1, rgba(245, 158, 11, 0.25)), transparent 60%),
-    radial-gradient(circle at 85% 35%, var(--ambient-color-2, rgba(168, 85, 247, 0.18)), transparent 50%),
-    radial-gradient(circle at 50% 85%, var(--ambient-color-3, rgba(239, 68, 68, 0.12)), transparent 60%),
-    linear-gradient(180deg, #0d1017 0%, #07090e 100%);
-  transition: background 1s ease;
+  background: var(--app-background);
 }
 
 /* Keyframe Animations */
