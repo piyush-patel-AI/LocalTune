@@ -31,14 +31,14 @@ function formatTime(seconds) {
 
 const ArtSlide = memo(function ArtSlide({ track }) {
   if (!track) {
-    return <div className="art-carousel-empty" />;
+    return <div className="art-slide-card-empty" />;
   }
   if (track.cover_art_path) {
     return (
       <img
         src={getArtworkUrl(track, 512)}
         alt={track.title}
-        className="art-carousel-img"
+        className="art-slide-card-img"
         draggable={false}
         loading="eager"
         decoding="async"
@@ -47,7 +47,7 @@ const ArtSlide = memo(function ArtSlide({ track }) {
     );
   }
   return (
-    <div className="art-carousel-fallback">
+    <div className="art-slide-card-fallback">
       <IconMusic size={80} color="var(--accent-primary)" />
     </div>
   );
@@ -98,7 +98,7 @@ export default function NowPlayingModal() {
   useEffect(() => {
     if (trackRef.current) {
       trackRef.current.style.transition = 'none';
-      trackRef.current.style.transform = 'translateX(-100%)';
+      trackRef.current.style.transform = 'translate3d(-33.3333%, 0, 0)';
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.id]);
@@ -152,7 +152,7 @@ export default function NowPlayingModal() {
 
     if (trackRef.current) {
       trackRef.current.style.transition = 'none';
-      trackRef.current.style.transform = `translate3d(calc(-100% + ${effectiveDx}px), 0, 0)`;
+      trackRef.current.style.transform = `translate3d(calc(-33.3333% + ${effectiveDx}px), 0, 0)`;
     }
   }, [prevTrackItem, nextTrackItem]);
 
@@ -162,18 +162,17 @@ export default function NowPlayingModal() {
 
     const dx = artDragRef.current.dx;
     const threshold = 60;
-    const viewportWidth = viewportRef.current?.clientWidth || 320;
 
     if (artDragRef.current.decided && Math.abs(dx) > threshold) {
       const goNext = dx < 0 && !!nextTrackItem;
       const goPrev = dx > 0 && !!prevTrackItem;
 
       if (goNext || goPrev) {
-        const finalPx = goNext ? -viewportWidth : viewportWidth;
+        const target = goNext ? '-66.6666%' : '0%';
 
         if (trackRef.current) {
           trackRef.current.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
-          trackRef.current.style.transform = `translate3d(calc(-100% + ${finalPx}px), 0, 0)`;
+          trackRef.current.style.transform = `translate3d(${target}, 0, 0)`;
         }
 
         setTimeout(() => {
@@ -183,7 +182,7 @@ export default function NowPlayingModal() {
           });
           if (trackRef.current) {
             trackRef.current.style.transition = 'none';
-            trackRef.current.style.transform = 'translateX(-100%)';
+            trackRef.current.style.transform = 'translate3d(-33.3333%, 0, 0)';
           }
           artDragRef.current.swiping = false;
         }, 220);
@@ -194,7 +193,7 @@ export default function NowPlayingModal() {
     // Snap back
     if (trackRef.current) {
       trackRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-      trackRef.current.style.transform = 'translateX(-100%)';
+      trackRef.current.style.transform = 'translate3d(-33.3333%, 0, 0)';
     }
     artDragRef.current.swiping = false;
   }, [prevTrackItem, nextTrackItem, nextTrack, prevTrack]);
@@ -324,15 +323,15 @@ export default function NowPlayingModal() {
             >
               <div className="art-carousel-track" ref={trackRef}>
                 {/* Previous slide */}
-                <div className="art-carousel-slide" key={`prev-${prevTrackItem?.id || 'none'}`}>
+                <div className="art-slide-card" key={`prev-${prevTrackItem?.id || 'none'}`}>
                   <ArtSlide track={prevTrackItem} />
                 </div>
                 {/* Current slide */}
-                <div className="art-carousel-slide" key={`cur-${currentTrack.id}`}>
+                <div className="art-slide-card" key={`cur-${currentTrack.id}`}>
                   <ArtSlide track={currentTrack} />
                 </div>
                 {/* Next slide */}
-                <div className="art-carousel-slide" key={`next-${nextTrackItem?.id || 'none'}`}>
+                <div className="art-slide-card" key={`next-${nextTrackItem?.id || 'none'}`}>
                   <ArtSlide track={nextTrackItem} />
                 </div>
               </div>
