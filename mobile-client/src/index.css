@@ -1051,7 +1051,7 @@ body {
   position: relative;
   flex-shrink: 1;
   background: rgba(0, 0, 0, 0.3);
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -1062,6 +1062,7 @@ body {
   height: 100%;
   transform: translateX(-100%);
   will-change: transform;
+  touch-action: pan-y;
 }
 
 .art-carousel-slide {

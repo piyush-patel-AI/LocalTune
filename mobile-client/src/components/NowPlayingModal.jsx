@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { flushSync } from 'react-dom';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
@@ -29,7 +29,7 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-function ArtSlide({ track }) {
+const ArtSlide = memo(function ArtSlide({ track }) {
   if (!track) {
     return <div className="art-carousel-empty" />;
   }
@@ -40,6 +40,8 @@ function ArtSlide({ track }) {
         alt={track.title}
         className="art-carousel-img"
         draggable={false}
+        loading="eager"
+        decoding="async"
         onError={(e) => { e.target.src = logo; }}
       />
     );
@@ -49,7 +51,7 @@ function ArtSlide({ track }) {
       <IconMusic size={80} color="var(--accent-primary)" />
     </div>
   );
-}
+});
 
 export default function NowPlayingModal() {
   const {
@@ -92,13 +94,25 @@ export default function NowPlayingModal() {
   const prevTrackItem = queueIndex > 0 ? queue[queueIndex - 1] : null;
   const nextTrackItem = queueIndex >= 0 && queueIndex < queue.length - 1 ? queue[queueIndex + 1] : null;
 
-  // --- Carousel: reset track position after track change ---
+  // --- Carousel: reset track position after track change (non-animated, seamless) ---
   useEffect(() => {
-    if (!artDragRef.current.swiping && trackRef.current) {
+    if (trackRef.current) {
       trackRef.current.style.transition = 'none';
       trackRef.current.style.transform = 'translateX(-100%)';
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.id]);
+
+  // --- Preload neighbor artwork so both cards are rendered before the gesture ---
+  useEffect(() => {
+    const neighbors = [];
+    if (prevTrackItem?.cover_art_path) neighbors.push(prevTrackItem);
+    if (nextTrackItem?.cover_art_path) neighbors.push(nextTrackItem);
+    neighbors.forEach((t) => {
+      const img = new Image();
+      img.src = getArtworkUrl(t, 512);
+    });
+  }, [prevTrackItem?.id, nextTrackItem?.id, prevTrackItem, nextTrackItem]);
 
   // --- Art swipe gesture handlers ---
   const handleArtStart = useCallback((e) => {
@@ -310,15 +324,15 @@ export default function NowPlayingModal() {
             >
               <div className="art-carousel-track" ref={trackRef}>
                 {/* Previous slide */}
-                <div className="art-carousel-slide">
+                <div className="art-carousel-slide" key={`prev-${prevTrackItem?.id || 'none'}`}>
                   <ArtSlide track={prevTrackItem} />
                 </div>
                 {/* Current slide */}
-                <div className="art-carousel-slide">
+                <div className="art-carousel-slide" key={`cur-${currentTrack.id}`}>
                   <ArtSlide track={currentTrack} />
                 </div>
                 {/* Next slide */}
-                <div className="art-carousel-slide">
+                <div className="art-carousel-slide" key={`next-${nextTrackItem?.id || 'none'}`}>
                   <ArtSlide track={nextTrackItem} />
                 </div>
               </div>
