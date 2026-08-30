@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
@@ -28,6 +29,28 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+function ArtSlide({ track }) {
+  if (!track) {
+    return <div className="art-carousel-empty" />;
+  }
+  if (track.cover_art_path) {
+    return (
+      <img
+        src={getArtworkUrl(track, 512)}
+        alt={track.title}
+        className="art-carousel-img"
+        draggable={false}
+        onError={(e) => { e.target.src = logo; }}
+      />
+    );
+  }
+  return (
+    <div className="art-carousel-fallback">
+      <IconMusic size={80} color="var(--accent-primary)" />
+    </div>
+  );
+}
+
 export default function NowPlayingModal() {
   const {
     currentTrack,
@@ -38,6 +61,7 @@ export default function NowPlayingModal() {
     isShuffled,
     isRepeating,
     repeatMode,
+    queue,
     isNowPlayingOpen,
     closeNowPlaying,
     togglePlay,
@@ -58,20 +82,32 @@ export default function NowPlayingModal() {
   const currentYRef = useRef(0);
   const isDraggingRef = useRef(false);
 
-  // Album art swipe gesture state
-  const artDragRef = useRef({ active: false, startX: 0, startY: 0, dx: 0, decided: false });
-  const artImgRef = useRef(null);
+  // Album art carousel refs
+  const viewportRef = useRef(null);
+  const trackRef = useRef(null);
+  const artDragRef = useRef({ active: false, startX: 0, startY: 0, dx: 0, decided: false, swiping: false });
 
-  // --- Album art swipe: horizontal drag to change track ---
-  // MUST be before the early return to satisfy React hooks rules
+  // --- Carousel: resolve prev/next tracks from queue ---
+  const queueIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+  const prevTrackItem = queueIndex > 0 ? queue[queueIndex - 1] : null;
+  const nextTrackItem = queueIndex >= 0 && queueIndex < queue.length - 1 ? queue[queueIndex + 1] : null;
+
+  // --- Carousel: reset track position after track change ---
+  useEffect(() => {
+    if (!artDragRef.current.swiping && trackRef.current) {
+      trackRef.current.style.transition = 'none';
+      trackRef.current.style.transform = 'translateX(-100%)';
+    }
+  }, [currentTrack?.id]);
+
+  // --- Art swipe gesture handlers ---
   const handleArtStart = useCallback((e) => {
     if (e.target.closest('button, input, a')) return;
     e.stopPropagation();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    artDragRef.current = { active: true, startX: clientX, startY: clientY, dx: 0, decided: false };
-    const img = artImgRef.current;
-    if (img) img.style.transition = 'none';
+    artDragRef.current = { active: true, startX: clientX, startY: clientY, dx: 0, decided: false, swiping: true };
+    if (trackRef.current) trackRef.current.style.transition = 'none';
   }, []);
 
   const handleArtMove = useCallback((e) => {
@@ -86,6 +122,7 @@ export default function NowPlayingModal() {
         artDragRef.current.decided = true;
       } else if (Math.abs(dy) > 10) {
         artDragRef.current.active = false;
+        artDragRef.current.swiping = false;
         return;
       }
       return;
@@ -93,52 +130,62 @@ export default function NowPlayingModal() {
 
     e.preventDefault();
     artDragRef.current.dx = dx;
-    const img = artImgRef.current;
-    if (img) {
-      img.style.transform = `translate3d(${dx}px, 0, 0)`;
+
+    // Apply resistance at boundaries
+    let effectiveDx = dx;
+    if (dx < 0 && !nextTrackItem) effectiveDx = dx * 0.25;
+    else if (dx > 0 && !prevTrackItem) effectiveDx = dx * 0.25;
+
+    if (trackRef.current) {
+      trackRef.current.style.transition = 'none';
+      trackRef.current.style.transform = `translate3d(calc(-100% + ${effectiveDx}px), 0, 0)`;
     }
-  }, []);
+  }, [prevTrackItem, nextTrackItem]);
 
   const handleArtEnd = useCallback(() => {
     if (!artDragRef.current.active) return;
     artDragRef.current.active = false;
 
     const dx = artDragRef.current.dx;
-    const img = artImgRef.current;
+    const threshold = 60;
+    const viewportWidth = viewportRef.current?.clientWidth || 320;
 
-    if (artDragRef.current.decided && Math.abs(dx) > 60) {
-      const direction = dx < 0 ? -1 : 1;
-      if (img) {
-        img.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
-        img.style.transform = `translate3d(${direction * 500}px, 0, 0)`;
-      }
-      setTimeout(() => {
-        if (dx < 0) nextTrack();
-        else prevTrack();
-        requestAnimationFrame(() => {
-          const el = artImgRef.current;
-          if (el) {
-            el.style.transition = 'none';
-            el.style.transform = 'translate3d(0, 0, 0)';
+    if (artDragRef.current.decided && Math.abs(dx) > threshold) {
+      const goNext = dx < 0 && !!nextTrackItem;
+      const goPrev = dx > 0 && !!prevTrackItem;
+
+      if (goNext || goPrev) {
+        const finalPx = goNext ? -viewportWidth : viewportWidth;
+
+        if (trackRef.current) {
+          trackRef.current.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
+          trackRef.current.style.transform = `translate3d(calc(-100% + ${finalPx}px), 0, 0)`;
+        }
+
+        setTimeout(() => {
+          flushSync(() => {
+            if (goNext) nextTrack();
+            else prevTrack();
+          });
+          if (trackRef.current) {
+            trackRef.current.style.transition = 'none';
+            trackRef.current.style.transform = 'translateX(-100%)';
           }
-        });
-      }, 220);
-    } else if (img) {
-      img.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-      img.style.transform = 'translate3d(0, 0, 0)';
+          artDragRef.current.swiping = false;
+        }, 220);
+        return;
+      }
     }
-  }, [nextTrack, prevTrack]);
 
-  if (!isNowPlayingOpen || !currentTrack) return null;
+    // Snap back
+    if (trackRef.current) {
+      trackRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      trackRef.current.style.transform = 'translateX(-100%)';
+    }
+    artDragRef.current.swiping = false;
+  }, [prevTrackItem, nextTrackItem, nextTrack, prevTrack]);
 
-  const isFav = !!favoritesMap[currentTrack.id];
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 2500);
-  };
-
+  // --- Overlay vertical swipe-to-dismiss ---
   const handleStart = (e) => {
     if (e.target.closest('button, input, a, range')) return;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -178,6 +225,11 @@ export default function NowPlayingModal() {
       }
     }
   };
+
+  if (!isNowPlayingOpen || !currentTrack) return null;
+
+  const isFav = !!favoritesMap[currentTrack.id];
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <>
@@ -244,9 +296,10 @@ export default function NowPlayingModal() {
 
           {/* Centered Main Player Block */}
           <div className="now-playing-center-group">
-            {/* Big Artwork Box */}
+            {/* Artwork Carousel — viewport clips the track */}
             <div
-              className="now-playing-art-container"
+              className="art-carousel-viewport"
+              ref={viewportRef}
               onTouchStart={handleArtStart}
               onTouchMove={handleArtMove}
               onTouchEnd={handleArtEnd}
@@ -255,20 +308,20 @@ export default function NowPlayingModal() {
               onMouseUp={handleArtEnd}
               onMouseLeave={handleArtEnd}
             >
-              {currentTrack.cover_art_path ? (
-                <img
-                  ref={artImgRef}
-                  src={getArtworkUrl(currentTrack, 512)}
-                  alt={currentTrack.title}
-                  className="now-playing-art-img"
-                  draggable={false}
-                  onError={(e) => { e.target.src = logo; }}
-                />
-              ) : (
-                <div className="now-playing-art-fallback">
-                  <IconMusic size={80} color="var(--accent-primary)" />
+              <div className="art-carousel-track" ref={trackRef}>
+                {/* Previous slide */}
+                <div className="art-carousel-slide">
+                  <ArtSlide track={prevTrackItem} />
                 </div>
-              )}
+                {/* Current slide */}
+                <div className="art-carousel-slide">
+                  <ArtSlide track={currentTrack} />
+                </div>
+                {/* Next slide */}
+                <div className="art-carousel-slide">
+                  <ArtSlide track={nextTrackItem} />
+                </div>
+              </div>
             </div>
 
             {/* Controls & Scrub Section Directly Below Artwork */}
