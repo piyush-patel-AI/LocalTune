@@ -1044,9 +1044,7 @@ body {
   height: min(84vw, 36vh, 320px);
   aspect-ratio: 1 / 1;
   margin: 0.5rem auto;
-  border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75);
   position: relative;
   flex-shrink: 1;
   background: transparent;
@@ -1059,7 +1057,7 @@ body {
   display: flex;
   width: 300%;
   height: 100%;
-  transform: translate3d(0, 0, 0);
+  transform: translate3d(-33.3333%, 0, 0);
   will-change: transform;
   touch-action: pan-y;
 }
@@ -1079,6 +1077,8 @@ body {
   object-fit: cover;
   pointer-events: none;
   user-select: none;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75);
 }
 
 .art-slide-card-fallback {
@@ -1088,6 +1088,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--radius-xl);
 }
 
 .art-slide-card-empty {
