@@ -379,7 +379,7 @@ export default function NowPlayingModal() {
                     onChange={(e) => seekTrack(Number(e.target.value))}
                     className="now-playing-scrub-input"
                     style={{
-                      background: `linear-gradient(to right, var(--accent-primary) ${progressPercent}%, rgba(255, 255, 255, 0.15) ${progressPercent}%)`
+                      background: `linear-gradient(to right, #F5F5F5 ${progressPercent}%, rgba(255, 255, 255, 0.15) ${progressPercent}%)`
                     }}
                   />
                 </div>

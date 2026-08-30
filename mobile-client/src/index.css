@@ -76,6 +76,29 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Home screen: subtle decorative ambient glow behind the top content.
+   The view establishes its own stacking context (isolation) so the glow stays
+   BEHIND the actual content, scrolls away with the page (it is NOT position:
+   fixed), and never intercepts pointer/touch events. The gradient value is set
+   inline from a module-level constant, so it is fixed per page load. */
+.mobile-home-view {
+  position: relative;
+  isolation: isolate;
+}
+
+.home-top-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34vh;
+  z-index: -1;
+  pointer-events: none;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
 /* Master Mobile Container & Dynamic Ambient Canvas */
 .mobile-app {
   max-width: 480px;

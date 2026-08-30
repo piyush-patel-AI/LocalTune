@@ -20,6 +20,21 @@ import { apiUrl } from '../config';
 
 const CATEGORIES = ['All', 'Chill', 'Energy', 'Focus', 'Workout', 'Late Night', 'Acoustic'];
 
+// Subtle, dark ambient tints for the top glow on Home. Purely decorative and
+// independent of the playing artwork. One is selected ONCE when this module
+// loads, so it stays stable across re-renders, scroll, playback/progress and
+// tab switches, and only changes again on a full page reload.
+const HOME_RIM_GRADIENTS = [
+  'radial-gradient(130% 100% at 50% 0%, rgba(37, 99, 235, 0.13), transparent 68%)',
+  'radial-gradient(130% 100% at 50% 0%, rgba(139, 92, 246, 0.11), transparent 68%)',
+  'radial-gradient(130% 100% at 50% 0%, rgba(34, 211, 238, 0.10), transparent 68%)',
+  'radial-gradient(130% 100% at 50% 0%, rgba(79, 70, 229, 0.12), transparent 68%)',
+  'radial-gradient(130% 100% at 50% 0%, rgba(217, 70, 239, 0.09), transparent 68%)',
+  'radial-gradient(130% 100% at 50% 0%, rgba(45, 212, 191, 0.09), transparent 68%)',
+  'radial-gradient(130% 100% at 50% 0%, rgba(217, 119, 6, 0.08), transparent 68%)'
+];
+const HOME_TOP_GRADIENT = HOME_RIM_GRADIENTS[Math.floor(Math.random() * HOME_RIM_GRADIENTS.length)];
+
 // Memoized so the Speed Dial tiles do not re-render during a swipe when only
 // the active page indicator (activePage) changes. Props are stable while the
 // user scrolls: track data is unchanged and currentTrackId only changes on
@@ -256,6 +271,7 @@ export default function MobileHomeView() {
 
   return (
     <div className="mobile-home-view animate-fade-in">
+      <div className="home-top-gradient" aria-hidden="true" style={{ background: HOME_TOP_GRADIENT }} />
       {/* Hero "Continue Listening" Carousel */}
       {continueListeningTracks.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
