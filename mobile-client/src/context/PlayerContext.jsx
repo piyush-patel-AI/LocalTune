@@ -46,6 +46,22 @@ function hexToRgb(hex) {
   return { r, g, b };
 }
 
+// Number of upcoming (after current) tracks we aim to keep available in the
+// queue so playback doesn't die after only 2-3 songs.
+const UPCOMING_TARGET = 10;
+
+function dedupeTracksByID(list) {
+  const seen = new Set();
+  const out = [];
+  for (const t of list) {
+    if (!t || !t.id) continue;
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
+
 export function PlayerProvider({ children }) {
   // Restore initial state from localStorage if available
   const [currentTrack, setCurrentTrack] = useState(() => {
@@ -409,14 +425,56 @@ export function PlayerProvider({ children }) {
     }
   };
 
+  // Pad the upcoming portion of the queue with additional eligible library
+  // tracks so playback doesn't end after just 2-3 songs. Context tracks are
+  // always kept first; library/catalog tracks are used only as a FALLBACK to
+  // reach the target upcoming count. Never duplicates, never adds the current
+  // track as an upcoming entry, never invents tracks, never reshuffles the
+  // existing queue. If there are fewer eligible tracks than needed, it uses
+  // everything available.
+  const ensureQueueHealthy = (baseQueue, currentTrackId) => {
+    const currentIdx = baseQueue.findIndex((t) => t.id === currentTrackId);
+    const upcomingCount =
+      currentIdx === -1 ? baseQueue.length : baseQueue.length - currentIdx - 1;
+    const needed = Math.max(0, UPCOMING_TARGET - upcomingCount);
+    if (needed === 0) return;
+
+    (async () => {
+      try {
+        const res = await apiClient.get('/api/tracks');
+        const allTracks = res.tracks || [];
+        const baseIds = new Set(baseQueue.map((t) => t.id));
+        const candidates = allTracks.filter(
+          (t) => t && t.id !== currentTrackId && !baseIds.has(t.id)
+        );
+        if (candidates.length === 0) return;
+        const pad = dedupeTracksByID(candidates).slice(0, needed);
+        setQueue((prev) => {
+          const prevIds = new Set(prev.map((t) => t.id));
+          const freshPad = dedupeTracksByID(pad).filter((t) => !prevIds.has(t.id));
+          if (freshPad.length === 0) return prev;
+          return [...prev, ...freshPad];
+        });
+      } catch (err) {
+        console.error('[Queue Health] Failed to pad upcoming queue:', err);
+      }
+    })();
+  };
+
   const playTrack = (track, newQueue = null, autoOpenNowPlaying = true) => {
     if (!track) return;
     setCurrentTrack(track);
 
     if (newQueue && newQueue.length > 0) {
-      setQueue(newQueue);
+      const deduped = dedupeTracksByID(newQueue);
+      setQueue(deduped);
+      ensureQueueHealthy(deduped, track.id);
     } else if (queueRef.current.length === 0) {
       buildFallbackQueue(track);
+    } else if (queueRef.current.some((t) => t.id === track.id)) {
+      // The track is already in an existing queue; just make sure the upcoming
+      // portion stays healthy without reshuffling anything.
+      ensureQueueHealthy(queueRef.current, track.id);
     }
 
     if (track.artist) {

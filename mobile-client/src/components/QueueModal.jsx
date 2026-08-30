@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import BottomSheet from './BottomSheet';
 import { IconMusic, IconPlus, IconPlay, IconTrash } from './Icons';
 import { apiUrl } from '../config';
+
+const RECS_LIMIT = 10;
 
 export default function QueueModal() {
   const {
@@ -18,32 +20,85 @@ export default function QueueModal() {
     addToQueue
   } = usePlayer();
 
+  const [candidatePool, setCandidatePool] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
 
-  useEffect(() => {
-    if (isQueueOpen) {
-      fetchQueueRecommendations();
-    }
-  }, [isQueueOpen, currentTrack, queue.length]);
+  // Filter the candidate pool down to songs that are NOT currently playing and
+  // NOT already queued, deduplicating by id. This reacts to the live queue.
+  const buildRecommendations = useCallback((pool, queueList, curTrack) => {
+    const excluded = new Set(queueList.map((t) => t && t.id));
+    if (curTrack && curTrack.id) excluded.add(curTrack.id);
 
-  const fetchQueueRecommendations = async () => {
+    const seen = new Set();
+    const result = [];
+    for (const t of pool) {
+      if (!t || !t.id) continue;
+      if (excluded.has(t.id)) continue;
+      if (seen.has(t.id)) continue;
+      seen.add(t.id);
+      result.push(t);
+      if (result.length >= RECS_LIMIT) break;
+    }
+    return result;
+  }, []);
+
+  // Fetch a layered candidate pool: personalized recommendations first, then
+  // the full library/catalog as a fallback so we can always surface a
+  // replacement. Uses the existing recommendation infrastructure (currentTrackId
+  // personalization); no refetch is needed when the queue changes.
+  const fetchCandidatePool = useCallback(async () => {
     try {
       setLoadingRecs(true);
-      const res = await fetch(apiUrl('/api/tracks/recommendations'), { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        const rawList = data.recommendations || data.tracks || [];
-        const queueIds = new Set(queue.map((t) => t.id));
-        const filtered = rawList.filter((t) => !queueIds.has(t.id)).slice(0, 10);
-        setRecommendations(filtered);
+      const curId = currentTrack?.id ? encodeURIComponent(currentTrack.id) : '';
+      const [recsRes, libRes] = await Promise.all([
+        fetch(apiUrl(`/api/tracks/recommendations?currentTrackId=${curId}`), { credentials: 'include' }),
+        fetch(apiUrl('/api/tracks'), { credentials: 'include' })
+      ]);
+
+      let recTracks = [];
+      if (recsRes.ok) {
+        const recData = await recsRes.json();
+        recTracks = recData.recommendations || recData.tracks || [];
       }
+      let libraryTracks = [];
+      if (libRes.ok) {
+        const libData = await libRes.json();
+        libraryTracks = libData.tracks || [];
+      }
+
+      // Recommendations first (personalized), then library as fallback.
+      const seen = new Set();
+      const pool = [];
+      for (const t of [...recTracks, ...libraryTracks]) {
+        if (!t || !t.id) continue;
+        if (seen.has(t.id)) continue;
+        seen.add(t.id);
+        pool.push(t);
+      }
+      setCandidatePool(pool);
     } catch (err) {
       console.error('Error fetching queue recommendations:', err);
     } finally {
       setLoadingRecs(false);
     }
-  };
+  }, [currentTrack?.id]);
+
+  // Reload the candidate pool when the sheet opens or the current track changes
+  // (so personalization follows the currently playing song). This is the only
+  // network call for recommendations.
+  useEffect(() => {
+    if (isQueueOpen) {
+      fetchCandidatePool();
+    }
+  }, [isQueueOpen, fetchCandidatePool]);
+
+  // Recalculate the filtered recommendations on every queue state change so the
+  // list stays in sync without a refresh, reopen, or extra network request.
+  useEffect(() => {
+    if (!isQueueOpen) return;
+    setRecommendations(buildRecommendations(candidatePool, queue, currentTrack));
+  }, [isQueueOpen, candidatePool, queue, currentTrack, buildRecommendations]);
 
   if (!isQueueOpen) return null;
 
