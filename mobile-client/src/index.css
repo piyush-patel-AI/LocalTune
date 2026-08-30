@@ -1055,9 +1055,10 @@ body {
 
 .art-carousel-track {
   display: flex;
-  width: 300%;
+  width: max-content;
   height: 100%;
-  transform: translate3d(-33.3333%, 0, 0);
+  column-gap: 12px;
+  transform: translate3d(0, 0, 0);
   will-change: transform;
   touch-action: pan-y;
 }

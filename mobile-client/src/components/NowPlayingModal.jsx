@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, memo } from 'react';
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, memo } from 'react';
 import { flushSync } from 'react-dom';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
@@ -89,16 +89,22 @@ export default function NowPlayingModal() {
   const trackRef = useRef(null);
   const artDragRef = useRef({ active: false, startX: 0, startY: 0, dx: 0, decided: false, swiping: false });
 
+  // Horizontal gap (px) between neighboring art slides; must be accounted for
+  // in every track offset so centering and snap positions stay exact.
+  const GAP = 12;
+  const getStep = () => (viewportRef.current?.clientWidth || 0) + GAP;
+
   // --- Carousel: resolve prev/next tracks from queue ---
   const queueIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
   const prevTrackItem = queueIndex > 0 ? queue[queueIndex - 1] : null;
   const nextTrackItem = queueIndex >= 0 && queueIndex < queue.length - 1 ? queue[queueIndex + 1] : null;
 
   // --- Carousel: reset track position after track change (non-animated, seamless) ---
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (trackRef.current) {
+      const step = getStep();
       trackRef.current.style.transition = 'none';
-      trackRef.current.style.transform = 'translate3d(-33.3333%, 0, 0)';
+      trackRef.current.style.transform = `translate3d(${-step}px, 0, 0)`;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.id]);
@@ -151,8 +157,9 @@ export default function NowPlayingModal() {
     else if (dx > 0 && !prevTrackItem) effectiveDx = dx * 0.25;
 
     if (trackRef.current) {
+      const step = getStep();
       trackRef.current.style.transition = 'none';
-      trackRef.current.style.transform = `translate3d(calc(-33.3333% + ${effectiveDx}px), 0, 0)`;
+      trackRef.current.style.transform = `translate3d(${-step + effectiveDx}px, 0, 0)`;
     }
   }, [prevTrackItem, nextTrackItem]);
 
@@ -168,11 +175,12 @@ export default function NowPlayingModal() {
       const goPrev = dx > 0 && !!prevTrackItem;
 
       if (goNext || goPrev) {
-        const target = goNext ? '-66.6666%' : '0%';
+        const step = getStep();
+        const target = goNext ? -(2 * step) : 0;
 
         if (trackRef.current) {
           trackRef.current.style.transition = 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)';
-          trackRef.current.style.transform = `translate3d(${target}, 0, 0)`;
+          trackRef.current.style.transform = `translate3d(${target}px, 0, 0)`;
         }
 
         setTimeout(() => {
@@ -181,8 +189,9 @@ export default function NowPlayingModal() {
             else prevTrack();
           });
           if (trackRef.current) {
+            const resetStep = getStep();
             trackRef.current.style.transition = 'none';
-            trackRef.current.style.transform = 'translate3d(-33.3333%, 0, 0)';
+            trackRef.current.style.transform = `translate3d(${-resetStep}px, 0, 0)`;
           }
           artDragRef.current.swiping = false;
         }, 220);
@@ -192,11 +201,12 @@ export default function NowPlayingModal() {
 
     // Snap back
     if (trackRef.current) {
+      const step = getStep();
       trackRef.current.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
-      trackRef.current.style.transform = 'translate3d(-33.3333%, 0, 0)';
+      trackRef.current.style.transform = `translate3d(${-step}px, 0, 0)`;
     }
     artDragRef.current.swiping = false;
-  }, [prevTrackItem, nextTrackItem, nextTrack, prevTrack]);
+  }, [viewportRef, nextTrackItem, prevTrackItem, nextTrack, prevTrack]);
 
   // --- Overlay vertical swipe-to-dismiss ---
   const handleStart = (e) => {
