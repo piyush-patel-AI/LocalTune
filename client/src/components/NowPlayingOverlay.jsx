@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import { logRecommendationAction } from '../services/recommendationTelemetry';
 import AddToPlaylistModal from './AddToPlaylistModal';
 import {
   IconMusic,
@@ -356,7 +357,13 @@ export default function NowPlayingOverlay({ onClose }) {
                       >
                         <div
                           className="np-queue-art-wrapper"
-                          onClick={() => playTrack(track, [...queue, track])}
+                          onClick={() => {
+                            logRecommendationAction(track.id, 'played', {
+                              shelfId: 'nowPlaying', surface: 'nowPlaying', source: 'recommended',
+                              currentTrackId: currentTrack ? currentTrack.id : null
+                            });
+                            playTrack(track, [...queue, track]);
+                          }}
                           style={{ cursor: 'pointer' }}
                         >
                           {track.cover_art_path ? (
@@ -375,7 +382,13 @@ export default function NowPlayingOverlay({ onClose }) {
 
                         <div
                           className="np-queue-meta"
-                          onClick={() => playTrack(track, [...queue, track])}
+                          onClick={() => {
+                            logRecommendationAction(track.id, 'played', {
+                              shelfId: 'nowPlaying', surface: 'nowPlaying', source: 'recommended',
+                              currentTrackId: currentTrack ? currentTrack.id : null
+                            });
+                            playTrack(track, [...queue, track]);
+                          }}
                           style={{ cursor: 'pointer', flex: 1 }}
                         >
                           <div className="np-queue-song-title" style={{ fontSize: '0.82rem' }}>{track.title}</div>

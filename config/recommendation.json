@@ -1,5 +1,6 @@
 {
-  "version": "v1",
+  "version": "v2",
+  "comment": "Recommendation policy. Top-level 'weights'/'thresholds' are the V1 engine's values, preserved verbatim so the frozen legacy engine (server/recommendation/legacy/v1Engine.js) can A/B benchmark against V2. All V2 policy lives in 'pipeline'.",
   "weights": {
     "completionHigh": 15.0,
     "completionMedium": 6.0,
@@ -33,5 +34,136 @@
     "cooldownHours": 6,
     "consecutiveSameArtistMax": 2,
     "topArtistMaxCount": 4
+  },
+  "pipeline": {
+    "algorithmVersion": "v2",
+    "cache": {
+      "ttlSeconds": 300,
+      "profileTtlSeconds": 600,
+      "sessionTtlSeconds": 300,
+      "maxEntries": 500
+    },
+    "session": {
+      "historyDepth": 30,
+      "recencyTracks": {
+        "veryRecent": 3,
+        "session": 15
+      },
+      "recencyDays": {
+        "recent": 21,
+        "longTerm": 90
+      },
+      "timeGapNewSessionMs": 1800000
+    },
+    "retrieval": {
+      "candidateLimit": 120,
+      "sourceWeights": {
+        "currentTrack": 0.28,
+        "sessionAffinity": 0.24,
+        "transition": 0.18,
+        "longTermTaste": 0.16,
+        "discovery": 0.1,
+        "exploration": 0.04
+      },
+      "currentTrack": {
+        "artistWeight": 1.0,
+        "genreWeight": 0.9,
+        "albumWeight": 0.8
+      },
+      "discovery": {
+        "maxNeverPlayed": 20,
+        "maxRarelyPlayed": 20,
+        "minGenreAffinity": 2.0,
+        "minArtistAffinity": 1.5
+      },
+      "exploration": {
+        "maxPoolSize": 15,
+        "qualityFloor": 0.4
+      }
+    },
+    "transitions": {
+      "maxProbability": 0.5,
+      "minConfidenceCount": 3,
+      "confidenceLogBase": 2,
+      "recencyHalfLifeDays": 21,
+      "artistLevelFallback": true,
+      "evidenceWeightCap": 16
+    },
+    "ranking": {
+      "strategy": "heuristic",
+      "weights": {
+        "currentTrackMatch": 22,
+        "sessionMatch": 18,
+        "transitionProbability": 16,
+        "artistAffinity": 12,
+        "genreAffinity": 12,
+        "completionProbability": 10,
+        "favoriteProbability": 8,
+        "freshness": 6,
+        "discoveryValue": 10,
+        "qualitySignal": 4,
+        "explorationValue": 3,
+        "timeOfDay": 5
+      },
+      "penalties": {
+        "recentPlayPenaltyMax": 40,
+        "repeatedRecommendationPenaltyMax": 25,
+        "recentSkipPenaltyMax": 35,
+        "artistOverusePenaltyMax": 15,
+        "albumOverusePenaltyMax": 12,
+        "sessionDuplicatePenalty": 25,
+        "cooldownPenalty": 30,
+        "sameSessionExclusionPenalty": 60
+      },
+      "recencyDecay": {
+        "recentPlayPenaltyHours": [2, 12, 48, 168],
+        "recentPlayPenaltyValues": [40, 28, 16, 6]
+      }
+    },
+    "cooldown": {
+      "recommendationCooldownHours": 6,
+      "skipCooldownHours": 72
+    },
+    "diversity": {
+      "maxSameArtist": 2,
+      "maxSameAlbumPerN": 1,
+      "maxGenreStreak": 3,
+      "artistSoftPenalty": 12,
+      "albumSoftPenalty": 10,
+      "genreStreakPenalty": 7,
+      "artistWindow": 6
+    },
+    "discovery": {
+      "budgetRatios": {
+        "highConfidence": 0.3,
+        "related": 0.25,
+        "fresh": 0.2,
+        "trusted": 0.15,
+        "exploration": 0.1
+      },
+      "adaptive": {
+        "completionThreshold": 0.5,
+        "skipRateThreshold": 0.35,
+        "discoveryBoostMax": 1.5,
+        "discoveryShrinkMin": 0.5
+      }
+    },
+    "antiRepetition": {
+      "sameSessionExclusionMs": 7200000,
+      "queueDedupHard": true,
+      "maxArtistPerQueue": 3,
+      "maxAlbumPerQueue": 2
+    },
+    "familiarity": {
+      "lovedCompletionRatio": 0.85,
+      "veryRecentHours": 48,
+      "replayRecoveryDays": 7,
+      "skipSuppressionDays": 3
+    },
+    "telemetry": {
+      "defaultSurface": "generic",
+      "outcomeLookbackHours": 2,
+      "impressionLogging": true
+    }
   }
 }

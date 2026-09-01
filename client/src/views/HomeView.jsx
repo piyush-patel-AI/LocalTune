@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
+import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
   IconPlay,
   IconPause,
@@ -191,7 +192,12 @@ export default function HomeView() {
                 <div
                   key={track.id}
                   className={`quick-pick-pill ${isCurrent ? 'active' : ''}`}
-                  onClick={() => playTrack(track, quickPicks)}
+                  onClick={() => {
+                  logRecommendationAction(track.id, 'played', {
+                    shelfId: 'quickPicks', surface: 'quickPicks', source: 'home'
+                  });
+                  playTrack(track, quickPicks);
+                }}
                 >
                   {track.cover_art_path ? (
                     <img src={`/api/tracks/${track.id}/art`} alt={track.title} className="quick-pick-art" />
@@ -246,6 +252,9 @@ export default function HomeView() {
                     if (currentTrack && currentTrack.id === heroTrack.id) {
                       togglePlay();
                     } else {
+                      logRecommendationAction(heroTrack.id, 'played', {
+                        shelfId: 'hero', surface: 'hero', source: 'home'
+                      });
                       playTrack(heroTrack, suggestedTracks);
                     }
                   }}

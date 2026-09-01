@@ -33,7 +33,11 @@ export async function cleanAllTables() {
       'user_sessions'
     ];
     for (const t of tables) {
-      await client.query(`TRUNCATE ${t} CASCADE`);
+      try {
+        await client.query(`TRUNCATE ${t} CASCADE`);
+      } catch (err) {
+        if (err.code !== '42P01') throw err; // undefined_table: skip, e.g. user_sessions
+      }
     }
     await client.query('COMMIT');
   } catch (err) {

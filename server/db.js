@@ -615,18 +615,34 @@ export const isFavorite = async (userId, trackId) => {
 };
 
 // --- Recommendation Telemetry & Data Operations ---
-export const logPlayEvent = async ({ userId, trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId }) => {
+export const logPlayEvent = async ({
+  userId, trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId,
+  playOrigin = 'manual', sessionId = null
+}) => {
   const listened = parseFloat(listenedSeconds) || 0;
   const duration = parseFloat(durationSeconds) || 0;
   const completionRatio = duration > 0 ? Math.min(1.0, listened / duration) : 0;
   const isSkip = (listened < 15 && duration >= 20 && completionRatio < 0.3) ? true : false;
   const hourOfDay = new Date().getHours();
+  const origin = NORMALIZE_PLAY_ORIGIN(playOrigin);
+  const sess = sessionId && typeof sessionId === 'string' ? sessionId.slice(0, 255) : null;
 
   await queryRun(
-    `INSERT INTO play_logs (user_id, track_id, listened_seconds, duration_seconds, completion_ratio, is_skip, is_replay, hour_of_day)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [userId, trackId, listened, duration, completionRatio, isSkip, !!isReplay, hourOfDay]
+    `INSERT INTO play_logs (user_id, track_id, listened_seconds, duration_seconds, completion_ratio, is_skip, is_replay, hour_of_day, play_origin, session_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [userId, trackId, listened, duration, completionRatio, isSkip, !!isReplay, hourOfDay, origin, sess]
   );
+
+  // Strong negative feedback telemetry: accumulates skip history on the track so
+  // the anti-repetition pipeline can suppress it with a decaying penalty.
+  if (isSkip) {
+    await queryRun(
+      `UPDATE tracks
+       SET total_skip_count = COALESCE(total_skip_count, 0) + 1, last_skipped_at = NOW()
+       WHERE id = $1`,
+      [trackId]
+    );
+  }
 
   if (previousTrackId && previousTrackId !== trackId) {
     await queryRun(
@@ -638,15 +654,75 @@ export const logPlayEvent = async ({ userId, trackId, listenedSeconds, durationS
       [userId, previousTrackId, trackId]
     );
   }
+
+  // Attribute the outcome to the most recent recommendation impression of this
+  // track so we can later learn P(play/completion/skip | recommendation).
+  await updateLatestRecommendationOutcome({
+    userId, trackId, listenedSeconds: listened, durationSeconds: duration,
+    completionRatio, isSkip, isReplay: !!isReplay
+  });
 };
 
-export const getPlayLogsForUser = async (userId) => {
+const NORMALIZE_PLAY_ORIGIN = (origin) => {
+  const value = String(origin || '').trim().toLowerCase();
+  const allowed = new Set([
+    'manual', 'search', 'library', 'playlist', 'favorite', 'radio',
+    'recommended', 'autoplay', 'queue', 'shuffle'
+  ]);
+  return allowed.has(value) ? value : 'manual';
+};
+
+/**
+ * Fold a completed play outcome back onto the latest matching recommendation
+ * impression within a short lookback window. This is what turns
+ * recommendation_logs rows into labeled training examples (played/completed/
+ * skipped/replayed) without requiring the client to correlate them itself.
+ */
+export const updateLatestRecommendationOutcome = async ({
+  userId, trackId, listenedSeconds, durationSeconds, completionRatio, isSkip, isReplay
+}) => {
+  if (!userId || !trackId) return;
+  const result = await queryRun(
+    `UPDATE recommendation_logs
+     SET listened_seconds = $1,
+         completion_ratio = $2,
+         is_skip = $3,
+         is_replay = $4
+     WHERE id = (
+       SELECT id FROM recommendation_logs
+       WHERE user_id = $5 AND track_id = $6 AND action IN ('played', 'shown')
+         AND timestamp > NOW() - INTERVAL '2 hours'
+       ORDER BY timestamp DESC
+       LIMIT 1
+     )`,
+    [listenedSeconds || 0, completionRatio || 0, !!isSkip, !!isReplay, userId, trackId]
+  );
+  return result.changes;
+};
+
+export const markRecommendationFavorited = async (userId, trackId, favorited) => {
+  if (!userId || !trackId) return;
+  await queryRun(
+    `UPDATE recommendation_logs SET favorited = $1
+     WHERE id = (
+       SELECT id FROM recommendation_logs
+       WHERE user_id = $2 AND track_id = $3 AND action IN ('played', 'shown')
+         AND timestamp > NOW() - INTERVAL '24 hours'
+       ORDER BY timestamp DESC
+       LIMIT 1
+     )`,
+    [!!favorited, userId, trackId]
+  );
+};
+
+export const getPlayLogsForUser = async (userId, options = {}) => {
+  const limit = options.limit || 2000;
   return queryAll(`
     SELECT * FROM play_logs 
     WHERE user_id = $1 
     ORDER BY timestamp DESC 
-    LIMIT 2000
-  `, [userId]);
+    LIMIT $2
+  `, [userId, limit]);
 };
 
 export const getTransitionsForUser = async (userId) => {
@@ -749,13 +825,34 @@ export const getMissingMetadataTracks = async () => {
   `);
 };
 
-export const logRecommendationAction = async ({ userId, trackId, shelfId, action, algorithmVersion = 'v1' }) => {
+export const logRecommendationAction = async ({
+  userId, trackId, shelfId, action, algorithmVersion = 'v2',
+  source = null, surface = 'generic', sessionId = null,
+  currentTrackId = null, positionInQueue = null
+}) => {
   if (!userId || !trackId) return;
+  const sess = sessionId && typeof sessionId === 'string' ? sessionId.slice(0, 255) : null;
   await queryRun(
-    `INSERT INTO recommendation_logs (user_id, track_id, shelf_id, action, algorithm_version)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [userId, trackId, shelfId || 'recommendations', action, algorithmVersion]
+    `INSERT INTO recommendation_logs (
+       user_id, track_id, shelf_id, action, algorithm_version,
+       source, recommendation_surface, session_id, current_track_id, position_in_queue
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [userId, trackId, shelfId || 'recommendations', action, algorithmVersion,
+     source || null, surface, sess, currentTrackId || null,
+     Number.isInteger(positionInQueue) ? positionInQueue : null]
   );
+};
+
+/** Diagnostic/learner helper: recent recommendation impressions with context. */
+export const getRecommendationLogsForUser = async (userId, options = {}) => {
+  const limit = options.limit || 4000;
+  return queryAll(`
+    SELECT * FROM recommendation_logs
+    WHERE user_id = $1
+    ORDER BY timestamp DESC
+    LIMIT $2
+  `, [userId, limit]);
 };
 
 export const updateRecommendationStats = async (trackId) => {

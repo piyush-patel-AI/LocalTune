@@ -1,5 +1,6 @@
 import express from 'express';
 import { getLibraryStats, logPlayEvent } from '../db.js';
+import { invalidateRecommendationCache } from '../recommendationEngine.js';
 
 const router = express.Router();
 
@@ -23,7 +24,10 @@ router.get('/', async (req, res) => {
 router.post('/listen', async (req, res) => {
   try {
     const userId = req.user ? req.user.id : (req.session && req.session.userId ? req.session.userId : 1);
-    const { trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId } = req.body;
+    const {
+      trackId, listenedSeconds, durationSeconds, isReplay, previousTrackId,
+      playOrigin, sessionId
+    } = req.body;
 
     if (!trackId) {
       return res.status(400).json({ error: 'trackId is required' });
@@ -35,8 +39,13 @@ router.post('/listen', async (req, res) => {
       listenedSeconds: parseFloat(listenedSeconds) || 0,
       durationSeconds: parseFloat(durationSeconds) || 0,
       isReplay: !!isReplay,
-      previousTrackId: previousTrackId ? parseInt(previousTrackId, 10) : null
+      previousTrackId: previousTrackId ? parseInt(previousTrackId, 10) : null,
+      playOrigin: playOrigin || 'manual',
+      sessionId: sessionId || null
     });
+
+    // A completed play changes the user's listening profile; drop stale recs.
+    invalidateRecommendationCache(userId || 1);
 
     return res.json({ success: true });
   } catch (err) {

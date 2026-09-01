@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { fuzzySearch } from '../utils/fuzzySearch';
+import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
   IconFlame,
   IconMusic,
@@ -105,7 +106,7 @@ const SPOTLIGHT_ITEMS = [
 ];
 
 export default function MobileExploreView() {
-  const { playTrack, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
+  const { currentTrack, playTrack, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
   const [allTracks, setAllTracks] = useState([]);
   const [recommendedTracks, setRecommendedTracks] = useState([]);
   const [selectedActionTrack, setSelectedActionTrack] = useState(null);
@@ -382,7 +383,13 @@ export default function MobileExploreView() {
                   key={track.id}
                   className="media-card"
                   style={{ flexShrink: 0, width: '140px', cursor: 'pointer' }}
-                  onClick={() => playTrack(track, mostRecommended)}
+                  onClick={() => {
+                    logRecommendationAction(track.id, 'played', {
+                      shelfId: 'explore', surface: 'explore', source: 'explore',
+                      positionInQueue: idx, currentTrackId: currentTrack ? currentTrack.id : null
+                    });
+                    playTrack(track, mostRecommended);
+                  }}
                 >
                   <div className="media-card-art-box" style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', aspectRatio: '1/1' }}>
                     {track.cover_art_path ? (

@@ -1,5 +1,6 @@
 import express from 'express';
-import { getUserFavorites, addFavorite, removeFavorite, getTrackById } from '../db.js';
+import { getUserFavorites, addFavorite, removeFavorite, getTrackById, markRecommendationFavorited } from '../db.js';
+import { invalidateRecommendationCache } from '../recommendationEngine.js';
 
 const router = express.Router();
 
@@ -21,7 +22,10 @@ router.post('/:trackId', async (req, res) => {
     return res.status(404).json({ error: 'Track not found.' });
   }
 
-  await addFavorite(req.session.userId, trackId);
+  const userId = req.session.userId;
+  await addFavorite(userId, trackId);
+  await markRecommendationFavorited(userId, trackId, true).catch(() => {});
+  invalidateRecommendationCache(userId);
   return res.json({ success: true, message: 'Added to favorites.' });
 });
 
@@ -32,7 +36,10 @@ router.delete('/:trackId', async (req, res) => {
     return res.status(400).json({ error: 'Invalid track ID.' });
   }
 
-  await removeFavorite(req.session.userId, trackId);
+  const userId = req.session.userId;
+  await removeFavorite(userId, trackId);
+  await markRecommendationFavorited(userId, trackId, false).catch(() => {});
+  invalidateRecommendationCache(userId);
   return res.json({ success: true, message: 'Removed from favorites.' });
 });
 

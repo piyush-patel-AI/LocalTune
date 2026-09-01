@@ -17,6 +17,7 @@ import {
   generateDiscoveryRadar,
   generateForgottenFavorites,
   generateAutoplayTracks,
+  getRecommendationDiagnostics,
   invalidateRecommendationCache
 } from '../recommendationEngine.js';
 import { scanMissingMetadata } from '../scanner.js';
@@ -61,6 +62,22 @@ router.get('/recommendations/shelves', async (req, res) => {
   } catch (err) {
     console.error('Error generating recommendation shelves:', err);
     return res.status(500).json({ error: 'Failed to generate recommendation shelves' });
+  }
+});
+
+// GET /api/tracks/recommendations/diagnostics - V2 pipeline introspection
+router.get('/recommendations/diagnostics', async (req, res) => {
+  try {
+    const userId = getActiveUserId(req);
+    const currentTrackId = req.query.currentTrackId ? parseInt(req.query.currentTrackId, 10) : null;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 10;
+    const allTracks = await getAllTracks({});
+    const favoritesMap = await getFavoritesMap(userId);
+    const diagnostics = await getRecommendationDiagnostics({ allTracks, favoritesMap, userId, currentTrackId, limit });
+    return res.json({ diagnostics });
+  } catch (err) {
+    console.error('Error generating recommendation diagnostics:', err);
+    return res.status(500).json({ error: 'Failed to generate recommendation diagnostics' });
   }
 });
 
@@ -123,12 +140,25 @@ router.get('/recommendations/autoplay', async (req, res) => {
 router.post('/recommendations/log', async (req, res) => {
   try {
     const userId = getActiveUserId(req);
-    const { trackId, shelfId, action } = req.body;
+    const {
+      trackId, shelfId, action, source, surface, sessionId,
+      currentTrackId, positionInQueue
+    } = req.body || {};
     if (!trackId || !action) {
       return res.status(400).json({ error: 'Missing trackId or action' });
     }
 
-    await logRecommendationAction({ userId, trackId, shelfId, action });
+    await logRecommendationAction({
+      userId,
+      trackId: parseInt(trackId, 10),
+      shelfId,
+      action,
+      source: source || null,
+      surface: surface || 'generic',
+      sessionId: sessionId || null,
+      currentTrackId: currentTrackId ? parseInt(currentTrackId, 10) : null,
+      positionInQueue: positionInQueue
+    });
     return res.json({ success: true });
   } catch (err) {
     console.error('Error logging recommendation action:', err);

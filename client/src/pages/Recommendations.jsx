@@ -3,6 +3,7 @@ import { usePlayer } from '../context/PlayerContext';
 import EditMetadataModal from '../components/EditMetadataModal';
 import BulkEditModal from '../components/BulkEditModal';
 import DebugScoreModal from '../components/DebugScoreModal';
+import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
   IconPlay,
   IconPause,
@@ -180,7 +181,7 @@ export default function Recommendations() {
                     gap: '20px'
                   }}
                 >
-                  {shelf.tracks.map((track) => {
+                  {shelf.tracks.map((track, trackIndex) => {
                     const isCurrent = currentTrack && currentTrack.id === track.id;
                     const isSelected = selectedTrackIds.includes(track.id);
 
@@ -242,7 +243,16 @@ export default function Recommendations() {
                             className="play-overlay"
                             onClick={() => {
                               if (isCurrent) togglePlay();
-                              else playTrack(track, shelf.tracks);
+                              else {
+                                logRecommendationAction(track.id, 'played', {
+                                  shelfId: shelf.id,
+                                  source: 'shelf',
+                                  surface: shelf.id,
+                                  currentTrackId: currentTrack ? currentTrack.id : null,
+                                  positionInQueue: trackIndex
+                                });
+                                playTrack(track, shelf.tracks);
+                              }
                             }}
                             style={{
                               position: 'absolute',

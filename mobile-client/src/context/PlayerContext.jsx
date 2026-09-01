@@ -190,6 +190,29 @@ export function PlayerProvider({ children }) {
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const favoritesMapRef = useRef(favoritesMap);
+  const telemetryRef = useRef({
+    trackId: null,
+    listenedSeconds: 0,
+    duration: 0,
+    previousTrackId: null,
+    lastTime: 0,
+    playOrigin: 'manual'
+  });
+
+  // Stable session id for session-aware recommendations + telemetry.
+  const sessionIdRef = useRef(null);
+  if (sessionIdRef.current === null) {
+    try {
+      let sid = localStorage.getItem('localTune_session_id');
+      if (!sid) {
+        sid = 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('localTune_session_id', sid);
+      }
+      sessionIdRef.current = sid;
+    } catch {
+      sessionIdRef.current = 'sess_' + Date.now().toString(36);
+    }
+  }
 
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
   useEffect(() => { queueRef.current = queue; }, [queue]);
@@ -347,6 +370,10 @@ export function PlayerProvider({ children }) {
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
+      const t = audio.currentTime || 0;
+      const prev = telemetryRef.current.lastTime || t;
+      if (t > prev) telemetryRef.current.listenedSeconds += t - prev;
+      telemetryRef.current.lastTime = t;
       if (Math.floor(audio.currentTime) % 2 === 0) {
         localStorage.setItem('localTune_currentTime', audio.currentTime.toString());
       }
@@ -461,8 +488,41 @@ export function PlayerProvider({ children }) {
     })();
   };
 
-  const playTrack = (track, newQueue = null, autoOpenNowPlaying = true) => {
+  const sendTelemetry = (newTrackId = null) => {
+    const cur = telemetryRef.current;
+    if (!cur.trackId || cur.listenedSeconds < 1) return;
+    const isReplay = newTrackId === cur.trackId;
+    fetch(apiUrl('/api/stats/listen'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        trackId: cur.trackId,
+        listenedSeconds: Math.round(cur.listenedSeconds),
+        durationSeconds: Math.round(cur.duration),
+        isReplay,
+        previousTrackId: cur.previousTrackId,
+        playOrigin: cur.playOrigin || 'manual',
+        sessionId: sessionIdRef.current
+      })
+    }).catch(() => {});
+  };
+
+  const playTrack = (track, newQueue = null, autoOpenNowPlaying = true, playOrigin = 'manual') => {
     if (!track) return;
+
+    // Flush telemetry for the previously-played track, then set up for this one.
+    sendTelemetry(track.id);
+    const prevTrackId = currentTrackRef.current ? currentTrackRef.current.id : null;
+    telemetryRef.current = {
+      trackId: track.id,
+      listenedSeconds: 0,
+      duration: track.duration_seconds || 0,
+      previousTrackId: prevTrackId,
+      lastTime: 0,
+      playOrigin: playOrigin || 'manual'
+    };
+
     setCurrentTrack(track);
 
     if (newQueue && newQueue.length > 0) {
@@ -530,7 +590,7 @@ export function PlayerProvider({ children }) {
         if (data.tracks && data.tracks.length > 0) {
           const newQueue = [...q, ...data.tracks];
           setQueue(newQueue);
-          playTrack(data.tracks[0], null, false);
+          playTrack(data.tracks[0], null, false, 'autoplay');
           return;
         }
       }

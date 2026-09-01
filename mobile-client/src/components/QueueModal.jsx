@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import logo from '../../../Assets/logo.png';
 import { usePlayer } from '../context/PlayerContext';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
+import { logRecommendationAction } from '../services/recommendationTelemetry';
 import BottomSheet from './BottomSheet';
 import { IconMusic, IconPlus, IconPlay, IconTrash } from './Icons';
 import { apiUrl } from '../config';
@@ -231,7 +232,13 @@ export default function QueueModal() {
             <div className="quick-picks-list">
               {recommendations.map((track) => (
                 <div key={track.id} className="quick-pick-row" style={{ background: 'rgba(255, 255, 255, 0.03)', borderRadius: '10px', padding: '0.5rem 0.75rem' }}>
-                  <div className="row-main-info" onClick={() => playTrack(track, [...queue, track])} style={{ cursor: 'pointer' }}>
+                  <div className="row-main-info" onClick={() => {
+                    logRecommendationAction(track.id, 'played', {
+                      shelfId: 'queue', surface: 'queue', source: 'recommended',
+                      currentTrackId: currentTrack ? currentTrack.id : null
+                    });
+                    playTrack(track, [...queue, track]);
+                  }} style={{ cursor: 'pointer' }}>
                     {track.cover_art_path ? (
                       <img
                         src={apiUrl(`/api/tracks/${track.id}/art`)}

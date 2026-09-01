@@ -354,8 +354,26 @@ export const PlayerProvider = ({ children }) => {
     listenedSeconds: 0,
     duration: 0,
     previousTrackId: null,
-    lastTime: 0
+    lastTime: 0,
+    playOrigin: 'manual'
   });
+
+  // Stable session id for the current browser session (used for session-aware
+  // recommendations + telemetry attribution). Derived once and persisted in
+  // sessionStorage so reloads share the same id.
+  const sessionIdRef = useRef(null);
+  if (sessionIdRef.current === null) {
+    try {
+      let sid = window.sessionStorage.getItem('localtune_session_id');
+      if (!sid) {
+        sid = 'sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        window.sessionStorage.setItem('localtune_session_id', sid);
+      }
+      sessionIdRef.current = sid;
+    } catch {
+      sessionIdRef.current = 'sess_' + Date.now().toString(36);
+    }
+  }
 
   const sendTelemetry = (newTrackId = null) => {
     const cur = telemetryRef.current;
@@ -370,13 +388,15 @@ export const PlayerProvider = ({ children }) => {
           listenedSeconds: cur.listenedSeconds,
           durationSeconds: cur.duration,
           isReplay,
-          previousTrackId: cur.previousTrackId
+          previousTrackId: cur.previousTrackId,
+          playOrigin: cur.playOrigin || 'manual',
+          sessionId: sessionIdRef.current
         })
       }).catch(() => {});
     }
   };
 
-  const playTrack = (track, newQueue = null) => {
+  const playTrack = (track, newQueue = null, playOrigin = 'manual') => {
     if (!track) return;
 
     restoredTimeRef.current = 0;
@@ -389,7 +409,8 @@ export const PlayerProvider = ({ children }) => {
       listenedSeconds: 0,
       duration: track.duration_seconds || 0,
       previousTrackId: prevTrackId,
-      lastTime: 0
+      lastTime: 0,
+      playOrigin: playOrigin || 'manual'
     };
 
     if (newQueue) {
@@ -471,7 +492,7 @@ export const PlayerProvider = ({ children }) => {
           const nextIdx = q.length;
           setQueue(newQueue);
           setQueueIndex(nextIdx);
-          playTrack(data.tracks[0]);
+          playTrack(data.tracks[0], null, 'autoplay');
           return;
         }
       }
