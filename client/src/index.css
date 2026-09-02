@@ -3173,3 +3173,350 @@ body {
 }
 
 
+
+/* ==========================================================================
+   HOME REDESIGN — Speed Dial (compact 3x3), Quick Picks, Contextual shelves
+   ========================================================================== */
+
+/* Speed Dial: compact 3-column grid, up to 9 square tiles */
+.speed-dial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.speed-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
+}
+
+.speed-tile:hover {
+  transform: translateY(-4px);
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 18px rgba(245, 158, 11, 0.12);
+}
+
+.speed-tile.active {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 24px var(--accent-glow);
+}
+
+.speed-tile-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.speed-tile-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(244, 63, 94, 0.06));
+}
+
+.speed-tile-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  padding: 0.6rem;
+  background: linear-gradient(to top, rgba(10, 10, 14, 0.9) 0%, rgba(10, 10, 14, 0.4) 45%, transparent 70%);
+}
+
+.speed-tile-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.speed-tile-eq span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent-primary);
+  animation: eq-bounce 1s ease-in-out infinite;
+}
+
+.speed-tile-eq span:nth-child(2) { animation-delay: 0.25s; }
+.speed-tile-eq span:nth-child(3) { animation-delay: 0.5s; }
+
+@keyframes eq-bounce {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+
+.speed-tile-play {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.speed-tile-label {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-align: center;
+}
+
+.speed-tile-fav {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 3;
+}
+
+.speed-tile:hover .speed-tile-fav {
+  opacity: 1;
+}
+
+.speed-tile-fav.is-fav {
+  opacity: 1;
+}
+
+/* Quick Picks — compact list card */
+.quick-picks-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.quick-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.quick-pick-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.quick-pick-row.active {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.row-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.row-art.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.row-title {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-artist {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.row-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.row-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.row-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  width: 30px;
+  justify-content: center;
+}
+
+.row-eq span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent-primary);
+  animation: eq-bounce 1s ease-in-out infinite;
+}
+
+.row-eq span:nth-child(2) { animation-delay: 0.25s; }
+.row-eq span:nth-child(3) { animation-delay: 0.5s; }
+
+/* Contextual recommendation shelves — horizontal row of track cards */
+.shelf-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.shelf-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: 0.45rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.2s ease;
+}
+
+.shelf-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(245, 158, 11, 0.25);
+  transform: translateY(-3px);
+}
+
+.shelf-card.active {
+  border-color: var(--accent-primary);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.shelf-card-art {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.shelf-card-art.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(244, 63, 94, 0.05));
+}
+
+.shelf-card-eq {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: center;
+}
+
+.shelf-card-eq span {
+  width: 3px;
+  border-radius: 2px;
+  background: #111;
+  animation: eq-bounce 1s ease-in-out infinite;
+}
+
+.shelf-card-eq span:nth-child(2) { animation-delay: 0.25s; }
+.shelf-card-eq span:nth-child(3) { animation-delay: 0.5s; }
+
+.shelf-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0 0.1rem;
+}
+
+.shelf-card-title {
+  font-family: var(--font-display);
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shelf-card-artist {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

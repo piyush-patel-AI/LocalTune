@@ -1498,6 +1498,79 @@ body {
   width: 100%;
 }
 
+/* Compact 3x3 Speed Dial: more tracks per view, keeping tiles visually
+   appropriate for small phone screens. The grid is capped at 9 cells/page. */
+.speed-dial-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.speed-dial-grid .speed-dial-tile {
+  aspect-ratio: 1 / 1;
+}
+
+/* More-options button that appears on tile hover / active for Speed Dial. */
+.tile-more-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(7, 9, 14, 0.6);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.speed-dial-tile:hover .tile-more-btn,
+.speed-dial-tile:active .tile-more-btn {
+  opacity: 1;
+}
+
+/* Small "now playing" equalizer/pause badge for contextual shelf cards. */
+.media-card-eq {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   CONTEXTUAL RECOMMENDATION SHELF TYPOGRAPHY
+   Compact, scannable helper line so recommendation shelves read as intentional
+   groupings without adding heavy visual weight.
+   ========================================================================== */
+.rec-shelf-helper {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-shelf-helper .accent {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
 .speed-dial-pagination {
   display: flex;
   justify-content: center;

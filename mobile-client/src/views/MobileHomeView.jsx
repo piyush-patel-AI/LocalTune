@@ -4,6 +4,7 @@ import { usePlayer } from '../context/PlayerContext';
 import TrackActionSheet from '../components/TrackActionSheet';
 import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import ArtworkImage from '../components/ArtworkImage';
+import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
   IconChevronRight,
   IconMoreVertical,
@@ -39,17 +40,16 @@ const HOME_TOP_GRADIENT = HOME_RIM_GRADIENTS[Math.floor(Math.random() * HOME_RIM
 // the active page indicator (activePage) changes. Props are stable while the
 // user scrolls: track data is unchanged and currentTrackId only changes on
 // playback events, not on scroll.
-const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, onActivate }) {
+const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, onActivate, onOptions }) {
   return (
     <div className="speed-dial-page">
-      <div className="speed-dial-asymmetric-grid">
-        {pageTracks.map((track, trackIdx) => {
+      <div className="speed-dial-grid">
+        {pageTracks.map((track) => {
           const isCurrent = currentTrackId && currentTrackId === track.id;
-          const isHeroTile = trackIdx === 0;
           return (
             <div
               key={track.id}
-              className={`speed-dial-tile ${isHeroTile ? 'large' : ''} ${isCurrent ? 'active' : ''}`}
+              className={`speed-dial-tile ${isCurrent ? 'active' : ''}`}
               onClick={() => onActivate(track, isCurrent)}
             >
               <ArtworkImage
@@ -61,6 +61,15 @@ const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, 
               <div className="tile-gradient-overlay">
                 <span className="tile-overlay-text">{track.title}</span>
               </div>
+              {onOptions && (
+                <button
+                  className="tile-more-btn"
+                  onClick={(e) => { e.stopPropagation(); onOptions(track); }}
+                  aria-label="More options"
+                >
+                  <IconMoreVertical size={14} color="rgba(255,255,255,0.9)" />
+                </button>
+              )}
             </div>
           );
         })}
@@ -77,21 +86,21 @@ export default function MobileHomeView() {
   const [artists, setArtists] = useState([]);
   const [speedDialTracks, setSpeedDialTracks] = useState([]);
   const [quickPickTracks, setQuickPickTracks] = useState([]);
+  const [contextualShelves, setContextualShelves] = useState([]);
   const [activePage, setActivePage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedTrackForAction, setSelectedTrackForAction] = useState(null);
 
   const carouselRef = useRef(null);
   const scrollTickRef = useRef(false);
   const scrollSettleRef = useRef(null);
 
-  // Continue Listening carousel state
-  const continueRef = useRef(null);
-  const [continueIdx, setContinueIdx] = useState(0);
-  const pointerRef = useRef({ active: false, startX: 0, startY: 0, dx: 0 });
-
+  // Force full re-fetch when the current track changes so recommendations and
+  // contextual shelves reflect the current session.
   useEffect(() => {
     fetchHomeData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.id]);
 
   useEffect(() => {
@@ -133,6 +142,19 @@ export default function MobileHomeView() {
     }
   };
 
+  // Refresh uses the real recommendation/data pipeline (no client randomizer).
+  const handleRefreshSpeedDial = async () => {
+    setRefreshing(true);
+    try {
+      await fetchHomeData();
+      filterAndOrganize(activeCategory);
+    } catch (err) {
+      console.error('Error refreshing Speed Dial:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const filterAndOrganize = (category) => {
     const baseList = recommendedTracks.length > 0 ? recommendedTracks : allTracks;
     let filtered = [...baseList];
@@ -153,13 +175,75 @@ export default function MobileHomeView() {
       }
     }
 
-    setSpeedDialTracks(filtered.slice(0, 18));
-    setQuickPickTracks(filtered.slice(0, 15));
+    assembleHome(filtered, category);
   };
 
-  const handleRefreshSpeedDial = () => {
-    const shuffled = [...recommendedTracks].sort(() => 0.5 - Math.random());
-    setSpeedDialTracks(shuffled.slice(0, 18));
+  // Builds the Home shelf hierarchy from existing fetched data:
+  //   - Quick Picks = the first strongly-recommended V2 tracks
+  //   - Contextual shelves = grouped by the backend's own `reason` fields
+  // Speed Dial is assembled separately (primarily recent listening) below.
+  const assembleHome = (recommendationPool, category) => {
+    const dedupe = (arr) => {
+      const seen = new Set();
+      return arr.filter((t) => (t && t.id && !seen.has(t.id) ? (seen.add(t.id), true) : false));
+    };
+
+    const pool = dedupe(recommendationPool);
+    setQuickPickTracks(pool.slice(0, 8));
+
+    // Group recommendations by their backend-provided reason so we surface
+    // genuine contexts instead of fabricating shelf explanations on the client.
+    const grouped = new Map();
+    for (const track of pool) {
+      const reason = (track.reason || '').trim() || 'Recommended for you';
+      const reasonKey = reason.toLowerCase();
+      if (!grouped.has(reasonKey)) grouped.set(reasonKey, { reason, tracks: [] });
+      grouped.get(reasonKey).tracks.push(track);
+    }
+
+    const shelfOrder = ['quickPicks'];
+    const shelves = [];
+    for (const [key, { reason, tracks }] of grouped) {
+      const deduped = dedupe(tracks);
+      if (deduped.length < 2) continue;
+      shelves.push({
+        id: `ctx-${key}`,
+        reason,
+        tracks: deduped.slice(0, 10)
+      });
+    }
+
+    // Order shelves by how specific/intentional the context sounds, so
+    // "Because you listened to..."-style and taste shelves surface first.
+    const contextual = shelves.filter((s) => !shelfOrder.includes(s.id));
+
+    // Build Speed Dial: primarily recently listened tracks (up to 9 in a 3x3
+    // grid), optionally augmented with a couple of strong V2 candidates when
+    // they are genuinely distinct from recent listening. Never duplicates.
+    buildSpeedDial(recommendationPool, category);
+
+    setContextualShelves(contextual);
+  };
+
+  const buildSpeedDial = (recommendationPool, category) => {
+    const seen = new Set();
+    const take = (arr) => arr.filter((t) => t && t.id && !seen.has(t.id) ? (seen.add(t.id), true) : false);
+
+    const recents = (recentlyPlayed || []).filter((t) => t && t.id && t.title);
+    let speed = take(recents).slice(0, 9);
+
+    // Optionally blend in at most 2 strong V2 recommendation candidates that
+    // are not already in recent listening — only to enrich, never to pad.
+    if (speed.length < 9) {
+      const strongRecs = (recommendationPool || []).filter(
+        (t) => t && t.id && (t.score != null && t.score > 0)
+      );
+      const extra = take(strongRecs).slice(0, 9 - speed.length);
+      speed = [...speed, ...extra];
+    }
+
+    // Gracefully cap: if fewer than 3 meaningful tracks, show them as-is.
+    setSpeedDialTracks(speed.slice(0, 9));
   };
 
   // Throttle scroll → state update to one per animation frame so React state
@@ -193,207 +277,35 @@ export default function MobileHomeView() {
     if (isCurrent) {
       togglePlay();
     } else {
+      logRecommendationAction(track.id, 'played', {
+        shelfId: 'speedDial', surface: 'speedDial', source: 'home'
+      });
       playTrack(track, speedDialTracks);
     }
   }, [togglePlay, playTrack, speedDialTracks]);
 
-  const continueListeningTracks = (recentlyPlayed || []).filter(
-    (t) => t && t.id && t.title
-  );
-  const continueCount = continueListeningTracks.length;
-
-  // Clamp continue index when list shrinks
-  useEffect(() => {
-    if (continueCount === 0) {
-      setContinueIdx(0);
-    } else if (continueIdx >= continueCount) {
-      setContinueIdx(continueCount - 1);
-    }
-  }, [continueCount, continueIdx]);
-
-  // Continue Listening carousel — simple pointer-based horizontal drag
-  const SNAP_W = 320; // approx card + gap, recalculated per-card in handler
-
-  const continuePointerDown = useCallback((e) => {
-    if (continueCount <= 1) return;
-    const el = continueRef.current;
-    if (!el) return;
-    pointerRef.current = { active: true, startX: e.clientX, startY: e.clientY, dx: 0 };
-    el.style.transition = 'none';
-  }, [continueCount]);
-
-  const continuePointerMove = useCallback((e) => {
-    if (!pointerRef.current.active) return;
-    const el = continueRef.current;
-    if (!el) return;
-    const dx = e.clientX - pointerRef.current.startX;
-    const dy = e.clientY - pointerRef.current.startY;
-    // Only intercept horizontal swipes — let vertical scroll pass through
-    if (Math.abs(dy) > Math.abs(dx) && Math.abs(pointerRef.current.dx) < 8) return;
-    pointerRef.current.dx = dx;
-    const cardW = el.children[0] ? el.children[0].getBoundingClientRect().width + 16 : SNAP_W;
-    const offset = -(continueIdx * cardW) + dx;
-    el.style.transform = `translate3d(${offset}px, 0, 0)`;
-  }, [continueIdx]);
-
-  const continuePointerUp = useCallback(() => {
-    if (!pointerRef.current.active) return;
-    pointerRef.current.active = false;
-    const el = continueRef.current;
-    if (!el) return;
-    const dx = pointerRef.current.dx;
-    const cardW = el.children[0] ? el.children[0].getBoundingClientRect().width + 16 : SNAP_W;
-    let next = continueIdx;
-    if (Math.abs(dx) > cardW * 0.18) {
-      next = dx < 0
-        ? Math.min(continueIdx + 1, continueCount - 1)
-        : Math.max(continueIdx - 1, 0);
-    }
-    setContinueIdx(next);
-    el.style.transition = 'transform 0.32s cubic-bezier(0.25, 1, 0.5, 1)';
-    el.style.transform = `translate3d(${-(next * cardW)}px, 0, 0)`;
-  }, [continueIdx, continueCount]);
-
-  const madeForYouList = recommendedTracks.slice(0, 10);
   const topArtists = artists.slice(0, 8);
 
-  // Asymmetric speed dial pagination (6 tracks per page: 1 Large + 5 Medium = 6 items filling 3x3 grid completely including corner piece)
+  // Compact 3x3 Speed Dial pagination — up to 9 tracks per page, no dups.
   const pages = [];
-  for (let i = 0; i < speedDialTracks.length; i += 6) {
-    let pageItems = speedDialTracks.slice(i, i + 6);
-    if (pageItems.length > 0 && pageItems.length < 6 && speedDialTracks.length >= 6) {
-      const extraNeeded = 6 - pageItems.length;
-      const padTracks = speedDialTracks.filter((t) => !pageItems.includes(t)).slice(0, extraNeeded);
-      pageItems = [...pageItems, ...padTracks];
-    }
-    pages.push(pageItems);
+  const perPage = 9;
+  for (let i = 0; i < speedDialTracks.length; i += perPage) {
+    pages.push(speedDialTracks.slice(i, i + perPage));
   }
+
+  const shelfHeading = (reason) => {
+    const r = (reason || '').toLowerCase();
+    if (r.includes('favorite artist')) return 'Because you like...';
+    if (r.includes('favorite genre')) return 'Because you like...';
+    if (r.includes('similar to') || r.includes('great follow-up') || r.includes('frequently played after')) return 'Because you listened to...';
+    if (r.includes('never played') || r.includes('hidden gem') || r.includes('discover')) return 'You might like...';
+    if (r.includes('love to finish') || r.includes('favorited')) return 'Because you like...';
+    return 'You might like...';
+  };
 
   return (
     <div className="mobile-home-view animate-fade-in">
       <div className="home-top-gradient" aria-hidden="true" style={{ background: HOME_TOP_GRADIENT }} />
-      {/* Hero "Continue Listening" Carousel */}
-      {continueListeningTracks.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div className="section-title-row" style={{ padding: '0 1.25rem' }}>
-            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <IconClock size={15} color="var(--text-muted)" />
-              Continue Listening
-            </h2>
-            {continueListeningTracks.length > 1 && (
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                {continueIdx + 1} / {continueListeningTracks.length}
-              </span>
-            )}
-          </div>
-
-          <div
-            className="continue-listening-viewport"
-            onPointerDown={continuePointerDown}
-            onPointerMove={continuePointerMove}
-            onPointerUp={continuePointerUp}
-            onPointerCancel={continuePointerUp}
-          >
-            <div
-              className="continue-listening-track"
-              ref={continueRef}
-              style={{ transform: `translate3d(0, 0, 0)` }}
-            >
-              {continueListeningTracks.map((track) => {
-                const isCurrent = currentTrack && currentTrack.id === track.id;
-                return (
-                  <div
-                    key={track.id}
-                    className="hero-continue-card"
-                    onClick={() => {
-                      if (isCurrent) {
-                        togglePlay();
-                      } else {
-                        playTrack(track, continueListeningTracks);
-                      }
-                    }}
-                  >
-                    <div className="hero-tag">
-                      <IconSparkles size={13} color="var(--accent-primary)" />
-                      <span>{isCurrent && isPlaying ? 'NOW PLAYING' : 'CONTINUE LISTENING'}</span>
-                    </div>
-
-                    <div className="hero-content-flex" style={{ alignItems: 'center' }}>
-                      <div className="hero-art-wrapper" style={{ width: '64px', height: '64px', flexShrink: 0 }}>
-                        <ArtworkImage
-                          src={getArtworkUrl(track, 256)}
-                          alt={track.title}
-                          className="hero-art-img"
-                          eager
-                          onError={(e) => { e.target.src = logo; }}
-                        />
-                        <div className="hero-play-fab" style={{ width: '28px', height: '28px' }}>
-                          {isCurrent && isPlaying ? (
-                            <IconPause size={14} color="#000000" fill="#000000" />
-                          ) : (
-                            <IconPlay size={14} color="#000000" fill="#000000" style={{ marginLeft: '1px' }} />
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="hero-info-text" style={{ flex: 1, minWidth: 0 }}>
-                        <h2 className="hero-title" style={{ fontSize: '1.05rem' }}>{track.title}</h2>
-                        <p className="hero-artist" style={{ fontSize: '0.8rem' }}>{track.artist} • {track.album || 'Single'}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {continueListeningTracks.length > 1 && (
-            <div className="continue-listening-dots">
-              {continueListeningTracks.map((_, dotIdx) => (
-                <span
-                  key={dotIdx}
-                  className={`continue-dot ${continueIdx === dotIdx ? 'active' : ''}`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* "Made For You" Horizontal Carousel */}
-      <section className="section-container">
-        <div className="section-title-row">
-          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <IconSparkles size={15} color="var(--text-muted)" />
-            Made For You
-          </h2>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Personalized</span>
-        </div>
-
-        <div className="horizontal-card-list">
-          {madeForYouList.map((track) => (
-            <div
-              key={track.id}
-              className="media-card"
-              onClick={() => playTrack(track, madeForYouList)}
-            >
-              <div className="media-card-art-box">
-                <ArtworkImage
-                  src={getArtworkUrl(track, 256)}
-                  alt={track.title}
-                  className="media-card-art"
-                  onError={(e) => { e.target.src = logo; }}
-                />
-                <div className="media-card-play-hover">
-                  <IconPlay size={18} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
-                </div>
-              </div>
-              <span className="media-card-title">{track.title}</span>
-              <span className="media-card-sub">{track.artist}</span>
-            </div>
-          ))}
-        </div>
-      </section>
 
       {/* "Favorite Artists" Circular Avatars Row */}
       {topArtists.length > 0 && (
@@ -438,7 +350,7 @@ export default function MobileHomeView() {
         </section>
       )}
 
-      {/* Speed Dial Asymmetric Section with Inline Refresh Button */}
+      {/* Speed Dial — primary content section, compact 3x3 grid */}
       <section className="section-container">
         <div className="section-title-row" style={{ marginBottom: '0.85rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -450,12 +362,17 @@ export default function MobileHomeView() {
               className="icon-btn"
               onClick={handleRefreshSpeedDial}
               title="Refresh Speed Dial"
+              disabled={refreshing}
               style={{ width: '32px', height: '32px', minWidth: '32px', minHeight: '32px' }}
             >
               <IconRefresh size={15} color="var(--text-muted)" />
             </button>
           </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Swipe for more</span>
+          {pages.length > 1 ? (
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Swipe for more</span>
+          ) : (
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Recently played</span>
+          )}
         </div>
 
         {loading ? (
@@ -469,27 +386,30 @@ export default function MobileHomeView() {
                   pageTracks={pageTracks}
                   currentTrackId={currentTrack?.id}
                   onActivate={handleTileActivate}
+                  onOptions={setSelectedTrackForAction}
                 />
               ))}
             </div>
 
-            <div className="speed-dial-pagination">
-              {pages.map((_, dotIdx) => (
-                <span
-                  key={dotIdx}
-                  className={`page-dot ${activePage === dotIdx ? 'active' : ''}`}
-                  onClick={() => {
-                    if (carouselRef.current) {
-                      carouselRef.current.scrollTo({
-                        left: dotIdx * carouselRef.current.clientWidth,
-                        behavior: 'smooth'
-                      });
-                    }
-                  }}
-                  title={`Go to page ${dotIdx + 1}`}
-                />
-              ))}
-            </div>
+            {pages.length > 1 && (
+              <div className="speed-dial-pagination">
+                {pages.map((_, dotIdx) => (
+                  <span
+                    key={dotIdx}
+                    className={`page-dot ${activePage === dotIdx ? 'active' : ''}`}
+                    onClick={() => {
+                      if (carouselRef.current) {
+                        carouselRef.current.scrollTo({
+                          left: dotIdx * carouselRef.current.clientWidth,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                    title={`Go to page ${dotIdx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <div className="empty-state">
@@ -500,27 +420,30 @@ export default function MobileHomeView() {
         )}
       </section>
 
-      {/* Quick Picks Track List (Compact Apple Music Style Row Height) */}
-      <section className="section-container" style={{ paddingBottom: '2rem' }}>
-        <div className="section-title-row">
-          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <IconPlay size={15} color="var(--text-muted)" />
-            Quick Picks
-          </h2>
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              if (quickPickTracks.length > 0) {
-                playTrack(quickPickTracks[0], quickPickTracks);
-              }
-            }}
-            style={{ padding: '0.35rem 0.85rem', fontSize: '0.78rem' }}
-          >
-            Play All
-          </button>
-        </div>
+      {/* Quick Picks — first clearly recommendation-focused shelf, directly below Speed Dial */}
+      {quickPickTracks.length > 0 && (
+        <section className="section-container">
+          <div className="section-title-row">
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconPlay size={15} color="var(--text-muted)" />
+              Quick Picks
+            </h2>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                if (quickPickTracks.length > 0) {
+                  logRecommendationAction(quickPickTracks[0].id, 'played', {
+                    shelfId: 'quickPicks', surface: 'quickPicks', source: 'home'
+                  });
+                  playTrack(quickPickTracks[0], quickPickTracks);
+                }
+              }}
+              style={{ padding: '0.35rem 0.85rem', fontSize: '0.78rem' }}
+            >
+              Play All
+            </button>
+          </div>
 
-        {quickPickTracks.length > 0 && (
           <div className="quick-picks-list">
             {quickPickTracks.map((track) => {
               const isCurrent = currentTrack && currentTrack.id === track.id;
@@ -529,7 +452,12 @@ export default function MobileHomeView() {
                 <div
                   key={track.id}
                   className={`quick-pick-row ${isCurrent ? 'active' : ''}`}
-                  onClick={() => playTrack(track, quickPickTracks)}
+                  onClick={() => {
+                    logRecommendationAction(track.id, 'played', {
+                      shelfId: 'quickPicks', surface: 'quickPicks', source: 'home'
+                    });
+                    playTrack(track, quickPickTracks);
+                  }}
                 >
                   <div className="row-main-info">
                      <ArtworkImage
@@ -569,8 +497,54 @@ export default function MobileHomeView() {
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
+      )}
+
+      {/* Contextual recommendation shelves (grouped by backend reason fields) */}
+      {contextualShelves.map((shelf) => (
+        <section key={shelf.id} className="section-container">
+          <div className="section-title-row">
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <IconSparkles size={15} color="var(--text-muted)" />
+              {shelfHeading(shelf.reason)}
+            </h2>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Recommended</span>
+          </div>
+
+          <div className="horizontal-card-list">
+            {shelf.tracks.map((track) => {
+              const isCurrent = currentTrack && currentTrack.id === track.id;
+              return (
+                <div
+                  key={track.id}
+                  className="media-card"
+                  onClick={() => {
+                    logRecommendationAction(track.id, 'played', {
+                      shelfId: shelf.id, surface: shelf.id, source: 'home'
+                    });
+                    playTrack(track, shelf.tracks);
+                  }}
+                >
+                  <div className="media-card-art-box">
+                    <ArtworkImage
+                      src={getArtworkUrl(track, 256)}
+                      alt={track.title}
+                      className="media-card-art"
+                      onError={(e) => { e.target.src = logo; }}
+                    />
+                    <div className="media-card-play-hover">
+                      <IconPlay size={18} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
+                    </div>
+                    {isCurrent && isPlaying && <div className="media-card-eq"><IconPause size={14} color="#000" fill="#000" /></div>}
+                  </div>
+                  <span className="media-card-title">{track.title}</span>
+                  <span className="media-card-sub">{track.artist}</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
 
       {/* Action Sheet Modal */}
       {selectedTrackForAction && (
