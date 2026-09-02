@@ -3190,6 +3190,7 @@ body {
 .speed-dial-carousel-container {
   display: flex;
   overflow-x: auto;
+  overflow-y: hidden;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
@@ -3557,4 +3558,28 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Quick Picks — recommendation shelf of compact cards (reuses shelf-card) */
+.quick-picks-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.quick-pick-card {
+  position: relative;
+}
+
+.quick-pick-card-actions {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.quick-pick-card:hover .quick-pick-card-actions {
+  opacity: 1;
 }

@@ -3,24 +3,14 @@ import { usePlayer } from '../context/PlayerContext';
 import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
   IconPlay,
-  IconPause,
   IconHeart,
   IconPlus,
   IconMusic,
-  IconClock,
   IconSparkles,
-  IconDisc,
   IconZap,
   IconRefresh
 } from '../components/Icons';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
-
-function formatDuration(seconds) {
-  if (!seconds || isNaN(seconds)) return '--:--';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
 
 const dedupe = (arr) => {
   const seen = new Set();
@@ -137,8 +127,12 @@ export default function HomeView() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setActivePage(0);
     try {
       await fetchSuggestedTracks();
+      if (carouselRef.current) {
+        carouselRef.current.scrollTo({ left: 0, behavior: 'auto' });
+      }
     } catch (err) {
       console.error('Error refreshing Home:', err);
     } finally {
@@ -147,21 +141,22 @@ export default function HomeView() {
   };
 
   const assembleHome = (recs) => {
-    const allRecs = dedupe(
-      (recs || []).filter((t) => t && t.id && t.score != null && t.score > 0)
-    );
+    const pool = dedupe(recs || []);
 
-    // Speed Dial: all V2 recommendations, paginated by 9 in the render.
-    setSpeedDialTracks(allRecs);
+    // The /api/tracks/recommendations response is capped at 20 tracks by the
+    // recommendation engine (count=20). Compose the surfaces from that single
+    // deduplicated V2 pool without assuming a fixed total.
+    //
+    // Speed Dial: up to 18 tracks (two full 3x3 pages; a third page appears for
+    // any leftover beyond 18). Quick Picks: the next 8 remaining tracks so it is
+    // never a near-duplicate of Speed Dial. Contextual shelves: whatever is left
+    // over after Speed Dial + Quick Picks. Never fabricate or duplicate tracks.
+    const DIAL_CEIL = 18;
+    setSpeedDialTracks(pool.slice(0, DIAL_CEIL));
+    setQuickPicks(pool.slice(DIAL_CEIL).slice(0, 8));
 
-    // Quick Picks: next 8 after the Speed Dial pool — no overlap.
-    const afterDial = allRecs.slice(27);
-    setQuickPicks(afterDial.slice(0, 8));
-
-    // Contextual shelves: remaining recs grouped by backend reason field.
-    const afterQP = allRecs.slice(35);
     const grouped = new Map();
-    for (const track of afterQP) {
+    for (const track of pool.slice(DIAL_CEIL + 8)) {
       const reason = (track.reason || '').trim() || 'Recommended for you';
       const key = reason.toLowerCase();
       if (!grouped.has(key)) grouped.set(key, { reason, tracks: [] });
@@ -216,13 +211,13 @@ export default function HomeView() {
     pages.push(speedDialTracks.slice(i, i + perPage));
   }
 
-  const renderQuickPickRow = (track) => {
+  const renderQuickPickCard = (track) => {
     const isCurrent = currentTrack && currentTrack.id === track.id;
     const isFav = !!favoritesMap[track.id];
     return (
       <div
         key={track.id}
-        className={`quick-pick-row ${isCurrent ? 'active' : ''}`}
+        className={`shelf-card quick-pick-card ${isCurrent ? 'active' : ''}`}
         onClick={() => {
           logRecommendationAction(track.id, 'played', {
             shelfId: 'quickPicks', surface: 'quickPicks', source: 'home'
@@ -234,26 +229,29 @@ export default function HomeView() {
           <img
             src={`/api/tracks/${track.id}/art`}
             alt={track.title}
-            className="row-art"
+            className="shelf-card-art"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
         ) : (
-          <div className="row-art fallback">
-            <IconMusic size={16} color="var(--accent-primary)" />
+          <div className="shelf-card-art fallback">
+            <IconMusic size={24} color="var(--accent-primary)" />
           </div>
         )}
-        <div className="row-text">
-          <span className="row-title" title={track.title}>{track.title}</span>
-          <span className="row-artist" title={track.artist}>{track.artist}</span>
+        {isCurrent && isPlaying && (
+          <div className="shelf-card-eq"><span /><span /><span /></div>
+        )}
+        <div className="shelf-card-meta">
+          <span className="shelf-card-title" title={track.title}>{track.title}</span>
+          <span className="shelf-card-artist" title={track.artist}>{track.artist}</span>
         </div>
-        <div className="row-actions">
+        <div className="quick-pick-card-actions">
           <button
             className="row-action-btn"
             onClick={(e) => { e.stopPropagation(); toggleFavorite(track.id); }}
-            title="Add to favorites"
+            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
           >
             <IconHeart
-              size={16}
+              size={15}
               color={isFav ? 'var(--accent-crimson)' : 'var(--text-muted)'}
               fill={isFav ? 'var(--accent-crimson)' : 'none'}
             />
@@ -263,17 +261,15 @@ export default function HomeView() {
             onClick={(e) => { e.stopPropagation(); addToQueue(track); }}
             title="Add to queue"
           >
-            <IconPlus size={16} color="var(--text-muted)" />
+            <IconPlus size={15} color="var(--text-muted)" />
           </button>
-          {isCurrent && isPlaying ? (
-            <div className="row-eq"><span /><span /><span /></div>
-          ) : (
+          {!isCurrent && (
             <button
               className="row-action-btn"
               onClick={(e) => { e.stopPropagation(); playTrack(track, quickPicks); }}
               title="Play"
             >
-              <IconPlay size={16} color="var(--text-muted)" />
+              <IconPlay size={15} color="var(--text-muted)" />
             </button>
           )}
         </div>
@@ -386,7 +382,7 @@ export default function HomeView() {
         )}
       </section>
 
-      {/* Quick Picks — next batch of recommendations, no overlap with Speed Dial */}
+      {/* Quick Picks — a polished recommendation shelf (no overlap with Speed Dial) */}
       {quickPicks.length > 0 && (
         <section className="home-section">
           <div className="bento-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -410,8 +406,8 @@ export default function HomeView() {
             )}
           </div>
 
-          <div className="quick-picks-card">
-            {quickPicks.map(renderQuickPickRow)}
+          <div className="shelf-row quick-picks-grid">
+            {quickPicks.map(renderQuickPickCard)}
           </div>
         </section>
       )}

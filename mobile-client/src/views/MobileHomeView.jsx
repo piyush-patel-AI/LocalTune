@@ -143,9 +143,13 @@ export default function MobileHomeView() {
   // Refresh uses the real recommendation/data pipeline (no client randomizer).
   const handleRefreshSpeedDial = async () => {
     setRefreshing(true);
+    setActivePage(0);
     try {
       await fetchHomeData();
       filterAndOrganize(activeCategory);
+      if (carouselRef.current) {
+        carouselRef.current.scrollTo({ left: 0, behavior: 'auto' });
+      }
     } catch (err) {
       console.error('Error refreshing Speed Dial:', err);
     } finally {
@@ -177,8 +181,8 @@ export default function MobileHomeView() {
   };
 
   // Builds the Home shelf hierarchy from existing fetched data:
-  //   - Speed Dial = all V2 recommendations, paginated by 9
-  //   - Quick Picks = next 8 after Speed Dial pool (no overlap)
+  //   - Speed Dial = up to 18 V2 recs (two 3x3 pages)
+  //   - Quick Picks = next 8 remaining recs (no overlap)
   //   - Contextual shelves = grouped by the backend's own `reason` fields
   const assembleHome = (recommendationPool, category) => {
     const dedupe = (arr) => {
@@ -186,20 +190,19 @@ export default function MobileHomeView() {
       return arr.filter((t) => (t && t.id && !seen.has(t.id) ? (seen.add(t.id), true) : false));
     };
 
-    const allRecs = dedupe(
-      (recommendationPool || []).filter((t) => t && t.id && t.score != null && t.score > 0)
-    );
-
-    // Speed Dial: all V2 recommendations, paginated by 9 in the render.
-    setSpeedDialTracks(allRecs);
-
-    // Quick Picks: next 8 after the Speed Dial pool — no overlap.
-    const afterDial = allRecs.slice(27);
     const pool = dedupe(recommendationPool);
-    setQuickPickTracks(afterDial.length > 0 ? afterDial.slice(0, 8) : pool.slice(0, 8));
+
+    // Compose from the single deduplicated V2 pool without assuming a fixed
+    // total. Speed Dial: up to 18 (two full 3x3 pages). Quick Picks: the next
+    // 8 remaining tracks so it stays distinct from Speed Dial. Contextual
+    // shelves: whatever remains after Speed Dial + Quick Picks. Never fabricate
+    // or duplicate tracks.
+    const DIAL_CEIL = 18;
+    setSpeedDialTracks(pool.slice(0, DIAL_CEIL));
+    setQuickPickTracks(pool.slice(DIAL_CEIL).slice(0, 8));
 
     // Contextual shelves: remaining recs grouped by backend reason field.
-    const afterQP = allRecs.slice(35);
+    const afterQP = pool.slice(DIAL_CEIL + 8);
     const grouped = new Map();
     for (const track of afterQP) {
       const reason = (track.reason || '').trim() || 'Recommended for you';
@@ -391,8 +394,8 @@ export default function MobileHomeView() {
         ) : (
           <div className="empty-state">
             <div className="empty-state-icon"><IconMusic size={26} /></div>
-            <p className="empty-state-title">Your library is empty</p>
-            <p className="empty-state-sub">Add some music to start building your Speed Dial and recommendations.</p>
+            <p className="empty-state-title">No recommendations yet</p>
+            <p className="empty-state-sub">Play some music to help Octave learn your taste and build Speed Dial.</p>
           </div>
         )}
       </section>
@@ -421,14 +424,14 @@ export default function MobileHomeView() {
             </button>
           </div>
 
-          <div className="quick-picks-list">
+          <div className="horizontal-card-list">
             {quickPickTracks.map((track) => {
               const isCurrent = currentTrack && currentTrack.id === track.id;
               const isFav = !!favoritesMap[track.id];
               return (
                 <div
                   key={track.id}
-                  className={`quick-pick-row ${isCurrent ? 'active' : ''}`}
+                  className="media-card"
                   onClick={() => {
                     logRecommendationAction(track.id, 'played', {
                       shelfId: 'quickPicks', surface: 'quickPicks', source: 'home'
@@ -436,40 +439,31 @@ export default function MobileHomeView() {
                     playTrack(track, quickPickTracks);
                   }}
                 >
-                  <div className="row-main-info">
-                     <ArtworkImage
-                       src={getArtworkUrl(track, 256)}
-                       alt={track.title}
-                       className="row-art"
-                       onError={(e) => { e.target.src = logo; }}
-                     />
-                    <div className="row-text">
-                      <span className="row-title">{track.title}</span>
-                      <span className="row-artist">{track.artist}</span>
+                  <div className="media-card-art-box">
+                    <ArtworkImage
+                      src={getArtworkUrl(track, 256)}
+                      alt={track.title}
+                      className="media-card-art"
+                      onError={(e) => { e.target.src = logo; }}
+                    />
+                    <div className="media-card-play-hover">
+                      <IconPlay size={18} color="#000000" fill="#000000" style={{ marginLeft: '2px' }} />
                     </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={(e) => e.stopPropagation()}>
+                    {isCurrent && isPlaying && <div className="media-card-eq"><IconPause size={14} color="#000" fill="#000" /></div>}
                     <button
-                      className="row-more-btn"
-                      onClick={() => toggleFavorite(track.id)}
-                      title="Favorite"
+                      className="media-card-fav"
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(track.id); }}
+                      title={isFav ? 'Remove from favorites' : 'Add to favorites'}
                     >
                       <IconHeart
-                        size={18}
-                        color={isFav ? 'var(--accent-primary)' : 'var(--text-muted)'}
+                        size={14}
+                        color={isFav ? 'var(--accent-primary)' : 'rgba(255,255,255,0.9)'}
                         fill={isFav ? 'var(--accent-primary)' : 'none'}
                       />
                     </button>
-
-                    <button
-                      className="row-more-btn"
-                      onClick={() => setSelectedTrackForAction(track)}
-                      title="More Options"
-                    >
-                      <IconMoreVertical size={18} color="var(--text-muted)" />
-                    </button>
                   </div>
+                  <span className="media-card-title">{track.title}</span>
+                  <span className="media-card-sub">{track.artist}</span>
                 </div>
               );
             })}
