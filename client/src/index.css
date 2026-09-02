@@ -3186,6 +3186,44 @@ body {
   width: 100%;
 }
 
+/* Speed Dial carousel — swipeable multi-page container */
+.speed-dial-carousel-container {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.speed-dial-carousel-container::-webkit-scrollbar { display: none; }
+
+.speed-dial-page {
+  flex: 0 0 100%;
+  width: 100%;
+  scroll-snap-align: start;
+}
+
+/* Pagination dots */
+.speed-dial-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.page-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1), background 0.35s ease;
+  cursor: pointer;
+}
+.page-dot.active {
+  width: 22px;
+  border-radius: 4px;
+  background: var(--accent-primary);
+}
+
 .speed-tile {
   position: relative;
   aspect-ratio: 1 / 1;

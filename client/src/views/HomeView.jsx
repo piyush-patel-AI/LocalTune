@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { usePlayer } from '../context/PlayerContext';
 import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
@@ -14,8 +14,6 @@ import {
   IconRefresh
 } from '../components/Icons';
 import AddToPlaylistModal from '../components/AddToPlaylistModal';
-
-const SPEED_DIAL_SIZE = 9;
 
 function formatDuration(seconds) {
   if (!seconds || isNaN(seconds)) return '--:--';
@@ -38,6 +36,60 @@ const shelfHeading = (reason) => {
   return 'You might like...';
 };
 
+const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, onActivate, onFavorite, favoritesMap }) {
+  return (
+    <div className="speed-dial-page">
+      <div className="speed-dial-grid">
+        {pageTracks.map((track) => {
+          const isCurrent = currentTrackId && currentTrackId === track.id;
+          const isFav = !!favoritesMap[track.id];
+          return (
+            <div
+              key={track.id}
+              className={`speed-tile ${isCurrent ? 'active' : ''}`}
+              onClick={() => onActivate(track, isCurrent)}
+            >
+              {track.cover_art_path ? (
+                <img
+                  src={`/api/tracks/${track.id}/art`}
+                  alt={track.title}
+                  className="speed-tile-art"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div className="speed-tile-fallback">
+                  <IconMusic size={22} color="var(--accent-primary)" />
+                </div>
+              )}
+              <div className="speed-tile-overlay">
+                {isCurrent ? (
+                  <div className="speed-tile-eq"><span /><span /><span /></div>
+                ) : (
+                  <div className="speed-tile-play">
+                    <IconPlay size={14} color="#111" fill="#111" style={{ marginLeft: '1px' }} />
+                  </div>
+                )}
+                <span className="speed-tile-label" title={track.title}>{track.title}</span>
+              </div>
+              <button
+                className={`speed-tile-fav ${isFav ? 'is-fav' : ''}`}
+                onClick={(e) => { e.stopPropagation(); onFavorite(track.id); }}
+                title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                <IconHeart
+                  size={14}
+                  color={isFav ? 'var(--accent-crimson)' : 'rgba(255,255,255,0.85)'}
+                  fill={isFav ? 'var(--accent-crimson)' : 'none'}
+                />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export default function HomeView() {
   const {
     currentTrack,
@@ -50,14 +102,17 @@ export default function HomeView() {
     addToQueue
   } = usePlayer();
 
-  const [suggestedTracks, setSuggestedTracks] = useState([]);
-  const [allTracks, setAllTracks] = useState([]);
   const [speedDialTracks, setSpeedDialTracks] = useState([]);
   const [quickPicks, setQuickPicks] = useState([]);
   const [contextualShelves, setContextualShelves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activePage, setActivePage] = useState(0);
   const [selectedTrackForPlaylist, setSelectedTrackForPlaylist] = useState(null);
+
+  const carouselRef = useRef(null);
+  const scrollTickRef = useRef(false);
+  const scrollSettleRef = useRef(null);
 
   useEffect(() => {
     fetchSuggestedTracks();
@@ -67,19 +122,11 @@ export default function HomeView() {
   const fetchSuggestedTracks = async () => {
     try {
       setLoading(true);
-      const resAll = await fetch('/api/tracks', { credentials: 'include' });
-      if (resAll.ok) {
-        const dataAll = await resAll.json();
-        setAllTracks(dataAll.tracks || []);
-      }
-
       const recUrl = `/api/tracks/recommendations${currentTrack ? `?currentTrackId=${currentTrack.id}` : ''}`;
       const resRec = await fetch(recUrl, { credentials: 'include' });
       if (resRec.ok) {
         const dataRec = await resRec.json();
-        const tracks = dataRec.tracks || [];
-        setSuggestedTracks(tracks);
-        assembleHome(tracks);
+        assembleHome(dataRec.tracks || []);
       }
     } catch (err) {
       console.error('Error fetching smart recommendations:', err);
@@ -88,7 +135,6 @@ export default function HomeView() {
     }
   };
 
-  // Refresh uses the real recommendation/data pipeline (no client randomizer).
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -101,33 +147,26 @@ export default function HomeView() {
   };
 
   const assembleHome = (recs) => {
-    const recTracks = recs || suggestedTracks || [];
-    // Speed Dial: targeted 5 + 4 hybrid (5 V2 recommendations, 4 recent
-    // listens) interleaved across the 3x3 grid, deduplicated across both
-    // groups. Falls back between sources gracefully; never duplicates a
-    // track just to fill cells.
-    const recCandidates = dedupe(
-      recTracks.filter((t) => t && t.id && t.score != null && t.score > 0)
-    );
-    const recentCandidates = dedupe(
-      (recentlyPlayed || []).filter((t) => t && t.id && t.title)
+    const allRecs = dedupe(
+      (recs || []).filter((t) => t && t.id && t.score != null && t.score > 0)
     );
 
-    setSpeedDialTracks(composeSpeedDial(recCandidates, recentCandidates));
+    // Speed Dial: all V2 recommendations, paginated by 9 in the render.
+    setSpeedDialTracks(allRecs);
 
-    // Quick Picks: the first strongly-recommended V2 tracks.
-    const pool = dedupe(recTracks);
-    setQuickPicks(pool.slice(0, 8));
+    // Quick Picks: next 8 after the Speed Dial pool — no overlap.
+    const afterDial = allRecs.slice(27);
+    setQuickPicks(afterDial.slice(0, 8));
 
-    // Contextual shelves grouped by the backend-provided `reason` field.
+    // Contextual shelves: remaining recs grouped by backend reason field.
+    const afterQP = allRecs.slice(35);
     const grouped = new Map();
-    for (const track of pool) {
+    for (const track of afterQP) {
       const reason = (track.reason || '').trim() || 'Recommended for you';
       const key = reason.toLowerCase();
       if (!grouped.has(key)) grouped.set(key, { reason, tracks: [] });
       grouped.get(key).tracks.push(track);
     }
-
     const shelves = [];
     for (const { reason, tracks } of grouped.values()) {
       const deduped = dedupe(tracks);
@@ -137,105 +176,45 @@ export default function HomeView() {
     setContextualShelves(shelves);
   };
 
-  // Fixed interleaving pattern across the 3x3 grid (row-major): the 5 REC and
-  // 4 RECENT slots are spread out rather than grouped into separate blocks.
-  const SPEED_DIAL_PATTERN = ['REC', 'RECENT', 'REC', 'REC', 'REC', 'RECENT', 'RECENT', 'REC', 'RECENT'];
-
-  const composeSpeedDial = (recCandidates, recentCandidates) => {
-    // Cross-group dedup: a track that appears in BOTH sources is only used
-    // once. Give it to the RECENT slots first (source of truth for history),
-    // then fill remaining REC slots with leftovers only if they weren't used.
-    const seen = new Set();
-    const takenRecents = [];
-    for (const t of recentCandidates) {
-      if (!seen.has(t.id)) { seen.add(t.id); takenRecents.push(t); }
+  const handleTileActivate = useCallback((track, isCurrent) => {
+    if (isCurrent) {
+      togglePlay();
+    } else {
+      logRecommendationAction(track.id, 'played', {
+        shelfId: 'speedDial', surface: 'speedDial', source: 'home'
+      });
+      playTrack(track, speedDialTracks);
     }
-    const availableRecs = recCandidates.filter((t) => !seen.has(t.id));
+  }, [togglePlay, playTrack, speedDialTracks]);
 
-    const recents = takenRecents;
-    const recs = availableRecs;
-    let recIdx = 0;
-    let recentIdx = 0;
-    const result = [];
-
-    for (const slot of SPEED_DIAL_PATTERN) {
-      if (slot === 'REC') {
-        if (recIdx < recs.length) {
-          result.push(recs[recIdx++]);
-        } else if (recentIdx < recents.length) {
-          result.push(recents[recentIdx++]); // fallback to a recent
-        }
-      } else {
-        if (recentIdx < recents.length) {
-          result.push(recents[recentIdx++]);
-        } else if (recIdx < recs.length) {
-          result.push(recs[recIdx++]); // fallback to a rec
-        }
+  const handleScroll = useCallback(() => {
+    if (!carouselRef.current || scrollTickRef.current) return;
+    scrollTickRef.current = true;
+    requestAnimationFrame(() => {
+      scrollTickRef.current = false;
+      const { scrollLeft, clientWidth } = carouselRef.current;
+      if (clientWidth > 0) {
+        const pageIndex = Math.round(scrollLeft / clientWidth);
+        setActivePage((prev) => (prev === pageIndex ? prev : pageIndex));
       }
-      if (result.length >= SPEED_DIAL_SIZE) break;
-    }
-    return result;
-  };
-
-  const renderSpeedTile = (track) => {
-    const isCurrent = currentTrack && currentTrack.id === track.id;
-    const isFav = !!favoritesMap[track.id];
-    return (
-      <div
-        key={track.id}
-        className={`speed-tile ${isCurrent ? 'active' : ''}`}
-        onClick={() => {
-          if (isCurrent) {
-            togglePlay();
-          } else {
-            logRecommendationAction(track.id, 'played', {
-              shelfId: 'speedDial', surface: 'speedDial', source: 'home'
-            });
-            playTrack(track, speedDialTracks);
+      if (scrollSettleRef.current) clearTimeout(scrollSettleRef.current);
+      scrollSettleRef.current = setTimeout(() => {
+        if (carouselRef.current) {
+          const { scrollLeft: sl, clientWidth: cw } = carouselRef.current;
+          if (cw > 0) {
+            const idx = Math.round(sl / cw);
+            setActivePage((prev) => (prev === idx ? prev : idx));
           }
-        }}
-      >
-        {track.cover_art_path ? (
-          <img
-            src={`/api/tracks/${track.id}/art`}
-            alt={track.title}
-            className="speed-tile-art"
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
-        ) : (
-          <div className="speed-tile-fallback">
-            <IconMusic size={22} color="var(--accent-primary)" />
-          </div>
-        )}
-        <div className="speed-tile-overlay">
-          {isCurrent && isPlaying ? (
-            <div className="speed-tile-eq">
-              <span /><span /><span />
-            </div>
-          ) : (
-            <div className="speed-tile-play">
-              <IconPlay size={14} color="#111" fill="#111" style={{ marginLeft: '1px' }} />
-            </div>
-          )}
-          <span className="speed-tile-label" title={track.title}>{track.title}</span>
-        </div>
-        <button
-          className={`speed-tile-fav ${isFav ? 'is-fav' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFavorite(track.id);
-          }}
-          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
-        >
-          <IconHeart
-            size={14}
-            color={isFav ? 'var(--accent-crimson)' : 'rgba(255,255,255,0.85)'}
-            fill={isFav ? 'var(--accent-crimson)' : 'none'}
-          />
-        </button>
-      </div>
-    );
-  };
+        }
+      }, 180);
+    });
+  }, []);
+
+  const pages = [];
+  const perPage = 9;
+  for (let i = 0; i < speedDialTracks.length; i += perPage) {
+    pages.push(speedDialTracks.slice(i, i + perPage));
+  }
 
   const renderQuickPickRow = (track) => {
     const isCurrent = currentTrack && currentTrack.id === track.id;
@@ -342,10 +321,10 @@ export default function HomeView() {
     <div className="bento-home-container">
       <div className="bento-header">
         <h1 className="view-title">Listen Now</h1>
-        <p className="view-subtitle">Recent listening, quick picks & contextual recommendations</p>
+        <p className="view-subtitle">Recommendations curated by Octave for you</p>
       </div>
 
-      {/* Speed Dial — primary content section */}
+      {/* Speed Dial — primary recommendation discovery surface */}
       <section className="home-section">
         <div className="bento-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="bento-section-title">
@@ -365,19 +344,49 @@ export default function HomeView() {
 
         {loading ? (
           <div style={{ color: 'var(--text-muted)', padding: '1rem 0' }}>Loading tracks...</div>
-        ) : speedDialTracks.length > 0 ? (
-          <div className="speed-dial-grid">
-            {speedDialTracks.map(renderSpeedTile)}
-          </div>
+        ) : pages.length > 0 ? (
+          <>
+            <div className="speed-dial-carousel-container" ref={carouselRef} onScroll={handleScroll}>
+              {pages.map((pageTracks, pageIdx) => (
+                <SpeedDialPage
+                  key={pageIdx}
+                  pageTracks={pageTracks}
+                  currentTrackId={currentTrack?.id}
+                  onActivate={handleTileActivate}
+                  onFavorite={toggleFavorite}
+                  favoritesMap={favoritesMap}
+                />
+              ))}
+            </div>
+            {pages.length > 1 && (
+              <div className="speed-dial-pagination">
+                {pages.map((_, dotIdx) => (
+                  <span
+                    key={dotIdx}
+                    className={`page-dot ${activePage === dotIdx ? 'active' : ''}`}
+                    onClick={() => {
+                      if (carouselRef.current) {
+                        carouselRef.current.scrollTo({
+                          left: dotIdx * carouselRef.current.clientWidth,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                    title={`Go to page ${dotIdx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <div className="empty-bento-box">
             <IconMusic size={24} color="var(--text-muted)" />
-            <span>No tracks found in library. Add some music to start building your Speed Dial.</span>
+            <span>No recommendations yet. Play some music to help Octave learn your taste.</span>
           </div>
         )}
       </section>
 
-      {/* Quick Picks — first clearly recommendation-focused shelf */}
+      {/* Quick Picks — next batch of recommendations, no overlap with Speed Dial */}
       {quickPicks.length > 0 && (
         <section className="home-section">
           <div className="bento-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

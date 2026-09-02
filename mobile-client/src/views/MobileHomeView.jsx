@@ -6,7 +6,6 @@ import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import ArtworkImage from '../components/ArtworkImage';
 import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
-  IconChevronRight,
   IconMoreVertical,
   IconMusic,
   IconRefresh,
@@ -14,53 +13,11 @@ import {
   IconPause,
   IconSparkles,
   IconHeart,
-  IconZap,
-  IconClock
+  IconZap
 } from '../components/Icons';
 import { apiUrl } from '../config';
 
 const CATEGORIES = ['All', 'Chill', 'Energy', 'Focus', 'Workout', 'Late Night', 'Acoustic'];
-
-// Fixed interleaving pattern across the 3x3 Speed Dial grid (row-major): the
-// 5 REC (V2 recommendation) and 4 RECENT slots are spread out rather than
-// grouped into separate blocks. Row 1: REC RECENT REC · Row 2: REC REC RECENT
-// · Row 3: RECENT REC RECENT.
-const SPEED_DIAL_PATTERN = ['REC', 'RECENT', 'REC', 'REC', 'REC', 'RECENT', 'RECENT', 'REC', 'RECENT'];
-
-// Assembles the Speed Dial as a target 5 + 4 hybrid (5 V2 recs + 4 recent
-// listens), interleaved and deduplicated across both groups. Falls back
-// between sources when a group runs short; never duplicates a track just to
-// fill a cell. Pure data selection using existing fetched data.
-const composeSpeedDial = (recCandidates, recentCandidates) => {
-  const seen = new Set();
-  const recents = [];
-  for (const t of recentCandidates) {
-    if (!seen.has(t.id)) { seen.add(t.id); recents.push(t); }
-  }
-  const recs = recCandidates.filter((t) => t && t.id && !seen.has(t.id));
-
-  let recIdx = 0;
-  let recentIdx = 0;
-  const result = [];
-
-  for (const slot of SPEED_DIAL_PATTERN) {
-    if (slot === 'REC') {
-      if (recIdx < recs.length) {
-        result.push(recs[recIdx++]);
-      } else if (recentIdx < recents.length) {
-        result.push(recents[recentIdx++]);
-      }
-    } else {
-      if (recentIdx < recents.length) {
-        result.push(recents[recentIdx++]);
-      } else if (recIdx < recs.length) {
-        result.push(recs[recIdx++]);
-      }
-    }
-    if (result.length >= 9) break;
-  }
-  return result;
-};
 
 // Subtle, dark ambient tints for the top glow on Home. Purely decorative and
 // independent of the playing artwork. One is selected ONCE when this module
@@ -120,7 +77,7 @@ const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, 
 });
 
 export default function MobileHomeView() {
-  const { currentTrack, isPlaying, playTrack, togglePlay, recentlyPlayed, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlay, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
   const [allTracks, setAllTracks] = useState([]);
   const [recommendedTracks, setRecommendedTracks] = useState([]);
@@ -220,29 +177,37 @@ export default function MobileHomeView() {
   };
 
   // Builds the Home shelf hierarchy from existing fetched data:
-  //   - Quick Picks = the first strongly-recommended V2 tracks
+  //   - Speed Dial = all V2 recommendations, paginated by 9
+  //   - Quick Picks = next 8 after Speed Dial pool (no overlap)
   //   - Contextual shelves = grouped by the backend's own `reason` fields
-  // Speed Dial is assembled separately (primarily recent listening) below.
   const assembleHome = (recommendationPool, category) => {
     const dedupe = (arr) => {
       const seen = new Set();
       return arr.filter((t) => (t && t.id && !seen.has(t.id) ? (seen.add(t.id), true) : false));
     };
 
-    const pool = dedupe(recommendationPool);
-    setQuickPickTracks(pool.slice(0, 8));
+    const allRecs = dedupe(
+      (recommendationPool || []).filter((t) => t && t.id && t.score != null && t.score > 0)
+    );
 
-    // Group recommendations by their backend-provided reason so we surface
-    // genuine contexts instead of fabricating shelf explanations on the client.
+    // Speed Dial: all V2 recommendations, paginated by 9 in the render.
+    setSpeedDialTracks(allRecs);
+
+    // Quick Picks: next 8 after the Speed Dial pool — no overlap.
+    const afterDial = allRecs.slice(27);
+    const pool = dedupe(recommendationPool);
+    setQuickPickTracks(afterDial.length > 0 ? afterDial.slice(0, 8) : pool.slice(0, 8));
+
+    // Contextual shelves: remaining recs grouped by backend reason field.
+    const afterQP = allRecs.slice(35);
     const grouped = new Map();
-    for (const track of pool) {
+    for (const track of afterQP) {
       const reason = (track.reason || '').trim() || 'Recommended for you';
       const reasonKey = reason.toLowerCase();
       if (!grouped.has(reasonKey)) grouped.set(reasonKey, { reason, tracks: [] });
       grouped.get(reasonKey).tracks.push(track);
     }
 
-    const shelfOrder = ['quickPicks'];
     const shelves = [];
     for (const [key, { reason, tracks }] of grouped) {
       const deduped = dedupe(tracks);
@@ -254,25 +219,8 @@ export default function MobileHomeView() {
       });
     }
 
-    // Order shelves by how specific/intentional the context sounds, so
-    // "Because you listened to..."-style and taste shelves surface first.
-    const contextual = shelves.filter((s) => !shelfOrder.includes(s.id));
-
-    // Build Speed Dial: primarily recently listened tracks (up to 9 in a 3x3
-    // grid), optionally augmented with a couple of strong V2 candidates when
-    // they are genuinely distinct from recent listening. Never duplicates.
-    buildSpeedDial(recommendationPool, category);
-
+    const contextual = shelves.filter((s) => !['quickPicks'].includes(s.id));
     setContextualShelves(contextual);
-  };
-
-  const buildSpeedDial = (recommendationPool, category) => {
-    const recCandidates = (recommendationPool || []).filter(
-      (t) => t && t.id && (t.score != null && t.score > 0)
-    );
-    const recentCandidates = (recentlyPlayed || []).filter((t) => t && t.id && t.title);
-
-    setSpeedDialTracks(composeSpeedDial(recCandidates, recentCandidates));
   };
 
   // Throttle scroll → state update to one per animation frame so React state
@@ -400,7 +348,7 @@ export default function MobileHomeView() {
           {pages.length > 1 ? (
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Swipe for more</span>
           ) : (
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Recently played</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Recommendations for you</span>
           )}
         </div>
 
