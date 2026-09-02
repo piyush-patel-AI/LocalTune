@@ -21,6 +21,47 @@ import { apiUrl } from '../config';
 
 const CATEGORIES = ['All', 'Chill', 'Energy', 'Focus', 'Workout', 'Late Night', 'Acoustic'];
 
+// Fixed interleaving pattern across the 3x3 Speed Dial grid (row-major): the
+// 5 REC (V2 recommendation) and 4 RECENT slots are spread out rather than
+// grouped into separate blocks. Row 1: REC RECENT REC · Row 2: REC REC RECENT
+// · Row 3: RECENT REC RECENT.
+const SPEED_DIAL_PATTERN = ['REC', 'RECENT', 'REC', 'REC', 'REC', 'RECENT', 'RECENT', 'REC', 'RECENT'];
+
+// Assembles the Speed Dial as a target 5 + 4 hybrid (5 V2 recs + 4 recent
+// listens), interleaved and deduplicated across both groups. Falls back
+// between sources when a group runs short; never duplicates a track just to
+// fill a cell. Pure data selection using existing fetched data.
+const composeSpeedDial = (recCandidates, recentCandidates) => {
+  const seen = new Set();
+  const recents = [];
+  for (const t of recentCandidates) {
+    if (!seen.has(t.id)) { seen.add(t.id); recents.push(t); }
+  }
+  const recs = recCandidates.filter((t) => t && t.id && !seen.has(t.id));
+
+  let recIdx = 0;
+  let recentIdx = 0;
+  const result = [];
+
+  for (const slot of SPEED_DIAL_PATTERN) {
+    if (slot === 'REC') {
+      if (recIdx < recs.length) {
+        result.push(recs[recIdx++]);
+      } else if (recentIdx < recents.length) {
+        result.push(recents[recentIdx++]);
+      }
+    } else {
+      if (recentIdx < recents.length) {
+        result.push(recents[recentIdx++]);
+      } else if (recIdx < recs.length) {
+        result.push(recs[recIdx++]);
+      }
+    }
+    if (result.length >= 9) break;
+  }
+  return result;
+};
+
 // Subtle, dark ambient tints for the top glow on Home. Purely decorative and
 // independent of the playing artwork. One is selected ONCE when this module
 // loads, so it stays stable across re-renders, scroll, playback/progress and
@@ -226,24 +267,12 @@ export default function MobileHomeView() {
   };
 
   const buildSpeedDial = (recommendationPool, category) => {
-    const seen = new Set();
-    const take = (arr) => arr.filter((t) => t && t.id && !seen.has(t.id) ? (seen.add(t.id), true) : false);
+    const recCandidates = (recommendationPool || []).filter(
+      (t) => t && t.id && (t.score != null && t.score > 0)
+    );
+    const recentCandidates = (recentlyPlayed || []).filter((t) => t && t.id && t.title);
 
-    const recents = (recentlyPlayed || []).filter((t) => t && t.id && t.title);
-    let speed = take(recents).slice(0, 9);
-
-    // Optionally blend in at most 2 strong V2 recommendation candidates that
-    // are not already in recent listening — only to enrich, never to pad.
-    if (speed.length < 9) {
-      const strongRecs = (recommendationPool || []).filter(
-        (t) => t && t.id && (t.score != null && t.score > 0)
-      );
-      const extra = take(strongRecs).slice(0, 9 - speed.length);
-      speed = [...speed, ...extra];
-    }
-
-    // Gracefully cap: if fewer than 3 meaningful tracks, show them as-is.
-    setSpeedDialTracks(speed.slice(0, 9));
+    setSpeedDialTracks(composeSpeedDial(recCandidates, recentCandidates));
   };
 
   // Throttle scroll → state update to one per animation frame so React state

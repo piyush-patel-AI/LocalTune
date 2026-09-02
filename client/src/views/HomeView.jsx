@@ -102,20 +102,18 @@ export default function HomeView() {
 
   const assembleHome = (recs) => {
     const recTracks = recs || suggestedTracks || [];
-    // Speed Dial: primarily recent listening, up to 9 in a compact 3x3 grid,
-    // optionally enriched with up to 2 strong V2 candidates. Never duplicates.
-    const seen = new Set();
-    const take = (arr) => (arr || []).filter((t) => (t && t.id && !seen.has(t.id) ? (seen.add(t.id), true) : false));
+    // Speed Dial: targeted 5 + 4 hybrid (5 V2 recommendations, 4 recent
+    // listens) interleaved across the 3x3 grid, deduplicated across both
+    // groups. Falls back between sources gracefully; never duplicates a
+    // track just to fill cells.
+    const recCandidates = dedupe(
+      recTracks.filter((t) => t && t.id && t.score != null && t.score > 0)
+    );
+    const recentCandidates = dedupe(
+      (recentlyPlayed || []).filter((t) => t && t.id && t.title)
+    );
 
-    const recents = (recentlyPlayed || []).filter((t) => t && t.id && t.title);
-    let speed = take(recents).slice(0, SPEED_DIAL_SIZE);
-
-    if (speed.length < SPEED_DIAL_SIZE) {
-      const strongRecs = recTracks.filter((t) => t && t.id && t.score != null && t.score > 0);
-      const extra = take(strongRecs).slice(0, SPEED_DIAL_SIZE - speed.length);
-      speed = [...speed, ...extra];
-    }
-    setSpeedDialTracks(speed.slice(0, SPEED_DIAL_SIZE));
+    setSpeedDialTracks(composeSpeedDial(recCandidates, recentCandidates));
 
     // Quick Picks: the first strongly-recommended V2 tracks.
     const pool = dedupe(recTracks);
@@ -137,6 +135,46 @@ export default function HomeView() {
       shelves.push({ id: `ctx-${reason.toLowerCase()}`, reason, tracks: deduped.slice(0, 10) });
     }
     setContextualShelves(shelves);
+  };
+
+  // Fixed interleaving pattern across the 3x3 grid (row-major): the 5 REC and
+  // 4 RECENT slots are spread out rather than grouped into separate blocks.
+  const SPEED_DIAL_PATTERN = ['REC', 'RECENT', 'REC', 'REC', 'REC', 'RECENT', 'RECENT', 'REC', 'RECENT'];
+
+  const composeSpeedDial = (recCandidates, recentCandidates) => {
+    // Cross-group dedup: a track that appears in BOTH sources is only used
+    // once. Give it to the RECENT slots first (source of truth for history),
+    // then fill remaining REC slots with leftovers only if they weren't used.
+    const seen = new Set();
+    const takenRecents = [];
+    for (const t of recentCandidates) {
+      if (!seen.has(t.id)) { seen.add(t.id); takenRecents.push(t); }
+    }
+    const availableRecs = recCandidates.filter((t) => !seen.has(t.id));
+
+    const recents = takenRecents;
+    const recs = availableRecs;
+    let recIdx = 0;
+    let recentIdx = 0;
+    const result = [];
+
+    for (const slot of SPEED_DIAL_PATTERN) {
+      if (slot === 'REC') {
+        if (recIdx < recs.length) {
+          result.push(recs[recIdx++]);
+        } else if (recentIdx < recents.length) {
+          result.push(recents[recentIdx++]); // fallback to a recent
+        }
+      } else {
+        if (recentIdx < recents.length) {
+          result.push(recents[recentIdx++]);
+        } else if (recIdx < recs.length) {
+          result.push(recs[recIdx++]); // fallback to a rec
+        }
+      }
+      if (result.length >= SPEED_DIAL_SIZE) break;
+    }
+    return result;
   };
 
   const renderSpeedTile = (track) => {
