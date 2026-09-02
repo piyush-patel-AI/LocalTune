@@ -6,6 +6,11 @@ import { getArtworkUrl } from '../services/MediaMetadataProvider';
 import ArtworkImage from '../components/ArtworkImage';
 import { logRecommendationAction } from '../services/recommendationTelemetry';
 import {
+  composeSpeedDial,
+  composeQuickPicks,
+  composeRefreshWindow
+} from '../services/recommendationComposition';
+import {
   IconMoreVertical,
   IconMusic,
   IconRefresh,
@@ -77,7 +82,7 @@ const SpeedDialPage = memo(function SpeedDialPage({ pageTracks, currentTrackId, 
 });
 
 export default function MobileHomeView() {
-  const { currentTrack, isPlaying, playTrack, togglePlay, favoritesMap, toggleFavorite, navigateToArtist } = usePlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlay, favoritesMap, toggleFavorite, navigateToArtist, recentlyPlayed } = usePlayer();
   const [activeCategory, setActiveCategory] = useState('All');
   const [allTracks, setAllTracks] = useState([]);
   const [recommendedTracks, setRecommendedTracks] = useState([]);
@@ -85,6 +90,7 @@ export default function MobileHomeView() {
   const [speedDialTracks, setSpeedDialTracks] = useState([]);
   const [quickPickTracks, setQuickPickTracks] = useState([]);
   const [contextualShelves, setContextualShelves] = useState([]);
+  const refreshOffsetRef = useRef(0);
   const [activePage, setActivePage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -141,11 +147,15 @@ export default function MobileHomeView() {
   };
 
   // Refresh uses the real recommendation/data pipeline (no client randomizer).
+  // Because the backend delivers a cached ranked pool (no exploration endpoint),
+  // we advance a deterministic pool-window offset so the Speed Dial rotation
+  // shifts without fabricating tracks or changing backend/desktop behavior.
   const handleRefreshSpeedDial = async () => {
     setRefreshing(true);
     setActivePage(0);
     try {
       await fetchHomeData();
+      refreshOffsetRef.current += 1;
       filterAndOrganize(activeCategory);
       if (carouselRef.current) {
         carouselRef.current.scrollTo({ left: 0, behavior: 'auto' });
@@ -181,9 +191,11 @@ export default function MobileHomeView() {
   };
 
   // Builds the Home shelf hierarchy from existing fetched data:
-  //   - Speed Dial = up to 18 V2 recs (two 3x3 pages)
-  //   - Quick Picks = next 8 remaining recs (no overlap)
-  //   - Contextual shelves = grouped by the backend's own `reason` fields
+  //   - Speed Dial = recommendation-first composition: 5 discovery / 2 familiar
+  //     / 2 recent per 3x3 page, artist-capped, dynamically paginated.
+  //   - Quick Picks = a distinct surface (next ranked recs) with no overlap.
+  //   - Contextual shelves = grouped by the backend's own `reason` fields, from
+  //     the pool tracks that Speed Dial did not place.
   const assembleHome = (recommendationPool, category) => {
     const dedupe = (arr) => {
       const seen = new Set();
@@ -192,17 +204,30 @@ export default function MobileHomeView() {
 
     const pool = dedupe(recommendationPool);
 
-    // Compose from the single deduplicated V2 pool without assuming a fixed
-    // total. Speed Dial: up to 18 (two full 3x3 pages). Quick Picks: the next
-    // 8 remaining tracks so it stays distinct from Speed Dial. Contextual
-    // shelves: whatever remains after Speed Dial + Quick Picks. Never fabricate
-    // or duplicate tracks.
-    const DIAL_CEIL = 18;
-    setSpeedDialTracks(pool.slice(0, DIAL_CEIL));
-    setQuickPickTracks(pool.slice(DIAL_CEIL).slice(0, 8));
+    // Rotate the ranked window deterministically on refresh so Speed Dial feels
+    // alive while staying reproducible (no Math.random, no backend change).
+    const { pool: rotatedPool } = composeRefreshWindow(pool, refreshOffsetRef.current);
 
-    // Contextual shelves: remaining recs grouped by backend reason field.
-    const afterQP = pool.slice(DIAL_CEIL + 8);
+    // Signals the mobile client already has for the 5/2/2 composition.
+    const recentlyPlayedIds = (recentlyPlayed || []).map((t) => Number(t?.id)).filter(Boolean);
+    const favoriteIds = Object.keys(favoritesMap || {}).map(Number);
+
+    const { pages } = composeSpeedDial(rotatedPool, {
+      recentlyPlayedIds,
+      favoriteIds
+    });
+    const speedDialIds = pages.flat().map((t) => Number(t.id));
+
+    setSpeedDialTracks(pages.flat());
+
+    // Quick Picks = next ranked recs that Speed Dial did NOT already place.
+    const quickPicks = composeQuickPicks(rotatedPool, speedDialIds, { count: 8 });
+    setQuickPickTracks(quickPicks);
+
+    // Contextual shelves: remaining pool tracks (not on Speed Dial or Quick
+    // Picks) grouped by backend reason field.
+    const placedIds = new Set([...speedDialIds, ...quickPicks.map((t) => Number(t.id))]);
+    const afterQP = pool.filter((t) => !placedIds.has(Number(t.id)));
     const grouped = new Map();
     for (const track of afterQP) {
       const reason = (track.reason || '').trim() || 'Recommended for you';
