@@ -1,0 +1,459 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<title>YouTube Music</title>
+<!-- Tailwind CSS CDN v3 with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            yt: {
+              black: '#030303',
+              dark: '#0f0f0f',
+              player: '#212121',
+              chip: 'rgba(255, 255, 255, 0.1)',
+              chipActive: '#ffffff',
+              red: '#FF0000',
+              gray: '#aaaaaa',
+              subtext: '#909090'
+            }
+          },
+          fontFamily: {
+            sans: ['Roboto', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="layout-and-scroll">
+    /* Hide scrollbars for clean native mobile UI */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    body {
+      background-color: #030303;
+      color: #ffffff;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+  </style>
+<style data-purpose="custom-decorations">
+    /* Gradient overlay for speed dial cards to ensure label readability */
+    .card-gradient {
+      background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+    }
+    .mixed-card-gradient {
+      background: linear-gradient(145deg, #1b1329 0%, #110d1c 100%);
+    }
+    /* Seamless ambient top mesh gradient blending subtly down to true OLED black */
+    .top-ambient-mesh {
+      background: 
+        radial-gradient(circle at 18% 18%, rgba(136, 19, 55, 0.38) 0%, rgba(136, 19, 55, 0.12) 50%, transparent 80%),
+        radial-gradient(circle at 85% 15%, rgba(88, 28, 135, 0.32) 0%, rgba(88, 28, 135, 0.08) 55%, transparent 80%),
+        linear-gradient(180deg, rgba(76, 5, 25, 0.28) 0%, rgba(45, 10, 48, 0.16) 45%, rgba(3, 3, 3, 0) 100%);
+    }
+  </style>
+</head>
+<body class="bg-yt-black text-white min-h-screen flex justify-center selection:bg-transparent">
+<!-- Mobile Screen Container -->
+<div class="w-full max-w-md min-h-screen flex flex-col bg-yt-black relative pb-[120px] shadow-2xl overflow-x-hidden border-x border-neutral-900">
+<!-- Top ambient continuous gradient strictly covering the header & filter area -->
+<div class="absolute top-0 left-0 right-0 h-56 top-ambient-mesh pointer-events-none z-0"></div>
+<!-- BEGIN: StatusBar -->
+<!-- Mobile native top status bar showing time, carrier signals, battery -->
+<div class="relative h-10 px-6 pt-2 flex items-center justify-between text-xs font-semibold tracking-tight text-neutral-200 z-50 select-none bg-transparent" data-purpose="status-bar">
+<div class="flex items-center space-x-2">
+<span class="font-medium text-[13px]">6:11</span>
+<svg class="w-3 h-3 fill-current opacity-80" viewBox="0 0 24 24">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v2h-2v-2zm0-10h2v8h-2V6z"></path>
+</svg>
+<svg class="w-3.5 h-3.5 fill-current opacity-80" viewBox="0 0 24 24">
+<path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"></path>
+</svg>
+</div>
+<div class="flex items-center space-x-1.5">
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+<path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"></path>
+</svg>
+<span class="text-[10px] tracking-tight">5G</span>
+<div class="flex items-center">
+<span class="text-[11px] font-medium mr-1">43</span>
+<div class="w-5 h-2.5 border border-white/80 rounded-[2px] p-[1px] flex items-center">
+<div class="h-full bg-white w-[43%] rounded-[1px]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- END: StatusBar -->
+<!-- BEGIN: TopAppBar -->
+<!-- Primary App Navigation Bar floating seamlessly over radiant gradient without any dark background bar -->
+<header class="relative px-4 py-2 flex items-center justify-between z-40 bg-transparent" data-purpose="app-header">
+<!-- Logo Container -->
+<div class="flex items-center">
+<img alt="YouTube Music Logo" class="h-6 object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1WmySTXttRnup1JpgFU9Ika7ggAu5yH3HvY9M2Wa2tbrQRWuHfp41gMjbLm7LDbTjeVMdTXyBaHHRClgrziblkCNHCCGk_X0TKPxApnwVEJ5RGQuDXbHR4HS2QCJuysCQbbNRoinnQ6vtlkN5oJrCXoo2NtoxrEClMukwEEGCZNCL4P84_Ez6paSZT3ZrzCxeDR53Vr9ARVnfPswUTIePa2QX8ahyMc5WTtgR2HuSKR-nkjbFo33xnsqg">
+</div>
+<!-- Action Buttons & Profile Avatar -->
+<div class="flex items-center space-x-4">
+<!-- Notification Bell Icon with Badge Count -->
+<button aria-label="Notifications" class="relative p-1 text-white hover:opacity-80 transition-opacity" type="button">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+<path d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white transform translate-x-1/3 -translate-y-1/4 bg-yt-red rounded-full">3</span>
+</button>
+<!-- Search Icon -->
+<button aria-label="Search" class="p-1 text-white hover:opacity-80 transition-opacity" type="button">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- User Profile Avatar -->
+<div class="w-7 h-7 rounded-full overflow-hidden ring-1 ring-white/20 cursor-pointer">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqzhd6C3hyy39tU0OqYQwDFZciMuD4L0hNvFF-9m6UWgl_nYITXT6lXh2vCTvovsZAJwbuxKKrVRmMQGsdd04XoSCl3YOvoghyoTw8JnhfaEOyzIJZqOWxBcX2YzQCNnJWz_WHiz-qPjpfXvVOmoS539FSTNpu2UNm_8OHxmkBir8MhH2GbyymU57E-4OCQ9YwnLleYCbtw1Kb3cdSTiaIXtGAQ-un84bYiL2-1TfeKwLNV40U_zZaCV0jbz--XfGryA">
+</div>
+</div>
+</header>
+<!-- END: TopAppBar -->
+<!-- BEGIN: CategoryFilterChips -->
+<!-- Horizontal scrollable filter pill buttons floating naturally above radiant background -->
+<nav aria-label="Category Filters" class="relative z-30 flex items-center space-x-2 px-4 py-2 overflow-x-auto no-scrollbar bg-transparent" data-purpose="mood-filters">
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Podcasts</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Sad</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Relax</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Romance</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Energise</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Workout</button>
+<button class="px-3.5 py-1.5 rounded-lg bg-yt-chip hover:bg-white/20 text-[13px] font-medium whitespace-nowrap transition-colors">Focus</button>
+</nav>
+<!-- END: CategoryFilterChips -->
+<!-- BEGIN: MainContent -->
+<main class="flex-1 flex flex-col space-y-6 pt-3 relative z-10">
+<!-- BEGIN: SpeedDialSection -->
+<!-- Profile Speed Dial Grid matching screenshot layout -->
+<section aria-label="Speed Dial" class="px-4" data-purpose="speed-dial-section">
+<!-- Section Header with User Subtitle -->
+<div class="flex items-center justify-between mb-3 cursor-pointer group">
+<div class="flex items-center space-x-2.5">
+<div class="w-8 h-8 rounded-full overflow-hidden ring-1 ring-white/10">
+<img alt="User Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAJZ_wbJvF4TZPatjfIZNQ9AZz7vFeCa_UbW76SxpYd6DFjbZRk6cGqK1iBO4viOW2KR5518j7VOU9JOKKJnHjfCnq_f0151mU276KLVDh1QUfAla2WmGv7S8MQ2eNoi1boUI_F4xMq7lkU746B_8uwnXdHRtd6wMN6du34XHdsO1BbLh0R1ozi0cP7vZwWshY0g_RSivQPnIo8bltWGHbA5Gfw2dLHC0DomEAJ9xNoB9g5O8zfgfSh3-7WoOUykT_KA">
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-wider text-yt-subtext font-bold leading-none">NOTESCUBE</p>
+<h2 class="text-xl font-bold tracking-tight text-white group-hover:text-neutral-300">Speed dial</h2>
+</div>
+</div>
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<!-- 3x3 Speed Dial Image Grid -->
+<div class="grid grid-cols-3 gap-2">
+<!-- Item 1: HEAVENLY JUMP -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<img alt="HEAVENLY JUMP cover" class="w-full h-full object-cover brightness-95 group-hover:scale-105 transition-transform duration-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfDWfu6djeSqd0uARcJGRj15Mp7izxXLE0Gpu0fli4YWTwOyn2mFXZwy7RDGly-7FW8T9GQFiM8QYjTajk4MB8yZ_SorvHNAb4HWBlr2Q--eef3hYy5TkJhmBC6TiMLnJQcGqxuY1xeW1ILCe7lOLAnZ568bWLmYHdpqzdrZeuzTXuA6W5yzn6GZL9wNCcxN0QY1_pxoZAi_SdC_cfswKat2IVbi86kmaVmr_T6ns1SqC1zmOsu1Fc">
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white uppercase truncate drop-shadow-sm">HEAVENLY JUMP...</span>
+</div>
+</div>
+<!-- Item 2: FUNK INFERNAL -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<div class="w-full h-full bg-gradient-to-tr from-red-950 via-red-800 to-black group-hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+<span class="text-red-500 font-extrabold text-xl opacity-40">INFERNAL</span>
+</div>
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white uppercase truncate drop-shadow-sm">FUNK INFERNAL (...</span>
+</div>
+</div>
+<!-- Item 3: Karthikeya -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<div class="w-full h-full bg-gradient-to-b from-stone-700 to-amber-950 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+<span class="text-amber-300 font-bold text-xs uppercase text-center px-1">Karthikeya</span>
+</div>
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white truncate drop-shadow-sm">The Flute Of Srikr...</span>
+</div>
+</div>
+<!-- Item 4: golden hour -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<div class="w-full h-full bg-gradient-to-t from-amber-700 via-orange-500 to-sky-600 group-hover:scale-105 transition-transform duration-200"></div>
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white truncate drop-shadow-sm">golden hour (Pian...</span>
+</div>
+</div>
+<!-- Item 5: 1985 -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<div class="w-full h-full bg-neutral-900 group-hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+<div class="w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700"></div>
+</div>
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white truncate drop-shadow-sm">1985</span>
+</div>
+</div>
+<!-- Item 6: Timeless -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<img alt="Timeless track cover" class="w-full h-full object-cover filter contrast-125 group-hover:scale-105 transition-transform duration-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfDWfu6djeSqd0uARcJGRj15Mp7izxXLE0Gpu0fli4YWTwOyn2mFXZwy7RDGly-7FW8T9GQFiM8QYjTajk4MB8yZ_SorvHNAb4HWBlr2Q--eef3hYy5TkJhmBC6TiMLnJQcGqxuY1xeW1ILCe7lOLAnZ568bWLmYHdpqzdrZeuzTXuA6W5yzn6GZL9wNCcxN0QY1_pxoZAi_SdC_cfswKat2IVbi86kmaVmr_T6ns1SqC1zmOsu1Fc">
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white truncate drop-shadow-sm">Timeless (Slowed...</span>
+</div>
+</div>
+<!-- Item 7: HEAVENLY JUMP 2 -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<img alt="Heavenly Jump anime track" class="w-full h-full object-cover filter hue-rotate-180 group-hover:scale-105 transition-transform duration-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfDWfu6djeSqd0uARcJGRj15Mp7izxXLE0Gpu0fli4YWTwOyn2mFXZwy7RDGly-7FW8T9GQFiM8QYjTajk4MB8yZ_SorvHNAb4HWBlr2Q--eef3hYy5TkJhmBC6TiMLnJQcGqxuY1xeW1ILCe7lOLAnZ568bWLmYHdpqzdrZeuzTXuA6W5yzn6GZL9wNCcxN0QY1_pxoZAi_SdC_cfswKat2IVbi86kmaVmr_T6ns1SqC1zmOsu1Fc">
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white uppercase truncate drop-shadow-sm">HEAVENLY JUMP...</span>
+</div>
+</div>
+<!-- Item 8: TOKYO DRIFT -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-800 shadow-md group cursor-pointer">
+<div class="w-full h-full bg-gradient-to-r from-zinc-800 to-zinc-950 flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+<span class="text-white font-black text-xs italic tracking-tighter">FAST &amp; FURIOUS</span>
+</div>
+<div class="absolute inset-0 card-gradient flex items-end p-1.5">
+<span class="text-[10px] font-bold text-white uppercase truncate drop-shadow-sm">TOKYO DRIFT (F...</span>
+</div>
+</div>
+<!-- Item 9: Three dots / Placeholder icon -->
+<div class="relative aspect-square rounded-lg overflow-hidden bg-neutral-900 border border-white/5 shadow-md flex items-center justify-center group cursor-pointer">
+<div class="space-y-1 opacity-70">
+<div class="w-3 h-3 rounded-full bg-indigo-300"></div>
+<div class="w-3 h-3 rounded-full bg-indigo-400 translate-x-2"></div>
+<div class="w-3 h-3 rounded-full bg-indigo-500 translate-x-4"></div>
+</div>
+</div>
+</div>
+<!-- Carousel Pagination Dots Indicator -->
+<div class="flex items-center justify-center space-x-1.5 mt-3">
+<span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-neutral-600"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-neutral-600"></span>
+</div>
+</section>
+<!-- END: SpeedDialSection -->
+<!-- BEGIN: QuickPicksSection -->
+<!-- Quick picks track list with Play all button -->
+<section aria-label="Quick picks" class="px-4" data-purpose="quick-picks-section">
+<!-- Section Title & Play All Pill -->
+<div class="flex items-center justify-between mb-3">
+<h2 class="text-xl font-bold tracking-tight text-white">Quick picks</h2>
+<button class="px-3.5 py-1 text-xs font-semibold rounded-full border border-white/20 bg-transparent hover:bg-white/10 active:scale-95 transition-all text-neutral-200">
+            Play all
+          </button>
+</div>
+<!-- Track Rows -->
+<div class="space-y-3">
+<!-- Track 1 -->
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex items-center space-x-3 flex-1 min-w-0 pr-2">
+<div class="w-12 h-12 rounded bg-neutral-900 flex-shrink-0 relative overflow-hidden flex items-center justify-center border border-white/5">
+<svg class="w-7 h-7 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"></path>
+</svg>
+</div>
+<div class="min-w-0 flex-1">
+<p class="text-[14px] font-medium text-white truncate group-hover:text-neutral-200">Am I Dreaming (Instrumental)</p>
+<p class="text-[12px] text-yt-subtext truncate mt-0.5">Metro Boomin • 20 lakh plays</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-neutral-400 hover:text-white" type="button">
+<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+</svg>
+</button>
+</div>
+<!-- Track 2 -->
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex items-center space-x-3 flex-1 min-w-0 pr-2">
+<div class="w-12 h-12 rounded bg-neutral-800 flex-shrink-0 relative overflow-hidden flex items-center justify-center">
+<div class="w-full h-full bg-gradient-to-br from-purple-800 to-indigo-950 flex items-center justify-center text-[10px] font-bold">PIANO</div>
+</div>
+<div class="min-w-0 flex-1">
+<p class="text-[14px] font-medium text-white truncate group-hover:text-neutral-200">Cornfield Chase (Interstellar)</p>
+<p class="text-[12px] text-yt-subtext truncate mt-0.5">Hans Zimmer, Dorian Marko • 4.8 crore plays</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-neutral-400 hover:text-white" type="button">
+<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+</svg>
+</button>
+</div>
+<!-- Track 3 -->
+<div class="flex items-center justify-between group cursor-pointer">
+<div class="flex items-center space-x-3 flex-1 min-w-0 pr-2">
+<div class="w-12 h-12 rounded bg-neutral-800 flex-shrink-0 relative overflow-hidden">
+<img alt="End of Beginning cover" class="w-full h-full object-cover filter brightness-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfDWfu6djeSqd0uARcJGRj15Mp7izxXLE0Gpu0fli4YWTwOyn2mFXZwy7RDGly-7FW8T9GQFiM8QYjTajk4MB8yZ_SorvHNAb4HWBlr2Q--eef3hYy5TkJhmBC6TiMLnJQcGqxuY1xeW1ILCe7lOLAnZ568bWLmYHdpqzdrZeuzTXuA6W5yzn6GZL9wNCcxN0QY1_pxoZAi_SdC_cfswKat2IVbi86kmaVmr_T6ns1SqC1zmOsu1Fc">
+</div>
+<div class="min-w-0 flex-1">
+<p class="text-[14px] font-medium text-white truncate group-hover:text-neutral-200">End of Beginning</p>
+<p class="text-[12px] text-yt-subtext truncate mt-0.5">Djo • 32 crore plays</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-neutral-400 hover:text-white" type="button">
+<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<!-- END: QuickPicksSection -->
+<!-- BEGIN: MixedForYouSection -->
+<!-- Mixed for you curated card presentation from screenshot 3 -->
+<section aria-label="Mixed for you" class="px-4" data-purpose="mixed-section">
+<div class="flex items-center justify-between mb-3 cursor-pointer group">
+<h2 class="text-xl font-bold tracking-tight text-white group-hover:text-neutral-300">Mixed for you</h2>
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<!-- Curated Supermix Card -->
+<div class="rounded-2xl mixed-card-gradient p-4 border border-white/5 shadow-xl" data-purpose="supermix-card">
+<!-- Card Header Info -->
+<div class="flex items-center space-x-4 mb-4">
+<!-- 2x2 Collage Thumbnail for Supermix -->
+<div class="w-20 h-20 rounded-lg overflow-hidden grid grid-cols-2 grid-rows-2 bg-neutral-900 flex-shrink-0 shadow-lg relative border border-white/10">
+<div class="bg-indigo-900 flex items-center justify-center text-[9px] font-bold">Lofi</div>
+<div class="bg-rose-900 flex items-center justify-center text-[9px] font-bold">Anime</div>
+<div class="bg-emerald-900 flex items-center justify-center text-[9px] font-bold">Pop</div>
+<div class="bg-amber-900 flex items-center justify-center text-[9px] font-bold">EDM</div>
+</div>
+<div>
+<h3 class="text-xl font-bold tracking-tight text-white">My Supermix</h3>
+<p class="text-xs text-yt-subtext mt-1">YouTube Music</p>
+</div>
+</div>
+<!-- Included tracks preview -->
+<div class="space-y-3 pt-1 border-t border-white/10">
+<!-- Track 1 inside Supermix -->
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-3 flex-1 min-w-0 pr-2">
+<div class="w-10 h-10 rounded bg-red-950/60 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-red-300 border border-red-500/20">
+                  PIRATE
+                </div>
+<div class="min-w-0 flex-1">
+<p class="text-[13px] font-medium text-white truncate">He's a Pirate - Epic Version</p>
+<p class="text-[11px] text-yt-subtext truncate">Samuel Kim • 1.8 crore plays</p>
+</div>
+</div>
+<button aria-label="Track actions" class="p-1 text-neutral-400 hover:text-white">
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+</svg>
+</button>
+</div>
+<!-- Track 2 inside Supermix -->
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-3 flex-1 min-w-0 pr-2">
+<div class="w-10 h-10 rounded bg-blue-950 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-blue-300 border border-blue-500/20">
+                  SHIVA
+                </div>
+<div class="min-w-0 flex-1">
+<p class="text-[13px] font-medium text-white truncate">Namo Namo</p>
+<p class="text-[11px] text-yt-subtext truncate">Amit Trivedi • 165 crore plays</p>
+</div>
+</div>
+<button aria-label="Track actions" class="p-1 text-neutral-400 hover:text-white">
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Card Actions: Play Button & Save Button -->
+<div class="flex items-center space-x-3 mt-4 pt-2">
+<button aria-label="Play Supermix" class="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+<svg class="w-5 h-5 fill-current translate-x-0.5" viewBox="0 0 24 24">
+<polygon points="6,4 20,12 6,20"></polygon>
+</svg>
+</button>
+<button aria-label="Bookmark Supermix" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
+<svg class="w-5 h-5 fill-none stroke-currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<!-- END: MixedForYouSection -->
+<!-- BEGIN: HeardInShortsSection -->
+<!-- 'Heard in Shorts' trending sounds section matching screenshot 2 -->
+<!-- END: HeardInShortsSection -->
+</main>
+<!-- END: MainContent -->
+<!-- BEGIN: FloatingMiniPlayer -->
+<!-- Persistent Mini-Player pinned above Bottom Navigation Bar -->
+<div class="fixed bottom-[56px] left-0 right-0 max-w-md mx-auto z-40 px-2" data-purpose="mini-player-container">
+<div class="relative bg-yt-player/95 backdrop-blur-md rounded-xl overflow-hidden shadow-2xl border border-white/5 flex flex-col">
+<!-- Thin Audio Playback Progress Bar -->
+
+<!-- Main Mini-Player Row -->
+<div class="flex items-center justify-between px-3 py-2">
+<!-- Left: Thumbnail & Song Details -->
+<div class="flex items-center space-x-3 flex-1 min-w-0 cursor-pointer">
+<div class="w-10 h-10 rounded-md overflow-hidden bg-neutral-900 flex-shrink-0 shadow border border-white/10 relative">
+<img alt="Now playing album art" class="w-full h-full object-cover filter contrast-150" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfDWfu6djeSqd0uARcJGRj15Mp7izxXLE0Gpu0fli4YWTwOyn2mFXZwy7RDGly-7FW8T9GQFiM8QYjTajk4MB8yZ_SorvHNAb4HWBlr2Q--eef3hYy5TkJhmBC6TiMLnJQcGqxuY1xeW1ILCe7lOLAnZ568bWLmYHdpqzdrZeuzTXuA6W5yzn6GZL9wNCcxN0QY1_pxoZAi_SdC_cfswKat2IVbi86kmaVmr_T6ns1SqC1zmOsu1Fc">
+</div>
+<div class="min-w-0 flex-1">
+<p class="text-[13px] font-semibold text-white truncate tracking-tight">Never Giving Up</p>
+<p class="text-[11px] text-yt-subtext truncate">M.M. Keeravaani</p>
+</div>
+</div>
+<!-- Right Controls: Cast & Play/Pause -->
+<div class="flex items-center space-x-2 pl-2">
+<!-- Google Cast Icon -->
+<button aria-label="Cast to device" class="p-2 text-neutral-300 hover:text-white transition-colors" type="button">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+<path d="M3 16.5v2.25A1.25 1.25 0 004.25 20h2.25M3 12a9 9 0 019 9m-9-5a5 5 0 015 5m-5.75 0h.01" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M7 4h12.75A1.25 1.25 0 0121 5.25v13.5A1.25 1.25 0 0119.75 20H15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Play / Pause Icon -->
+<button aria-label="Play" class="p-2 text-white hover:opacity-80 transition-opacity" type="button">
+<svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+<polygon points="6,4 20,12 6,20"></polygon>
+</svg>
+</button>
+</div>
+</div>
+<div class="w-full h-[2px] bg-neutral-700"><div class="h-full bg-white w-2/5"></div></div></div>
+</div>
+<!-- END: FloatingMiniPlayer -->
+<!-- BEGIN: BottomNavigationBar -->
+<!-- Fixed 5-tab native YouTube Music navigation bar -->
+<nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto h-[56px] bg-yt-black border-t border-neutral-800/80 px-2 flex items-center justify-around z-50 select-none" data-purpose="bottom-navigation"><!-- Tab 1: Home (Active) -->
+<button aria-label="Home" class="flex flex-col items-center justify-center flex-1 py-1 text-white group" type="button">
+  <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg>
+  <span class="text-xs font-semibold mt-1 tracking-tight">Home</span>
+</button>
+<!-- Tab 2: Explore -->
+<button aria-label="Explore" class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400 hover:text-white group" type="button">
+  <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm2.19 12.19L6 18l3.81-8.19L18 6l-3.81 8.19zM12 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"></path></svg>
+  <span class="text-xs font-normal mt-1 tracking-tight">Explore</span>
+</button>
+<!-- Tab 3: Library -->
+<button aria-label="Library" class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400 hover:text-white group" type="button">
+  <svg class="w-6 h-6 text-neutral-400 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+  <span class="text-xs font-normal mt-1 tracking-tight">Library</span>
+</button></nav>
+<!-- END: BottomNavigationBar -->
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Music Search Screen</title>
+<!-- Tailwind CSS CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration for custom theme styles -->
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            appDark: '#0a0b0e',
+            glassDark: 'rgba(22, 24, 30, 0.75)',
+            glassBorder: 'rgba(255, 255, 255, 0.08)',
+            keyboardBg: '#1e2025',
+            keyBg: '#343842',
+            keyActive: '#4a4f5d',
+            accentCyan: '#4ed6c2',
+            accentCyanDark: '#2bb3a0'
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"Segoe UI"', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+<!-- Hydro-Gloss & Glassmorphic Custom Styles -->
+<style data-purpose="hydro-gloss-effects">
+    .hydro-glass-bar {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(18, 20, 26, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    
+    .hydro-glass-pill {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(26, 29, 38, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), 0 4px 16px rgba(0,0,0,0.4);
+    }
+
+    .hydro-key {
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transition: all 0.08s ease;
+    }
+
+    .hydro-key:active {
+      transform: translateY(1px) scale(0.97);
+      background-color: #434854;
+    }
+
+    /* Blinking search cursor animation */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .blinking-cursor {
+      animation: blink 1.1s infinite cubic-bezier(0.65, 0.05, 0.36, 1);
+    }
+  </style>
+</head>
+<body class="bg-[#050608] text-white flex justify-center items-center min-h-screen p-0 sm:p-4 font-sans select-none antialiased">
+<!-- Mobile Frame Container -->
+<main class="relative w-full max-w-[420px] h-[885px] bg-[#090a0d] flex flex-col overflow-hidden sm:rounded-[44px] sm:ring-1 sm:ring-white/10 sm:shadow-2xl shadow-black" data-purpose="mobile-viewport">
+<!-- BEGIN: MobileStatusBar -->
+<header class="w-full pt-3 px-6 pb-2 flex justify-between items-center text-xs font-semibold tracking-tight text-white/90 z-30" data-purpose="status-bar">
+<span class="text-sm tracking-normal">1:27</span>
+<div class="flex items-center space-x-2 text-white/80">
+<!-- Fork / USB connection indicator -->
+<svg class="w-3.5 h-3.5 fill-current opacity-80" viewBox="0 0 24 24">
+<path d="M12 2a2 2 0 0 0-2 2v2H8a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v4.17A3.001 3.001 0 0 0 11 21a3 3 0 0 0 3-3V14h2a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2V4a2 2 0 0 0-2-2z"></path>
+</svg>
+<!-- Signal Icons -->
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+<path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L12 22l7.03-4.39C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9z" opacity="0.3"></path>
+<path d="M12 7c-2.76 0-5 2.24-5 5 0 1.25.46 2.4 1.23 3.3L12 18l3.77-2.7C16.54 14.4 17 13.25 17 12c0-2.76-2.24-5-5-5z"></path>
+</svg>
+<!-- 5G Label -->
+<span class="text-[10px] font-bold tracking-tighter px-0.5 border border-white/40 rounded leading-none py-0.5">5G</span>
+<!-- Battery with numeric percentage (48) -->
+<div class="flex items-center space-x-0.5 bg-white/10 px-1.5 py-0.5 rounded-full text-[10px]">
+<span class="">48</span>
+<div class="w-4 h-2 border border-white/80 rounded-[2px] p-[1px] relative flex items-center">
+<div class="h-full bg-white rounded-xs w-[48%]"></div>
+</div>
+</div>
+</div>
+</header>
+<!-- END: MobileStatusBar -->
+<!-- BEGIN: SearchHeaderBar -->
+<section class="px-3.5 pt-1.5 pb-2.5 flex items-center gap-2.5 z-20" data-purpose="search-header">
+<!-- Back Navigation Button -->
+<button aria-label="Go back" class="p-2 -ml-1 text-white/90 hover:text-white transition-colors">
+<svg class="w-6 h-6 stroke-[2.2] stroke-current fill-none" viewBox="0 0 24 24">
+<path d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Glass Capsule Search Field -->
+<div class="flex-1 rounded-full h-11 px-3.5 flex items-center justify-between bg-white/10">
+<div class="flex items-center overflow-hidden mr-2">
+<span class="text-[#cfd3db] text-[15.5px] font-normal tracking-wide whitespace-nowrap">Search in library</span>
+<!-- Dynamic cyan blinking cursor -->
+<span class="inline-block w-[2px] h-5 bg-[#4ed6c2] ml-0.5 rounded-full blinking-cursor"></span>
+</div>
+<!-- Voice Search & Audio Waveform Identification Icons -->
+<div class="flex items-center space-x-1.5 text-white/85">
+<!-- Microphone Icon -->
+<button aria-label="Voice Search" class="p-1.5 hover:text-[#4ed6c2] transition-colors">
+<svg class="w-[19px] h-[19px] fill-current" viewBox="0 0 24 24">
+<path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"></path>
+<path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"></path>
+</svg>
+</button>
+<!-- Audio Waveform / Song Identifier Icon (Right pill action) -->
+<button aria-label="Song Recognition" class="p-1.5 hover:text-[#4ed6c2] transition-colors">
+<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+<path d="M12 3v18M8 6v12M4 9v6M16 7v10M20 10v4" stroke="currentColor" stroke-linecap="round" stroke-width="2.2"></path>
+</svg>
+</button>
+</div>
+</div>
+</section>
+<!-- END: SearchHeaderBar -->
+<!-- BEGIN: SearchHistoryList -->
+<!-- Scrollable area with recent search queries exactly mirroring IMAGE_2 -->
+<section class="flex-1 overflow-y-auto px-4 py-1 space-y-0.5 no-scrollbar" data-purpose="search-history-container">
+<!-- History Item 1: beat it -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<!-- History Clock Icon -->
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">beat it</span>
+</div>
+<!-- Arrow Up-Right (insert query) -->
+<button aria-label="Insert beat it into search" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 2: nh3sbt-vse -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">nh3sbt-vse</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 3: krishna flute karthikeya 2 -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">krishna flute karthikeya 2</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 4: URL entry -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">https://youtu.be/joyxrgcs-cw?si=szoq7jn...</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 5: phonk -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">phonk</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 6: shape of you -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">shape of you</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 7: merry go round mha opening -->
+<div class="flex items-center justify-between py-3 group cursor-pointer border-b border-white/[0.03]" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">merry go round mha opening</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<!-- History Item 8: love me not slowed -->
+<div class="flex items-center justify-between py-3 group cursor-pointer" data-purpose="history-item">
+<div class="flex items-center gap-4 min-w-0 pr-2">
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+<path d="M3 3v5h5"></path>
+<path d="M12 7v5l3 3"></path>
+</svg>
+<span class="text-[15px] font-medium text-neutral-200 group-hover:text-white truncate">love me not slowed</span>
+</div>
+<button aria-label="Insert query" class="text-neutral-400 p-1 hover:text-white">
+<svg class="w-5 h-5 stroke-[2] stroke-current" fill="none" viewBox="0 0 24 24">
+<path d="M7 17L17 7M17 7H9M17 7V15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</section>
+<!-- END: SearchHistoryList -->
+<!-- BEGIN: MobileDarkKeyboard -->
+<!-- Docked realistic dark keyboard matching the exact layout in IMAGE_2 -->
+
+<!-- END: MobileDarkKeyboard -->
+</main>
+<!-- Interactive script to allow clicking history items -->
+<script data-purpose="search-interaction">
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchPillText = document.querySelector('[data-purpose="search-header"] span.whitespace-nowrap');
+      const historyItems = document.querySelectorAll('[data-purpose="history-item"]');
+      
+      historyItems.forEach(item => {
+        item.addEventListener('click', () => {
+          const queryText = item.querySelector('span').innerText.trim();
+          if (searchPillText) {
+            searchPillText.innerText = queryText;
+            searchPillText.classList.remove('text-[#cfd3db]');
+            searchPillText.classList.add('text-white', 'font-medium');
+          }
+        });
+      });
+    });
+  </script>
+
+
+</body></html>

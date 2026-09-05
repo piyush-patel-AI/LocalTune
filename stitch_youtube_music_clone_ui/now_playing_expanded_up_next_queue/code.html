@@ -1,0 +1,431 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>YouTube Music - Now Playing</title>
+<!-- Tailwind CSS CDN with forms and container queries plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            yt: {
+              black: '#030303',
+              dark: '#0f0f0f',
+              surface: '#212121',
+              lightDark: '#282828',
+              red: '#FF0000',
+              secondary: '#AAAAAA',
+              muted: '#717171',
+              border: '#383838'
+            }
+          },
+          fontFamily: {
+            sans: ['Roboto', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+<!-- Material Symbols Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<style data-purpose="custom-styling">
+    /* Ambient glow simulation matching dynamic player background */
+    .ambient-glow {
+      background: radial-gradient(circle at 50% 30%, rgba(88, 28, 135, 0.45) 0%, rgba(136, 19, 55, 0.25) 45%, rgba(3, 3, 3, 0) 80%);
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      user-select: none;
+    }
+    .material-symbols-outlined.fill-icon {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    /* Smooth touch tap highlights removal */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Apple Hydro-Gloss Bulbous Liquid Glass Styles */
+    .liquid-glass-droplet {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.08) 100%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.37),
+        0 0 1px 1px rgba(255, 255, 255, 0.2),
+        inset 0 2px 4px rgba(255, 255, 255, 0.65),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.4);
+    }
+    .liquid-glass-droplet:active {
+      transform: scale(0.94);
+      box-shadow: 
+        0 4px 16px rgba(0, 0, 0, 0.4),
+        0 0 1px 1px rgba(255, 255, 255, 0.25),
+        inset 0 1px 3px rgba(255, 255, 255, 0.4),
+        inset 0 -1px 3px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Hydro-Acrylic Luminous Glass Lens (Play Button) */
+    .hydro-glass-master-play {
+      background: radial-gradient(circle at 35% 25%, #ffffff 0%, #f0eff5 45%, #d5d3e0 80%, #bdb9ce 100%);
+      box-shadow: 
+        0 14px 36px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(255, 255, 255, 0.6),
+        inset 0 3px 6px rgba(255, 255, 255, 0.95),
+        inset 0 -4px 8px rgba(90, 70, 140, 0.35);
+      position: relative;
+    }
+    .hydro-glass-master-play::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 12%;
+      right: 12%;
+      height: 40%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
+      border-radius: 9999px;
+      pointer-events: none;
+    }
+
+    /* Floating Liquid Segmented Slider Chamber */
+    .liquid-glass-chamber {
+      background: rgba(20, 10, 32, 0.5);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 
+        inset 0 1px 3px rgba(255, 255, 255, 0.2),
+        inset 0 -1px 3px rgba(0, 0, 0, 0.6),
+        0 4px 14px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .liquid-slider-active {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.1) 100%);
+      box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(255, 255, 255, 0.35),
+        inset 0 1.5px 3px rgba(255, 255, 255, 0.7),
+        inset 0 -1.5px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Polished Double-Rim Specular Capsule */
+    .liquid-specular-capsule {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 
+        0 6px 20px rgba(0, 0, 0, 0.3),
+        inset 0 1.5px 2px rgba(255, 255, 255, 0.5),
+        inset 0 -1.5px 3px rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body class="bg-black text-white flex justify-center items-center min-h-screen antialiased selection:bg-red-600 selection:text-white">
+<!-- BEGIN: MobileDeviceFrame -->
+<div class="relative w-full max-w-[425px] h-[100dvh] max-h-[915px] bg-[#030303] overflow-hidden flex flex-col justify-between shadow-2xl select-none sm:rounded-[36px] sm:border sm:border-neutral-800" data-purpose="player-container" style="background: radial-gradient(circle at 50% 30%, rgb(59, 16, 84) 0%, rgb(26, 5, 38) 55%, rgb(13, 2, 20) 100%);">
+<!-- Ambient glowing background -->
+<div aria-hidden="true" class="absolute inset-0 pointer-events-none ambient-glow z-0" style="background: radial-gradient(circle at 50% 35%, rgba(147, 51, 234, 0.45) 0%, rgba(88, 28, 135, 0.35) 40%, rgba(26, 5, 38, 0.8) 85%);"></div>
+<!-- BEGIN: StatusBar -->
+<header class="relative z-10 flex justify-between items-center px-6 pt-3 pb-1 text-xs font-medium text-neutral-300" data-purpose="status-bar">
+<span class="tracking-tight font-semibold text-[14px]">=6:13</span>
+<!-- Right Status Icons -->
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] leading-none">wifi</span>
+<span class="material-symbols-outlined text-[15px] leading-none">signal_cellular_4_bar</span>
+<!-- Battery Icon & Percentage -->
+<div class="flex items-center gap-1 ml-0.5 font-semibold text-[11px] leading-none">
+<span class="">43%</span>
+<span class="material-symbols-outlined text-[16px] -rotate-90 leading-none">battery_full</span>
+</div>
+</div>
+</header>
+<!-- END: StatusBar -->
+<!-- BEGIN: PlayerTopAppBar -->
+<nav class="relative z-10 flex items-center justify-between px-4 py-2" data-purpose="top-navigation">
+<!-- Minimize chevron button with liquid glass droplet styling -->
+<button aria-label="Minimize Player" class="w-10 h-10 flex items-center justify-center rounded-full liquid-glass-droplet transition-transform">
+<span class="material-symbols-outlined text-white text-[24px]">expand_more</span>
+</button>
+<!-- Centered Song/Video Segmented Pill Switch with Milled Liquid Glass Chamber -->
+<div class="flex items-center liquid-glass-chamber p-1 rounded-full gap-0.5" data-purpose="segmented-toggle">
+<button class="liquid-slider-active px-4 py-1 rounded-full text-white font-medium text-[12px] tracking-wide transition-all">Song</button>
+</div>
+<!-- More options overflow icon with liquid glass droplet styling -->
+<button aria-label="More options" class="w-10 h-10 flex items-center justify-center rounded-full liquid-glass-droplet transition-transform">
+<span class="material-symbols-outlined text-white text-[22px]">more_vert</span>
+</button>
+</nav>
+<!-- END: PlayerTopAppBar -->
+<!-- BEGIN: MainContentSection -->
+<main class="relative z-10 flex-1 flex flex-col justify-evenly px-6 overflow-hidden">
+<!-- Album Artwork Visual Container -->
+<section class="flex items-center justify-center w-full px-2 py-1" data-purpose="album-artwork-display">
+<div class="relative w-full aspect-square max-w-[340px] rounded-2xl overflow-hidden shadow-2xl shadow-black/80 ring-1 ring-white/10 group">
+<!-- Album Artwork Image from DataStore -->
+<img alt="Album Artwork - Never Giving Up by M.M. Keeravaani" class="w-full h-full object-cover object-center transform transition duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHylDh9TgyiyiN-S3kB5QZAOOX7AmOf_amSsfBvRkG6KBHrnsO8g5mufijkjf2PfG3TOtaxsh3TzWcK2mZS4zUNJzEo09imF2QXNN6rxIO9XSK4Ath3plVDU9eBK_dE_i7bfJgWXn_Ne1Y30Tqdu9Kr0wuxZv5oSdlQ2gKHqIGrlmp-BupUZ1JPc_dW7DtKTy7CywzPEHSDQqjQcbVFpYSA8hd9o5RCtRnj-Twohe1EGlKHIMED-1KJWO1sYXV8EEcYBGGhU8LiKBSSA">
+</div>
+</section>
+<!-- Track Information and Reaction Actions -->
+<section class="flex items-center justify-between mt-2 mb-1" data-purpose="track-metadata-actions">
+<!-- Left: Track Title & Artist Info -->
+<div class="flex flex-col min-w-0 pr-4">
+<h1 class="text-[21px] font-bold text-white tracking-normal leading-tight truncate">Heat Waves</h1>
+<h2 class="text-[14px] text-neutral-400 font-normal truncate mt-0.5">Glass Animals</h2>
+</div>
+<!-- Right: Like, Dislike & Save Actions - Polished Liquid Glass Capsule -->
+<div class="flex items-center gap-1 shrink-0 text-white liquid-specular-capsule px-1.5 py-1 rounded-full">
+<button aria-label="Dislike" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-90 transition">
+<span class="material-symbols-outlined text-[20px]">thumb_down</span>
+</button>
+<div class="w-[1px] h-4 bg-white/15 mx-0.5"></div>
+<button aria-label="Like" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-90 transition">
+<span class="material-symbols-outlined text-[20px]">thumb_up</span>
+</button>
+<div class="w-[1px] h-4 bg-white/15 mx-0.5"></div>
+<button aria-label="Save to playlist" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 active:scale-90 transition">
+<span class="material-symbols-outlined text-[20px]">bookmark_border</span>
+</button>
+</div>
+</section>
+<!-- BEGIN: ScrubBarAndTimestamps -->
+<section class="w-full mt-1" data-purpose="playback-progress">
+<!-- Progress Bar Slider -->
+<div class="relative w-full h-6 flex items-center cursor-pointer group">
+<!-- Background track -->
+<div class="w-full h-[3px] bg-white/20 rounded-full overflow-hidden group-hover:h-[5px] transition-all">
+<!-- Filled Played Bar -->
+<div class="h-full bg-red-600 rounded-full w-[36%] relative"></div>
+</div>
+<!-- Scrubber Handle Knob -->
+<div class="absolute left-[36%] -translate-x-1/2 w-3.5 h-3.5 bg-red-600 rounded-full shadow-md scale-100 group-hover:scale-125 transition-transform"></div>
+</div>
+<!-- Timestamps Row -->
+<div class="flex justify-between text-[11px] font-medium text-neutral-400 tabular-nums -mt-1 tracking-wider">
+<span class="">1:24</span>
+<span class="">3:45</span>
+</div>
+</section>
+<!-- END: ScrubBarAndTimestamps -->
+<!-- BEGIN: TransportPlaybackControls -->
+<section class="flex items-center justify-between px-2 my-1" data-purpose="master-playback-controls">
+<!-- Shuffle button (Tumbled glass pebble) -->
+<button aria-label="Shuffle" class="w-11 h-11 flex items-center justify-center rounded-full text-neutral-300 hover:text-white liquid-glass-droplet transition">
+<span class="material-symbols-outlined text-[22px]">shuffle</span>
+</button>
+<!-- Previous track button (Tumbled glass pebble) -->
+<button aria-label="Previous Track" class="w-12 h-12 flex items-center justify-center rounded-full text-white liquid-glass-droplet transition">
+<span class="material-symbols-outlined text-[32px] fill-icon">skip_previous</span>
+</button>
+<!-- Large Master Play/Pause Button (Hydro-Acrylic luminous glass sphere/lens) -->
+<button aria-label="Play" class="w-[70px] h-[70px] flex items-center justify-center hydro-glass-master-play text-[#161026] rounded-full active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[40px] fill-icon ml-1">play_arrow</span>
+</button>
+<!-- Next track button (Tumbled glass pebble) -->
+<button aria-label="Next Track" class="w-12 h-12 flex items-center justify-center rounded-full text-white liquid-glass-droplet transition">
+<span class="material-symbols-outlined text-[32px] fill-icon">skip_next</span>
+</button>
+<!-- Repeat button (Tumbled glass pebble) -->
+<button aria-label="Repeat" class="w-11 h-11 flex items-center justify-center rounded-full text-neutral-300 hover:text-white liquid-glass-droplet transition">
+<span class="material-symbols-outlined text-[22px]">repeat</span>
+</button>
+</section>
+<!-- END: TransportPlaybackControls -->
+<!-- BEGIN: AudioRoutingRow -->
+<section class="flex items-center justify-between text-xs text-neutral-400 pt-1 pb-2" data-purpose="audio-device-output">
+<!-- Device Pill Capsule -->
+<button class="liquid-specular-capsule flex items-center gap-2 hover:text-white transition-colors py-1.5 px-3.5 rounded-full active:scale-95">
+<span class="material-symbols-outlined text-[17px] text-white">cast</span>
+<span class="font-medium text-[13px] text-neutral-200">Living Room Speaker</span>
+</button>
+<!-- Share Button Droplet -->
+<button aria-label="Share" class="liquid-glass-droplet w-9 h-9 flex items-center justify-center rounded-full text-white transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</button>
+</section>
+<!-- END: AudioRoutingRow -->
+</main>
+<!-- END: MainContentSection -->
+<!-- BEGIN: BottomSheetPeek -->
+<div class="absolute inset-0 z-30 flex flex-col bg-[#141511] text-white overflow-hidden" data-purpose="expanded-queue-sheet" style="background: linear-gradient(180deg, #181714 0%, #151612 100%);">
+<!-- Status bar area spacer & Top Mini Playing Bar -->
+<div class="px-4 pt-3 pb-2 flex items-center justify-between border-b border-white/5 bg-[#171613]/90 backdrop-blur-md shrink-0">
+<div class="flex items-center gap-3 min-w-0 flex-1 mr-2">
+<div class="w-11 h-11 rounded-lg overflow-hidden shrink-0 shadow-md bg-neutral-800">
+<img alt="Eternity" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHiCgBqNifi7rq1haO70BfwP5_mpS16XCRRvIvX39DA_LzbOHiGnuWToDd2KkCCUz06u4mnDWdYlgopp5tp1xKyhf9-QbA0b53vCdh5ZcuQlrZ1qgJA9Dnmx1zxaAVquG-1OEke1BBBH9-caZWDYN50XMFCBRsG5j9JtplYxvqXgm-oidFtczuWLPD-eL4-ZMkOpJQVcz_rTOWhghDLgvfPnUm3viBaXiJ2s6vW-G9sQucoDoKcEw-WR-tOcNxpDddKDOVuTzNnyezCw">
+</div>
+<div class="flex flex-col min-w-0">
+<span class="text-[15px] font-bold text-white leading-snug truncate">Heatwaves</span>
+<span class="text-[13px] text-neutral-400 font-normal truncate">Glass Animals</span>
+</div>
+</div>
+<div class="flex items-center gap-4 text-white shrink-0 pr-1">
+<button aria-label="Cast audio" class="hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center">
+<span class="material-symbols-outlined text-[23px]">cast</span>
+</button>
+<button aria-label="Pause" class="hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center">
+<span class="material-symbols-outlined text-[28px] fill-icon">pause</span>
+</button>
+</div>
+</div>
+<!-- Main Queue Scrollable Drawer Body -->
+<div class="flex-1 overflow-y-auto px-4 pt-2 pb-6 flex flex-col" style="scrollbar-width: none;">
+<!-- Drag Pill Indicator -->
+<div class="w-full flex justify-center py-1.5 cursor-grab shrink-0">
+<div class="w-10 h-1 bg-white/20 rounded-full"></div>
+</div>
+<!-- Playing From Header Row with Save Pill Button -->
+<div class="flex items-center justify-between mt-2 mb-3 shrink-0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[12px] font-medium text-neutral-400 tracking-wide">Playing from</span>
+<h3 class="text-[15px] font-bold text-white tracking-tight leading-tight truncate mt-0.5">Glass Animals MIX</h3>
+</div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 transition-all text-white shrink-0 border border-white/10 shadow-sm">
+<span class="material-symbols-outlined text-[17px]">playlist_add</span>
+<span class="text-[12px] font-semibold">Save</span>
+</button>
+</div>
+<!-- Category Filter Chips Horizontal List -->
+<div class="flex items-center gap-2 overflow-x-auto py-1 shrink-0" style="scrollbar-width: none;">
+<button class="px-3.5 py-1.5 rounded-full bg-white text-black font-semibold text-[13px] shadow-sm shrink-0">All</button>
+<button class="px-3.5 py-1.5 rounded-full bg-[#262624] hover:bg-[#2e2e2b] text-neutral-200 font-medium text-[13px] shrink-0 border border-white/5 transition-colors">Familiar</button>
+<button class="px-3.5 py-1.5 rounded-full bg-[#262624] hover:bg-[#2e2e2b] text-neutral-200 font-medium text-[13px] shrink-0 border border-white/5 transition-colors">Popular</button>
+<button class="px-3.5 py-1.5 rounded-full bg-[#262624] hover:bg-[#2e2e2b] text-neutral-200 font-medium text-[13px] shrink-0 border border-white/5 transition-colors">Discover</button>
+<button class="px-3.5 py-1.5 rounded-full bg-[#262624] hover:bg-[#2e2e2b] text-neutral-200 font-medium text-[13px] shrink-0 border border-white/5 transition-colors">Deep cuts</button>
+</div>
+<!-- Tracklist Queue Rows -->
+<div class="mt-3.5 flex flex-col gap-1">
+<!-- Row 1: Sanctimonia -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Sanctimonia" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDo2fdO2HPmdu0PyPaP9G8A2r92co3PNRUu2-JTnL57v2a95As6DF52NAXs3QohvfwWmKxS0MM60cSW9jKlazdu1N-mDCl6qtVY9isqa-OOR_aqgZUUBrspNzfdsS9ABCCvTCsxc5pSULx4-mHJLtK44q_8yJKhTXxumXvhABoeL5Qnb1m9l9UU9OJOzEMAy6V0Jl95tBLJuwrUJ8rJrDOOUrzrsJIW8ADMjL9bMJ0yhvZrNy1YoNbY">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">Sanctimonia</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">Dylan John Sparkes • 2:30</span>
+</div>
+</div>
+<button aria-label="Reorder Sanctimonia" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 2: Merry-Go-Round of Life -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Merry-Go-Round of Life" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAs_ucrLHka-CyGDFLz8I6cMvM9StBG5uRdoi8HfD5n_dtdnLEyne_P5QplhKRsjb4W9yLLiG_nd3MuywCN2skktSikYO5m6tRnAA-Z_pmFCgPmwclboZCArGIA2ge2iRTo99u88QlfHPN6NkRWQEJlP8Mv9zrpmU0QPCoPTdVJ8ofTTaMvB66CYJ_ZvD39NrzrAjnuXlosaeOwbTC-EJP6EqJ8fsJZ686_bET-S2Srx9f6mzh-sibD">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">Merry-Go-Round of Life (From "Howl's Moving Castle")</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">Morunas • 2:46</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 3: suzume (piano instrumental) -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="suzume" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATvGVMw6epaJDtNP15fQKYHrGM_hGZ0J-kmF72WovtzGbOgseSJ4ia5BMB3ycE8CuoGMM_up12lAkfu1u4yvollA6AKFnKz26YzvYO_l47puyBOEiMEfNJLOVt_SoeVb1P7Yp062_zTuoljrt0Ia1exdOMhqBOq7Um7-0vfEMo4tLM0kF5p9i_fzldGcmw-9xUeCLfwsKBmhWZhc73qmVrxf7g1xBZZJMwYXemKKw2_USm0ndhs7OW">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">suzume (piano instrumental)</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">chill with maki • 2:01</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 4: Toygar: Morpho -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Toygar: Morpho" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDT9Z2_YKGf4h9Hi6YgKzYiCggv3nhYtMg8zBhBNuI-B0liM-LrJ0uLg4TAqYjFVCNcV4ChV0IhT9GrLuMfHWia31wdRqXiSDauZT9HxJI852dsCsfalxhYi8j72eIQNQVxuffF99HZj8p-vc0cCVVluWyl3RiM6sp2oZX7xYyGOAxTCg2LWSzksBZ0-fT__CJCLt-c9VXl-raUt3betwgzqenB5lLFLeawEX7ppcKj0ezqYWFoWNsU">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">Toygar: Morpho</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">Ali Toygar • 2:01</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 5: Hope -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Hope" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAF0m9s9h7GxhqyBcyH_FeWAUDHJkzPW17Zu_UHCqxozEzkoix5cxO95Z2o_VIxoo1-OcvOrYFkkYy--660mCKuSMoEtF3CfYzhRlwHLlNtvdhl8KJ_X-o0ROV5RlgdT5L9oHHbRnRp_izroA_2S3V9CKGErJlqwHlAt43mbCu127SOzi4HrI1pN-eu-XPzYzsfb3K3VIgQrsY_7D5Jg51so_qaTzcTlWsMgDZbkbqVZfxUbCYCQAT9">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">Hope</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">Seb Wery • 3:00</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 6: Runaway (Piano Version) -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Runaway" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_3DR2-nWC0QH72Lvk_7G-xj99RqxzJzC8FK1eryzvu9PyexMGM-GhX4PS9Zh9dryEHyKiJzUJ2GHyI8qf5Eh4wP0M1fd7VzxrQGeVD-fNLUSyeUdQ8zglA-ZWIxu4cJuVQkKVZrgZfOqYr59wN5no0T5v0F2vwp_wa1P_xkA6xSXSFboqxV3CZY7oYoLnEVTLreFVoZUoXG3GoyLHQnjLhu2LSBsg4JLhf6n6BljfjEYAxN7Tc6YC">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">Runaway (Piano Version)</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">Piano Glow • 1:21</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 7: Golden Hour - 432Hz Piano -->
+<div class="flex items-center justify-between py-2 px-1 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Golden Hour" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQ8-k4KfBJ9jtPZYw8iJMkHdN7QjwvZqAKaoRlpQoX8WdNrXYbh44fVz-L8FU0EP5OIv7nrp6XbHEvds0Ild-bikfMmIMGGOJUC92t2vIAQNeQk2qZmwsDPhWZsdLbWSkRUxsjVfyzUK3W8vTKDi9dhAPo-Rj5PuCRIilu7yV_PX-hwvhD3bgMoTjcNSBhVbjzocVyxuPQPkbNX485MQdvBH3wHOhLk2zMw2F9e4HlpyR3v8240ZDZ">
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-semibold text-white truncate group-hover:text-neutral-100">Golden Hour - 432Hz Piano (Orchestral Version)</span>
+<span class="text-[12px] text-neutral-400 font-normal truncate mt-0.5">Eric Yan • 3:33</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-400 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+<!-- Row 8: Currently Playing / Active Item - Eternity -->
+<div class="flex items-center justify-between py-2 px-2.5 rounded-xl bg-white/10 transition-colors group cursor-pointer border border-white/10 shadow-sm">
+<div class="flex items-center gap-3 min-w-0 flex-1">
+<div class="relative w-11 h-11 rounded-lg overflow-hidden bg-neutral-800 shrink-0 shadow">
+<img alt="Eternity" class="w-full h-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDexYuIhjQJgMmhbvcnncRx64d1nJpxohBTfql6Fb5Yc-sSub5rtH81wpJgcVjRDPfNs9EgEz2d73ZjBPEqwZ-Go1vHZ-BMWV6KmGj7R9K03AaZ3qxIOrsGNUs8R72DpToTfIqr3KdIuK0GcM4V6yIHv1uURA2pHnQHH0rWdjJgJ1uYRW24uOHxWgJFEv06XGsLtVeRQWSZ7dSyOve2_-A2A7PtWA4ZtUmH8CLPNJ-CpYzKS9sXjUm">
+<div class="absolute inset-0 bg-black/40 flex items-end justify-center pb-1.5 gap-0.5">
+<div class="w-1 h-3 bg-white rounded-full animate-pulse"></div>
+<div class="w-1 h-4 bg-white rounded-full animate-pulse" style="animation-delay: 150ms;"></div>
+<div class="w-1 h-2 bg-white rounded-full animate-pulse" style="animation-delay: 300ms;"></div>
+</div>
+</div>
+<div class="flex flex-col min-w-0 pr-2">
+<span class="text-[14px] font-bold text-white truncate">Eternity</span>
+<span class="text-[12px] text-neutral-300 font-normal truncate mt-0.5">Nayan Samuel • 2:13</span>
+</div>
+</div>
+<button aria-label="Reorder track" class="text-neutral-300 hover:text-white px-2 py-1 cursor-grab active:cursor-grabbing flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">drag_handle</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- END: BottomSheetPeek -->
+</div>
+<!-- END: MobileDeviceFrame -->
+
+
+</body></html>

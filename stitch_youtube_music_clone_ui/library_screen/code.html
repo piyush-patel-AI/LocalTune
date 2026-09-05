@@ -1,0 +1,416 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Library - Hydro-Gloss Music</title>
+<!-- Tailwind CSS v3 with forms and container queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#08080a',
+            surface: 'rgba(255, 255, 255, 0.05)',
+            'surface-hover': 'rgba(255, 255, 255, 0.09)',
+            'glass-border': 'rgba(255, 255, 255, 0.12)',
+            'glass-highlight': 'rgba(255, 255, 255, 0.22)',
+            accent: '#38bdf8',
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"SF Pro Display"', 'Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+<!-- BEGIN: Hydro-Gloss Custom Styles -->
+<style data-purpose="hydro-gloss-effects">
+    /* Base obsidian backdrop */
+    body {
+      background-color: #060607;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* Hydro-gloss pill & panel styling with specular highlight */
+    .glass-pill {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .glass-pill-active {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.15) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.45), 0 2px 8px rgba(255, 255, 255, 0.12);
+    }
+
+    /* Floating + New Action Button Liquid Glass */
+    .fab-hydro {
+      background: linear-gradient(180deg, #ffffff 0%, #e6e8eb 100%);
+      color: #000000;
+      box-shadow: 0 8px 24px -2px rgba(0, 0, 0, 0.6), inset 0 1px 0.5px #ffffff, 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+
+    /* Mini player bar glass effect */
+    .mini-player-glass {
+      background: linear-gradient(180deg, rgba(24, 24, 27, 0.88) 0%, rgba(14, 14, 16, 0.96) 100%);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Bottom Navigation Bar Glass */
+    .bottom-nav-glass {
+      background: linear-gradient(180deg, rgba(12, 12, 14, 0.92) 0%, rgba(6, 6, 8, 0.98) 100%);
+      backdrop-filter: blur(28px) saturate(190%);
+      -webkit-backdrop-filter: blur(28px) saturate(190%);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Hide scrollbar for horizontal chips */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+<!-- END: Hydro-Gloss Custom Styles -->
+</head>
+<body class="flex justify-center min-h-screen bg-black overflow-x-hidden">
+<!-- BEGIN: Mobile Device Frame Simulator -->
+<div class="relative w-full max-w-[420px] min-h-screen bg-[#070709] flex flex-col text-white pb-36 shadow-2xl overflow-hidden">
+<!-- BEGIN: iOS Status Bar -->
+<div class="w-full pt-3 px-6 pb-2 flex items-center justify-between text-xs font-semibold tracking-tight text-white/90 z-30 select-none" data-purpose="status-bar">
+<!-- Current Time -->
+<span class="text-[15px] font-medium tracking-tight">1:24</span>
+<!-- Right Status Cluster (Signal, WiFi, Battery) -->
+<div class="flex items-center space-x-2 text-white/80">
+<!-- 5G / Signal Bars -->
+<svg class="w-4 h-3 fill-current" viewBox="0 0 16 12">
+<rect height="3" rx="0.6" width="2.5" x="0" y="9"></rect>
+<rect height="5.5" rx="0.6" width="2.5" x="4" y="6.5"></rect>
+<rect height="8.5" rx="0.6" width="2.5" x="8" y="3.5"></rect>
+<rect height="11.5" rx="0.6" width="2.5" x="12" y="0.5"></rect>
+</svg>
+<!-- WiFi Icon -->
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+<path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A17.95 17.95 0 0012 4zm0 2.22c3.92 0 7.49 1.54 10.15 4.05L12 18.42 1.85 10.27A15.82 15.82 0 0112 6.22z"></path>
+</svg>
+<!-- Battery Capsule with 48% inside -->
+<div class="flex items-center space-x-1 pl-0.5">
+<div class="relative w-6 h-3 border border-white/60 rounded-sm p-0.5 flex items-center">
+<div class="h-full bg-white rounded-2xs w-[48%]"></div>
+<div class="absolute -right-1 w-0.5 h-1.5 bg-white/60 rounded-r-xs"></div>
+</div>
+<span class="text-[11px] font-semibold text-white/80">48</span>
+</div>
+</div>
+</div>
+<!-- END: iOS Status Bar -->
+<!-- BEGIN: Top Navigation & Title Bar -->
+<header class="px-5 pt-2 pb-3 flex items-center justify-between z-20" data-purpose="library-header">
+<!-- Large Bold Header Title -->
+<h1 class="text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">Library</h1>
+<!-- Top Action Controls (History, Search, Avatar) -->
+<div class="flex items-center space-x-5">
+<!-- History / Activity Clock Icon -->
+<button aria-label="Listening History" class="text-white/80 hover:text-white transition-opacity active:opacity-60">
+<svg class="w-6 h-6 stroke-[2.2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Search Icon -->
+<button aria-label="Search Library" class="text-white/80 hover:text-white transition-opacity active:opacity-60">
+<svg class="w-6 h-6 stroke-[2.2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- User Profile Avatar with Anime Silver Hair -->
+<button aria-label="User Account" class="relative group active:scale-95 transition-transform"><div class="w-7 h-7 rounded-full overflow-hidden ring-1 ring-white/30 p-[1px] bg-gradient-to-tr from-cyan-400 to-indigo-500"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCI5O6XM8MM6ypXByY9P0VPAnIwpj7mcEc-oRFZcDUasUmubTHCEK6BJtQZCtxO2Nox5zojGEv6lma4ihn3zw4NQR8360tt1XhaJjSZUxUADPH-jvhuv_YIF3jG7YvwPnlhdZmNIb1XDvFf-GOwMcO9ut6Kqblld--an6DWrbK2Bh_RwWJbcLW0ImP8xuCCzI2rhHWuY5vj1YsWcaN1srol4xAcySzOdZsY959nWh1iHfCiXTD1UnPuPMWM--LwsJa2JA" alt="User Account" class="w-full h-full rounded-full object-cover"></div></button>
+</div>
+</header>
+<!-- END: Top Navigation & Title Bar -->
+<!-- BEGIN: Filter Chips Carousel -->
+<nav aria-label="Library Categories" class="px-5 py-2.5 overflow-x-auto no-scrollbar flex items-center space-x-2.5 z-10 select-none" data-purpose="chips-filter-bar"><button class="bg-white/10 hover:bg-white/[0.16] text-white text-sm font-medium px-4 py-2 rounded-lg whitespace-nowrap active:scale-95 transition-all">Downloads</button><button class="bg-white/10 hover:bg-white/[0.16] text-white text-sm font-medium px-4 py-2 rounded-lg whitespace-nowrap active:scale-95 transition-all">Playlists</button><button class="bg-white/10 hover:bg-white/[0.16] text-white text-sm font-medium px-4 py-2 rounded-lg whitespace-nowrap active:scale-95 transition-all">Podcasts</button><button class="bg-white/10 hover:bg-white/[0.16] text-white text-sm font-medium px-4 py-2 rounded-lg whitespace-nowrap active:scale-95 transition-all">Songs</button><button class="bg-white/10 hover:bg-white/[0.16] text-white text-sm font-medium px-4 py-2 rounded-lg whitespace-nowrap active:scale-95 transition-all">Albums</button></nav>
+<!-- END: Filter Chips Carousel -->
+<!-- BEGIN: Section Header Controls -->
+<div class="px-5 pt-4 pb-2 flex items-center justify-between text-white/90" data-purpose="library-sorting-controls">
+<!-- Left: Recent Activity Dropdown -->
+<button class="flex items-center space-x-2 text-sm font-semibold tracking-tight text-white hover:text-white/80 active:opacity-75 transition-opacity">
+<span class="">Recent activity</span>
+<svg class="w-4 h-4 text-white/80" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Right: Grid / List Layout Switcher -->
+<button aria-label="Switch Layout" class="p-1 text-white/80 hover:text-white active:scale-90 transition-transform">
+<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+<!-- 4 Grid Squares icon -->
+<rect height="7.5" rx="1.5" width="7.5" x="3" y="3"></rect>
+<rect height="7.5" rx="1.5" width="7.5" x="13.5" y="3"></rect>
+<rect height="7.5" rx="1.5" width="7.5" x="3" y="13.5"></rect>
+<rect height="7.5" rx="1.5" width="7.5" x="13.5" y="13.5"></rect>
+</svg>
+</button>
+</div>
+<!-- END: Section Header Controls -->
+<!-- BEGIN: Playlist Content List -->
+<main class="flex-1 px-4 py-1 flex flex-col space-y-1.5" data-purpose="library-items-list">
+<!-- Item 1: Liked Music (Vibrant Violet Gradient with Thumbs-up) -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<!-- Artwork: Violet Gradient with Thumb Icon -->
+<div class="relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-900/30 border border-white/10">
+<svg class="w-7 h-7 text-white fill-current" viewBox="0 0 24 24">
+<path d="M2 20h2c.55 0 1-.45 1-1v-9c0-.55-.45-1-1-1H2v11zm19.83-7.12c.11-.25.17-.52.17-.88 0-1.1-.9-2-2-2h-5.5l.92-4.65c.05-.22.02-.46-.08-.66-.23-.45-.52-.86-.88-1.22L14 3.03 8.41 8.62C8.14 8.89 8 9.24 8 9.61V19c0 1.1.9 2 2 2h8c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-.12z"></path>
+</svg>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">Liked music</h2>
+<div class="flex items-center space-x-1.5 text-xs text-white/60 pt-0.5">
+<!-- Pin icon -->
+<svg class="w-3.5 h-3.5 fill-current text-white/70" viewBox="0 0 24 24">
+<path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"></path>
+</svg>
+<span class="">Auto playlist</span>
+</div>
+</div>
+</div>
+<!-- Triple Dot Menu Button -->
+<button aria-label="More options for Liked music" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+<!-- Item 2: my fave song (2x2 collage artwork) -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<!-- 2x2 Artwork Grid -->
+<div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 grid grid-cols-2 grid-rows-2 bg-neutral-800 border border-white/10">
+<div class="bg-purple-900/80 flex items-center justify-center text-[8px] font-black text-purple-300">NEO</div>
+<div class="bg-red-900/90 flex items-center justify-center text-[8px] font-black text-red-300">SPID</div>
+<div class="bg-amber-900/80 flex items-center justify-center text-[8px] font-black text-amber-300">JFL</div>
+<div class="bg-emerald-900/80 flex items-center justify-center text-[8px] font-black text-emerald-300">VIBE</div>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">my fave song</h2>
+<p class="text-xs text-white/60 truncate pt-0.5">Playlist • NotesCube • 19 tracks</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+<!-- Item 3: hanuman chalisa -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 grid grid-cols-2 grid-rows-2 bg-neutral-900 border border-white/10">
+<div class="bg-stone-800 flex items-center justify-center text-[7px] text-orange-400">DEV</div>
+<div class="bg-violet-950 flex items-center justify-center text-[7px] text-pink-300">SACRED</div>
+<div class="bg-zinc-800 flex items-center justify-center text-[7px] text-zinc-400">CHANT</div>
+<div class="bg-amber-950 flex items-center justify-center text-[7px] text-yellow-300">OM</div>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">hanuman chalisa</h2>
+<p class="text-xs text-white/60 truncate pt-0.5">Playlist • NotesCube • 28 tracks</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+<!-- Item 4: my actual favorite -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 grid grid-cols-2 grid-rows-2 bg-neutral-900 border border-white/10">
+<div class="bg-yellow-800/80 flex items-center justify-center text-[8px] font-bold text-yellow-100">ROCK</div>
+<div class="bg-orange-800/80 flex items-center justify-center text-[8px] font-bold text-orange-100">SOUL</div>
+<div class="bg-blue-900/80 flex items-center justify-center text-[8px] font-bold text-blue-100">WAVE</div>
+<div class="bg-rose-900/80 flex items-center justify-center text-[8px] font-bold text-rose-100">HYPER</div>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">my actual favorite</h2>
+<p class="text-xs text-white/60 truncate pt-0.5">Playlist • NotesCube • 20 tracks</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+<!-- Item 5: Important videos -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-tr from-emerald-600 to-lime-400 p-1 flex flex-col justify-end border border-white/10">
+<span class="text-[9px] font-black tracking-tighter text-black uppercase bg-white/90 px-1 py-0.2 rounded-xs inline-block">VERT</span>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">Important videos</h2>
+<p class="text-xs text-white/60 truncate pt-0.5">Playlist • NotesCube • 39 tracks</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+<!-- Item 6: nice songs -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 grid grid-cols-2 grid-rows-2 bg-neutral-900 border border-white/10">
+<div class="bg-sky-900 flex items-center justify-center text-[7px] text-cyan-200">CHILL</div>
+<div class="bg-indigo-900 flex items-center justify-center text-[7px] text-indigo-200">NIGHT</div>
+<div class="bg-stone-900 flex items-center justify-center text-[7px] text-stone-300">LO-FI</div>
+<div class="bg-amber-900 flex items-center justify-center text-[7px] text-amber-200">DAWN</div>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">nice songs</h2>
+<p class="text-xs text-white/60 truncate pt-0.5">Playlist • NotesCube • 14 tracks</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+<!-- Item 7: n1 (Boxhead acoustic player) -->
+<article class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.04] transition-colors group cursor-pointer active:bg-white/[0.08]">
+<div class="flex items-center space-x-3.5 min-w-0">
+<div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-neutral-800 flex items-center justify-center border border-white/10 relative">
+<!-- Boxhead acoustic avatar illustration -->
+<div class="w-7 h-7 bg-amber-700/80 rounded-xs flex items-center justify-center border border-amber-500/40">
+<div class="flex space-x-1">
+<div class="w-1 h-1 bg-black rounded-full"></div>
+<div class="w-1 h-1 bg-black rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="min-w-0">
+<h2 class="text-[15.5px] font-semibold text-white truncate tracking-tight">n1</h2>
+<p class="text-xs text-white/60 truncate pt-0.5">Playlist • NotesCube • 1 track</p>
+</div>
+</div>
+<button aria-label="More options" class="p-2 text-white/60 hover:text-white">
+<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+<circle cx="12" cy="5" r="2"></circle>
+<circle cx="12" cy="12" r="2"></circle>
+<circle cx="12" cy="19" r="2"></circle>
+</svg>
+</button>
+</article>
+</main>
+<!-- END: Playlist Content List -->
+<!-- BEGIN: Floating Action Button (+ New) -->
+<aside class="absolute bottom-[132px] right-4 z-40">
+<button aria-label="Create new playlist or item" class="fab-hydro flex items-center space-x-2 px-5 py-3 rounded-full font-bold text-sm tracking-wide transform active:scale-95 transition-all">
+<!-- Plus Sign Icon -->
+<svg class="w-5 h-5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="pr-0.5">New</span>
+</button>
+</aside>
+<!-- END: Floating Action Button -->
+<!-- BEGIN: Docked Mini Player & Bottom Navigation Container -->
+<div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[420px] z-50 flex flex-col pointer-events-auto">
+<!-- Mini Player Glass Bar -->
+<section class="mini-player-glass px-3.5 py-2 relative flex items-center justify-between cursor-pointer border-b border-white/[0.04]" data-purpose="mini-player">
+<div class="flex items-center space-x-3 min-w-0 flex-1">
+<!-- Track Artwork Thumbnail -->
+<div class="w-11 h-11 rounded-md overflow-hidden flex-shrink-0 bg-neutral-800 border border-white/10 shadow-md">
+<img alt="Album artwork" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbMU7uvdJwk43LvC2F_hxzmjVeoAAtyeTfuVKKoySW_tAA_ImP1ypG7uochUZsKroOWo_o9CA4JJEG4lxeLWUIs2s_qEoeRGi8yObAp1Ktai6hcGgfO8Y7TGfCBsIJzd3XePyBTiPJWi7zCbHtVstSvU7NGuk9Xu537E36DuxVckrLpRPhaEGtCJ2_8-C9LMaQqEA2Tt1571wPfOQJaPBPh58iEWXPTjyp8bi5pVd3sH5PtjlYT4eoutveldM8zG02BA">
+</div>
+<!-- Song Meta -->
+<div class="min-w-0 pr-2">
+<h3 class="text-[13.5px] font-semibold text-white tracking-tight truncate leading-tight">
+              Life (From "Howl's Moving Castle")
+            </h3>
+<p class="text-[11.5px] text-white/70 font-medium truncate pt-0.5">
+              Morunas
+            </p>
+</div>
+</div>
+<!-- Controls: Cast & Play/Pause -->
+<div class="flex items-center space-x-4 pl-2 text-white/90">
+<!-- Cast / Connect Device Icon -->
+<button aria-label="Cast to device" class="p-1 hover:text-white transition-opacity active:opacity-60">
+<svg class="w-5 h-5 fill-none stroke-current stroke-[1.8]" viewBox="0 0 24 24">
+<path d="M2 16.1A5 5 0 017 21M2 12a9 9 0 0111 9M2 20h.01M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2h-6" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Play / Pause Icon -->
+<button aria-label="Pause playback" class="p-1 hover:text-white transition-opacity active:scale-95">
+<svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+<!-- Pause dual bars -->
+<rect height="16" rx="1.5" width="3.5" x="6" y="4"></rect>
+<rect height="16" rx="1.5" width="3.5" x="14.5" y="4"></rect>
+</svg>
+</button>
+</div>
+<!-- Mini Progress Bar along the bottom of the card -->
+<div class="absolute bottom-0 left-0 right-0 h-[2px] bg-white/10 overflow-hidden">
+<div class="h-full bg-white/90 w-[38%] rounded-r-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
+</div>
+</section>
+<!-- Bottom Navigation Bar (3 tabs: Home, Explore, Library) -->
+<footer class="bottom-nav-glass px-6 pt-2.5 pb-5 flex items-center justify-around" data-purpose="bottom-navigation"><!-- Tab 1: Home (Inactive) -->
+<button class="flex flex-col items-center justify-center space-y-1 text-white/60 hover:text-white transition-colors group flex-1 py-1">
+  <svg class="w-6 h-6 stroke-[1.8] fill-none" stroke="currentColor" viewBox="0 0 24 24">
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M9 22V12h6v10" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+  <span class="text-[10.5px] font-medium tracking-tight">Home</span>
+</button>
+<!-- Tab 2: Explore (Inactive) -->
+<button class="flex flex-col items-center justify-center space-y-1 text-white/60 hover:text-white transition-colors group flex-1 py-1">
+  <svg class="w-6 h-6 stroke-[1.8] fill-none" stroke="currentColor" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9.5"></circle>
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor"></polygon>
+  </svg>
+  <span class="text-[10.5px] font-medium tracking-tight">Explore</span>
+</button>
+<!-- Tab 3: Library (ACTIVE state - Solid bookmark ribbon with clean white fill and no box artifact) -->
+<button class="flex flex-col items-center justify-center space-y-1 text-white transition-colors group flex-1 py-1">
+  <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+    <path d="M18 2H6c-1.1 0-2 .9-2 2v18l8-4.5 8 4.5V4c0-1.1-.9-2-2-2z"></path>
+  </svg>
+  <span class="text-[10.5px] font-semibold tracking-tight text-white">Library</span>
+</button></footer>
+<!-- iOS Home Indicator bar -->
+
+</div>
+<!-- END: Docked Mini Player & Bottom Navigation Container -->
+</div>
+<!-- END: Mobile Device Frame Simulator -->
+
+
+</body></html>

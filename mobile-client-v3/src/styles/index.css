@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+body {
+  background-color: #030303;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+/* Gradient overlay for speed dial cards */
+.card-gradient {
+  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+}
+
+.mixed-card-gradient {
+  background: linear-gradient(145deg, #1b1329 0%, #110d1c 100%);
+}
+
+/* Ambient top mesh gradient for seamless header blending */
+.top-ambient-mesh {
+  background: 
+    radial-gradient(circle at 18% 18%, rgba(136, 19, 55, 0.38) 0%, rgba(136, 19, 55, 0.12) 50%, transparent 80%),
+    radial-gradient(circle at 85% 15%, rgba(88, 28, 135, 0.32) 0%, rgba(88, 28, 135, 0.08) 55%, transparent 80%),
+    linear-gradient(180deg, rgba(76, 5, 25, 0.28) 0%, rgba(45, 10, 48, 0.16) 45%, rgba(3, 3, 3, 0) 100%);
+}
+
+/* Liquid glass hydro gloss player backdrop */
+.liquid-glass-bg {
+  background: radial-gradient(circle at 50% 30%, rgba(120, 20, 60, 0.45) 0%, rgba(30, 10, 35, 0.95) 70%, #030303 100%);
+  backdrop-filter: blur(24px);
+}

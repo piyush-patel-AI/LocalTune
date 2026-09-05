@@ -1,0 +1,346 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Moods &amp; Genres - YouTube Music</title>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            surface: '#030303',
+            'card-bg': '#212121',
+            'card-hover': '#2a2a2a',
+            'player-bg': '#212121',
+            'subtext': '#AAAAAA',
+          },
+          fontFamily: {
+            sans: ['"Roboto Flex"', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<!-- Google Fonts: Roboto Flex -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style data-purpose="custom-scroll-and-layout">
+    /* Hide scrollbars for slick native app look */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    body {
+      background-color: #030303;
+      color: #FFFFFF;
+      font-family: 'Roboto Flex', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-[#030303] text-white flex justify-center min-h-screen antialiased selection:bg-neutral-800">
+<!-- Main Mobile Shell (Strict iOS viewport container 420px max) -->
+<div class="w-full max-w-[420px] min-h-screen bg-[#030303] flex flex-col relative pb-32">
+<!-- BEGIN: StatusBar -->
+<header class="sticky top-0 z-40 bg-[#030303]/95 backdrop-blur-md pt-2 px-4 pb-1">
+<!-- iOS / Phone System Status Line -->
+<div class="flex justify-between items-center text-xs text-white font-medium mb-2 tracking-wide px-1">
+<span class="">1:05</span>
+<div class="flex items-center space-x-1.5 opacity-90">
+<!-- VoWiFi / Signal Icon -->
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+<path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 18.23C2.89 16.5 2 14.36 2 12 2 6.48 6.48 2 12 2s10 4.48 10 10c0 2.36-.89 4.5-2.35 6.23l-.62-.62C20.26 16.07 21 14.12 21 12c0-4.97-4.03-9-9-9zm0 4c-2.76 0-5 2.24-5 5 0 1.25.46 2.4 1.22 3.3l.71-.71C8.36 13.9 8 12.99 8 12c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .99-.36 1.9-.93 2.59l.71.71c.76-.9 1.22-2.05 1.22-3.3 0-2.76-2.24-5-5-5zm0 8c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"></path>
+</svg>
+<!-- 5G / Signal Bars -->
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+<path d="M2 22h20V2L2 22z"></path>
+</svg>
+<!-- Battery Icon (42%) -->
+<div class="flex items-center space-x-0.5">
+<div class="border border-white/80 rounded-sm px-0.5 py-[1px] text-[9px] font-bold leading-none">
+              42
+            </div>
+</div>
+</div>
+</div>
+<!-- Main Navigation Header -->
+<div class="flex items-center justify-between pt-1 pb-2">
+<div class="flex items-center space-x-3">
+<!-- Back Arrow Button with touch feedback -->
+<button aria-label="Go back to Explore" class="p-1 -ml-1 text-white hover:bg-white/10 active:scale-90 transition rounded-full focus:outline-none" onclick="history.back()" type="button">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+<path d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<h1 class="text-[22px] font-extrabold tracking-tight text-white leading-tight">
+            Moods and genres
+          </h1>
+</div>
+<!-- Search Button -->
+<button aria-label="Search moods and genres" class="p-2 text-white hover:bg-white/10 active:scale-90 transition rounded-full focus:outline-none" type="button">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+<path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: StatusBar -->
+<!-- BEGIN: ContentArea -->
+<main class="flex-1 px-4 pt-1 space-y-7">
+<!-- SECTION 1: For you -->
+<section data-purpose="for-you-section">
+<h2 class="text-[20px] font-bold tracking-tight text-white mb-3">
+          For you
+        </h2>
+<div class="grid grid-cols-2 gap-2.5">
+<!-- Family (#2196F3) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm group">
+<span class="w-[5px] h-full bg-[#2196F3] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Family</span>
+</button>
+<!-- 1990s (#4CAF50) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm group">
+<span class="w-[5px] h-full bg-[#4CAF50] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">1990s</span>
+</button>
+<!-- Sleep (#9C27B0) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm group">
+<span class="w-[5px] h-full bg-[#9C27B0] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Sleep</span>
+</button>
+<!-- Monsoon (#FFC107) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm group">
+<span class="w-[5px] h-full bg-[#FFC107] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Monsoon</span>
+</button>
+<!-- Reggae and caribbean (#FFEB3B) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm group">
+<span class="w-[5px] h-full bg-[#FFEB3B] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Reggae and caribbean</span>
+</button>
+<!-- R&B and soul (#7C4DFF) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm group">
+<span class="w-[5px] h-full bg-[#7C4DFF] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">R&amp;B and soul</span>
+</button>
+</div>
+</section>
+<!-- SECTION 2: Moods and moments -->
+<section data-purpose="moods-and-moments-section">
+<h2 class="text-[20px] font-bold tracking-tight text-white mb-3">
+          Moods and moments
+        </h2>
+<div class="grid grid-cols-2 gap-2.5">
+<!-- Chill (#64B5F6) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#64B5F6] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Chill</span>
+</button>
+<!-- Commute (#FFA000) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FFA000] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Commute</span>
+</button>
+<!-- Energize (#FFD600) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FFD600] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Energize</span>
+</button>
+<!-- Feel-good (#76FF03) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#76FF03] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Feel-good</span>
+</button>
+<!-- Focus (#E0E0E0) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#E0E0E0] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Focus</span>
+</button>
+<!-- Gaming (#80CBC4) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#80CBC4] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Gaming</span>
+</button>
+<!-- Party (#D500F9) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#D500F9] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Party</span>
+</button>
+<!-- Romance (#FF1744) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FF1744] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Romance</span>
+</button>
+<!-- Sad (#3D5AFE) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#3D5AFE] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Sad</span>
+</button>
+<!-- Workout (#FF6D00) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FF6D00] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Workout</span>
+</button>
+</div>
+</section>
+<!-- SECTION 3: Genres -->
+<section class="pb-6" data-purpose="genres-section">
+<h2 class="text-[20px] font-bold tracking-tight text-white mb-3">
+          Genres
+        </h2>
+<div class="grid grid-cols-2 gap-2.5">
+<!-- African (#2E7D32) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#00C853] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">African</span>
+</button>
+<!-- Arabic (#E64A19) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FF5722] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Arabic</span>
+</button>
+<!-- Bengali (#FFD54F) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FFD54F] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Bengali</span>
+</button>
+<!-- Bhojpuri (#AA00FF) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#AA00FF] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Bhojpuri</span>
+</button>
+<!-- Carnatic classical (#FF7043) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#FF7043] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Carnatic classical</span>
+</button>
+<!-- Classical (#ECEFF1) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#ECEFF1] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Classical</span>
+</button>
+<!-- Country and Americana (#2979FF) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#2979FF] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Country and America...</span>
+</button>
+<!-- Dance and electronic (#00BCD4) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#00BCD4] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Dance and electronic</span>
+</button>
+<!-- Decades (#69F0AE) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#69F0AE] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Decades</span>
+</button>
+<!-- Desi Hip-Hop (#B0BEC5) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#CFD8DC] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Desi Hip-Hop</span>
+</button>
+<!-- Devotional (#B0BEC5) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#B0BEC5] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Devotional</span>
+</button>
+<!-- Family (#00B0FF) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#00B0FF] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Family</span>
+</button>
+<!-- Folk and acoustic (#00E676) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#00E676] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Folk and acoustic</span>
+</button>
+<!-- Ghazal/sufi (#00E5FF) -->
+<button class="flex items-center h-[52px] bg-card-bg hover:bg-card-hover active:scale-[0.98] transition rounded-lg overflow-hidden text-left shadow-sm">
+<span class="w-[5px] h-full bg-[#00E5FF] shrink-0"></span>
+<span class="px-3.5 text-sm font-semibold text-white tracking-wide truncate">Ghazal/sufi</span>
+</button>
+</div>
+</section>
+</main>
+<!-- END: ContentArea -->
+<!-- BEGIN: PersistentMiniPlayer -->
+<!-- Fixed mini-player just positioned above bottom navigation -->
+<div class="fixed bottom-14 left-0 right-0 max-w-[420px] mx-auto px-1 z-30 pointer-events-none">
+<div class="pointer-events-auto bg-[#212121] text-white flex items-center justify-between p-2 rounded-t-md shadow-2xl relative overflow-hidden border-b border-black/40">
+<!-- Track Info with Thumbnail -->
+<div class="flex items-center space-x-3 overflow-hidden pr-2">
+<!-- Album Art Cover -->
+<div class="w-10 h-10 rounded bg-neutral-700 shrink-0 overflow-hidden relative shadow">
+<!-- Representing album artwork of Jef Neve -->
+<div class="w-full h-full bg-stone-800 flex items-center justify-center text-neutral-400 font-bold text-xs">
+<svg class="w-6 h-6 text-stone-400" fill="currentColor" viewBox="0 0 24 24">
+<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"></path>
+</svg>
+</div>
+</div>
+<div class="truncate leading-tight">
+<div class="text-[13.5px] font-semibold text-white truncate">Looking In The Mirror</div>
+<div class="text-[11.5px] text-[#AAAAAA] truncate mt-0.5">Jef Neve</div>
+</div>
+</div>
+<!-- Controls: Cast & Play/Pause -->
+<div class="flex items-center space-x-3 shrink-0 pr-1">
+<!-- Cast Icon -->
+<button aria-label="Cast audio" class="text-white hover:text-gray-300 p-1.5 focus:outline-none">
+<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+<path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"></path>
+</svg>
+</button>
+<!-- Play / Pause Icon -->
+<button aria-label="Pause playback" class="text-white hover:text-gray-300 p-1.5 focus:outline-none">
+<svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+</svg>
+</button>
+</div>
+<!-- Mini Player Progress Bar -->
+<div class="absolute bottom-0 left-0 right-0 h-[2px] bg-neutral-700">
+<div class="h-full bg-white w-1/3"></div>
+</div>
+</div>
+</div>
+<!-- END: PersistentMiniPlayer -->
+<!-- BEGIN: BottomNavigationBar -->
+<!-- Exactly 3 tabs: Home, Explore (Active), Library -->
+<nav class="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto h-14 bg-[#141313] border-t border-neutral-900/60 z-30 flex items-center justify-around px-4 select-none">
+<!-- Home Tab (Inactive) -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-[#AAAAAA] hover:text-white transition group focus:outline-none">
+<svg class="w-7 h-7 group-hover:scale-105 transition stroke-current fill-none stroke-[1.8]" viewBox="0 0 24 24">
+<path d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[10px] tracking-tight mt-0.5 font-medium">Home</span>
+</button>
+<!-- Explore Tab (ACTIVE: solid filled compass icon and white text) -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-white transition focus:outline-none">
+<div class="w-7 h-7 flex items-center justify-center">
+<!-- Solid Filled Compass Icon -->
+<svg class="w-[26px] h-[26px] fill-white" viewBox="0 0 24 24">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm2.93 12.93L6.5 17.5l2.57-8.43L17.5 6.5l-2.57 8.43zM12 10.9c-.61 0-1.1.49-1.1 1.1s.49 1.1 1.1 1.1 1.1-.49 1.1-1.1-.49-1.1-1.1-1.1z"></path>
+</svg>
+</div>
+<span class="text-[10px] tracking-tight mt-0.5 font-bold">Explore</span>
+</button>
+<!-- Library Tab (Inactive) -->
+<button class="flex flex-col items-center justify-center flex-1 py-1 text-[#AAAAAA] hover:text-white transition group focus:outline-none">
+<svg class="w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+<span class="text-[10px] tracking-tight mt-0.5 font-medium">Library</span>
+</button>
+</nav>
+<!-- END: BottomNavigationBar -->
+</div>
+
+
+</body></html>

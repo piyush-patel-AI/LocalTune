@@ -1,0 +1,349 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>YouTube Music - Explore</title>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            yt: {
+              black: '#030303',
+              dark: '#212121',
+              card: '#1c1b1b',
+              red: '#FF0000',
+              gray: '#909090',
+              border: '#2a2a2a'
+            }
+          },
+          fontFamily: {
+            sans: ['Roboto', 'system-ui', '-apple-system', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<!-- Google Fonts: Roboto -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style data-purpose="custom-scrollbars">
+    /* Hide horizontal scrollbar for clean app carousel look */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-black text-white font-sans antialiased select-none flex justify-center min-h-screen">
+<!-- Mobile App Outer Frame (Simulating Mobile iOS / Screen) -->
+<div class="w-full max-w-[420px] bg-[#030303] text-white min-h-screen relative flex flex-col pb-36 shadow-2xl overflow-x-hidden">
+<!-- BEGIN: MobileStatusBar -->
+<!-- Top System Status Bar -->
+<div class="w-full pt-2 pb-1 px-5 flex justify-between items-center text-xs font-semibold tracking-tight text-neutral-300 select-none z-30" data-purpose="status-bar">
+<span class="">1:02</span>
+<div class="flex items-center space-x-1.5">
+<!-- Location / Small status symbols -->
+<svg class="w-3.5 h-3.5 text-neutral-300" fill="currentColor" viewBox="0 0 24 24">
+<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"></path>
+</svg>
+<!-- Signal / VoLTE -->
+<span class="text-[10px] font-mono px-0.5 border border-neutral-600 rounded">5G</span>
+<!-- WiFi Icon -->
+<svg class="w-3.5 h-3.5 text-neutral-300" fill="currentColor" viewBox="0 0 24 24">
+<path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4z"></path>
+</svg>
+<!-- Battery Icon with 41% -->
+<div class="flex items-center space-x-0.5 bg-neutral-800/80 px-1 py-0.5 rounded text-[10px]">
+<svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+<path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"></path>
+</svg>
+<span class="font-medium text-[9px]">41%</span>
+</div>
+</div>
+</div>
+<!-- END: MobileStatusBar -->
+<!-- BEGIN: TopBar -->
+<!-- App Navigation Header -->
+<header class="px-4 py-3 flex items-center justify-between sticky top-0 bg-[#030303]/95 backdrop-blur-md z-20" data-purpose="app-header">
+<!-- YouTube Music Brand Logo & Label -->
+<div class="flex items-center space-x-1.5 cursor-pointer">
+<div class="w-7 h-7 rounded-full bg-[#FF0000] flex items-center justify-center shadow-lg shadow-red-600/30">
+<!-- Play Icon inside Red Circle -->
+<svg class="w-3.5 h-3.5 text-white fill-current ml-0.5" viewBox="0 0 24 24">
+<path d="M8 5v14l11-7z"></path>
+</svg>
+</div>
+<span class="text-xl font-black tracking-tight tracking-tighter">Music</span>
+</div>
+<!-- Action Buttons: Search and Profile Avatar -->
+<div class="flex items-center space-x-4">
+<button aria-label="Search" class="p-1 rounded-full text-white active:bg-neutral-800 transition">
+<svg class="w-6 h-6 stroke-[2.2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<circle cx="11" cy="11" r="7"></circle>
+<line x1="16.5" x2="21.5" y1="16.5" y2="21.5"></line>
+</svg>
+</button>
+<!-- User Profile Avatar -->
+<button aria-label="Account profile" class="relative group focus:outline-none">
+<img alt="User Profile" class="w-7 h-7 rounded-full object-cover ring-1 ring-neutral-700 active:scale-95 transition" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtcrZ54BrpzY4mXam2Pyn8LOlH-y02NNWpitmt9QTrRp2YTL1zAs1aRzkhbPqaJZLzR2gFbDlVkejNc2hPezf2IctElhaEPOqmlPjyv6sYrdSBc0qFPLa2oJcrkmoCJA2YcKgdC5U-X8Sguog3wzb7JPXwp6L5Iz7MkJRsm2tYwc4Uw7JDk0rHvbtJ0y0ouvSiEXJp79VtSGHVuZqaIwn5X8bCTSL2VPqvNz6HcDX6Gvufie-jeR7hr1XCNt_wX7F0UQ">
+</button>
+</div>
+</header>
+<!-- END: TopBar -->
+<!-- Scrollable Main Content -->
+<main class="flex-1 px-4 pt-2 pb-6 space-y-6">
+<!-- BEGIN: ExploreQuickActions -->
+<!-- 2x2 Grid of Explore Actions -->
+<section class="grid grid-cols-2 gap-3" data-purpose="quick-actions-grid">
+<!-- New releases -->
+<div class="bg-[#212121] active:bg-[#2e2e2e] transition rounded-xl p-3.5 h-[84px] flex flex-col justify-between cursor-pointer group">
+<div class="text-white">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<span class="font-bold text-[15px] leading-tight text-neutral-100">New releases</span>
+</div>
+<!-- Charts -->
+<div class="bg-[#212121] active:bg-[#2e2e2e] transition rounded-xl p-3.5 h-[84px] flex flex-col justify-between cursor-pointer group">
+<div class="text-white">
+<svg class="w-5 h-5 stroke-[2.2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+<polyline points="17 6 23 6 23 12"></polyline>
+</svg>
+</div>
+<span class="font-bold text-[15px] leading-tight text-neutral-100">Charts</span>
+</div>
+<!-- Moods and genres -->
+<div class="bg-[#212121] active:bg-[#2e2e2e] transition rounded-xl p-3.5 h-[84px] flex flex-col justify-between cursor-pointer group border border-transparent hover:border-neutral-700" onclick="toggleMoodsExpanded()">
+<div class="text-white">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="9"></circle>
+<path d="M9 10h.01M15 10h.01M9.5 15a4 4 0 005 0" stroke-linecap="round"></path>
+</svg>
+</div>
+<span class="font-bold text-[15px] leading-tight text-neutral-100">Moods and genres</span>
+</div>
+<!-- Podcasts -->
+<div class="bg-[#212121] active:bg-[#2e2e2e] transition rounded-xl p-3.5 h-[84px] flex flex-col justify-between cursor-pointer group">
+<div class="text-white">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<circle cx="12" cy="8" r="4"></circle>
+<path d="M12 12v6m-4 0h8m-9-9a7 7 0 0010 0" stroke-linecap="round"></path>
+</svg>
+</div>
+<span class="font-bold text-[15px] leading-tight text-neutral-100">Podcasts</span>
+</div>
+</section>
+<!-- END: ExploreQuickActions -->
+<!-- BEGIN: NewAlbumsSection -->
+<!-- New Albums and Singles Horizontal Scroll Carousel -->
+<section class="space-y-3 pt-2" data-purpose="new-albums-singles">
+<div class="flex items-center justify-between cursor-pointer group">
+<h2 class="text-xl font-bold tracking-tight text-white group-hover:text-neutral-200">New albums and singles</h2>
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+<path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<!-- Carousel List -->
+<div class="flex space-x-3.5 overflow-x-auto no-scrollbar -mx-4 px-4 pb-2">
+<!-- Album Card 1: Little Life -->
+<div class="flex-shrink-0 w-36 space-y-2 cursor-pointer group">
+<div class="relative w-36 h-36 rounded-lg overflow-hidden bg-neutral-900 shadow-md">
+<img alt="Little Life Album" class="w-full h-full object-cover object-left-top transform scale-[1.3] -translate-x-3 -translate-y-4 group-hover:scale-[1.35] transition duration-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPkZaHwHRUN1-gWNruZ0qE5aUoGA8JjfceU8tNP2SviBIUmwfBdYMrcf30xsulM3VTOj5hWU_S90RarNjakc15cNrwwmV7qrdlh1LEEDsCV0RfMxoqPa_uQ-Nxlh5g3R4D7HPnkxJ0Kq2p09XIjQxgICNU-ludC78mkfK5wTJVOecs4CyAyLPUw8YvIdyiV1Q6Cjuln3kIBESeKnCJAMH38cUFhovCB_t75EH724yPq3memkB39cKu9JLNuuaVd-p5fA">
+</div>
+<div>
+<p class="font-bold text-sm text-white truncate group-hover:underline">Little Life</p>
+<p class="text-xs text-neutral-400 truncate mt-0.5">Album • Penguin Piano</p>
+</div>
+</div>
+<!-- Album Card 2: Sa Ye (撒野) -->
+<div class="flex-shrink-0 w-36 space-y-2 cursor-pointer group">
+<div class="relative w-36 h-36 rounded-lg overflow-hidden bg-neutral-900 shadow-md">
+<img alt="Sa Ye Piano Single" class="w-full h-full object-cover object-center transform scale-[1.35] translate-x-2 -translate-y-4 group-hover:scale-[1.4] transition duration-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA869ESIqsDmt3ayGJFp8CvgJ03Yl8zx8JdL0rA76neVahoAfOUbEMAqSYhYiVDCS8yqahmtpsBL99cEnqbdqTBX0smo-nXYArUYkA1c6XAFdNN1ujinW5wyh8yGvPHrEY4ozxVySkfBzokAfpLZKASK6Av85acPa72MP7rp1OxmA8fSWXmi2_EBFyYm0rrMNdsEdhhSVKJm_ivE81qqGCRjeCVXPcGk4APXhKHpQGQsHyh2LIsF_WZtaFwAIDoNU_Aqw">
+</div>
+<div>
+<p class="font-bold text-sm text-white truncate group-hover:underline">Sa Ye (撒野) - Piano Vers...</p>
+<p class="text-xs text-neutral-400 truncate mt-0.5">Single • Penguin Piano</p>
+</div>
+</div>
+<!-- Album Card 3: Partially visible card -->
+<div class="flex-shrink-0 w-36 space-y-2 cursor-pointer opacity-90">
+<div class="relative w-36 h-36 rounded-lg overflow-hidden bg-gradient-to-tr from-red-900 via-amber-700 to-neutral-900 shadow-md flex items-center justify-center">
+<img alt="Popular Single" class="w-full h-full object-cover object-left scale-[1.2]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8KPUDj4Hm3IFUUbaixTCm9q2V5aGciCHnzJzuwMuZcFlCqLJATiQcmlqC0aW9WfXdjQdRvYn2SnuBS8CLRQ50ObEf4BpVt_eGsLoDbGxL4pI0cgnm6hIxwnEbxTLMH49MykYP1bGL-BVwkYnETXN5pCJSMelWtmMF7h8hE0Ehpdv1tTPpnfMLmUqeORLle83TPkAGT-9eYs2FmslNsfHexbUx40IYwI5JIydYdKlf2QR-vqpS1M1O91Xtpew61UrPQQ">
+</div>
+<div>
+<p class="font-bold text-sm text-white truncate">Special Release</p>
+<p class="text-xs text-neutral-400 truncate mt-0.5">Single • Trending Music</p>
+</div>
+</div>
+</div>
+</section>
+<!-- END: NewAlbumsSection -->
+<!-- BEGIN: MoodsAndGenresSection -->
+<!-- Moods and Genres Pill Buttons -->
+<section class="space-y-3 pt-2" data-purpose="moods-and-genres">
+<div class="flex items-center justify-between cursor-pointer group" onclick="toggleMoodsExpanded()">
+<h2 class="text-xl font-bold tracking-tight text-white group-hover:text-neutral-200">Moods and genres</h2>
+<svg class="w-5 h-5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+<path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<!-- 2-Column Buttons with colored left accent border -->
+<div class="grid grid-cols-2 gap-2.5" id="moods-grid">
+<!-- Pop -->
+<div class="bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<!-- Magenta/Pink Stripe -->
+<div class="w-1.5 h-full bg-[#E91E63] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">Pop</span>
+</div>
+<!-- 1990s -->
+<div class="bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<!-- Bright Green Stripe -->
+<div class="w-1.5 h-full bg-[#00E676] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">1990s</span>
+</div>
+<!-- Metal -->
+<div class="bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<!-- Cyan/Teal Stripe -->
+<div class="w-1.5 h-full bg-[#00B0FF] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">Metal</span>
+</div>
+<!-- 1980s -->
+<div class="bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<!-- Mint Green Stripe -->
+<div class="w-1.5 h-full bg-[#69F0AE] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">1980s</span>
+</div>
+<!-- African -->
+<div class="bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<!-- Forest/Vibrant Green Stripe -->
+<div class="w-1.5 h-full bg-[#4CAF50] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">African</span>
+</div>
+<!-- Romance -->
+<div class="bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<!-- Bright Red Stripe -->
+<div class="w-1.5 h-full bg-[#FF1744] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">Romance</span>
+</div>
+<!-- Additional genres (shown on toggle) -->
+<div class="extra-moods hidden bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<div class="w-1.5 h-full bg-[#FF9100] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">Hip-Hop</span>
+</div>
+<div class="extra-moods hidden bg-[#212121] active:bg-[#2c2c2c] transition h-12 rounded-lg flex items-center overflow-hidden cursor-pointer">
+<div class="w-1.5 h-full bg-[#D500F9] rounded-l-lg flex-shrink-0"></div>
+<span class="px-3.5 font-bold text-[15px] text-white tracking-normal truncate">Indie &amp; Alt</span>
+</div>
+</div>
+</section>
+<!-- END: MoodsAndGenresSection -->
+</main>
+<!-- BEGIN: PersistentMiniPlayer -->
+<!-- Floating mini-player above navigation bar -->
+<div class="fixed bottom-[60px] left-0 right-0 max-w-[420px] mx-auto px-2 z-40" data-purpose="mini-player">
+<div class="bg-[#212121] rounded-xl overflow-hidden shadow-2xl border border-neutral-800/80 flex flex-col cursor-pointer transition hover:bg-[#282828]">
+<!-- Player Content Row -->
+<div class="flex items-center justify-between p-2">
+<!-- Album art & track meta -->
+<div class="flex items-center space-x-3 overflow-hidden pr-2">
+<img alt="Current Playing" class="w-10 h-10 rounded-md object-cover flex-shrink-0 ring-1 ring-white/10" src="https://lh3.googleusercontent.com/aida/AEtjO1VRXlmtKdroQk6x7MUlKZYcAgT8NVIPu5DtrnsC_xSifySamHmJv623bvLiFicJNQC2HgKwnvwF75SHqRuIavg4DFR6pup2dDAy0alBxwNUb8gA3xkJqAH4nyawZyK_wTLbtYG-xhmf0C15X8ly8hLQru-Pt_nTX11AiPJfCQb2UmqusOJXZ7dS5_9QQHRgDT8aohBZxQdfE1FWBSpMdmWSOou6C1vm3Nx0Hpcgf1T4o8gi7Am2LEYtXLo">
+<div class="min-w-0">
+<p class="font-bold text-sm text-white truncate leading-tight">Never Giving Up</p>
+<p class="text-xs text-neutral-400 truncate mt-0.5">M.M. Keeravaani</p>
+</div>
+</div>
+<!-- Player Controls: Google Cast & Play/Pause -->
+<div class="flex items-center space-x-3 text-neutral-200 flex-shrink-0 pr-1">
+<!-- Cast Device Icon -->
+<button aria-label="Cast audio" class="p-1 hover:text-white transition">
+<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+<path d="M1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11zm20-7H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"></path>
+</svg>
+</button>
+<!-- Play / Pause Icon -->
+<button aria-label="Play or Pause" class="p-1 text-white hover:scale-105 transition active:scale-95" id="mini-play-btn" onclick="togglePlayState(event)">
+<svg class="w-6 h-6 fill-current" id="pause-icon" viewBox="0 0 24 24">
+<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+</svg>
+<svg class="w-6 h-6 fill-current hidden" id="play-icon" viewBox="0 0 24 24">
+<path d="M8 5v14l11-7z"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Timeline Progress Bar Running Flush at the Bottom -->
+<div class="w-full bg-neutral-700 h-[2px] relative overflow-hidden">
+<div class="bg-white h-full w-[42%] transition-all duration-300" id="player-progress"></div>
+</div>
+</div>
+</div>
+<!-- END: PersistentMiniPlayer -->
+<!-- BEGIN: BottomNavigation -->
+<!-- 3-Item YouTube Music Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-[#030303]/98 border-t border-[#1c1c1c] h-[60px] flex items-center justify-around px-4 z-40" data-purpose="bottom-navigation-bar"><!-- Tab 1: Home (Inactive) -->
+<button aria-label="Home" class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400 hover:text-white transition group focus:outline-none" type="button">
+  <svg class="w-7 h-7 stroke-current fill-none stroke-[1.8] group-hover:scale-105 transition" viewBox="0 0 24 24">
+    <path d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+  <span class="text-[10px] tracking-tight mt-0.5 font-medium">Home</span>
+</button>
+<!-- Tab 2: Explore (Active) -->
+<button aria-label="Explore" class="flex flex-col items-center justify-center flex-1 py-1 text-white transition focus:outline-none" type="button">
+  <div class="w-7 h-7 flex items-center justify-center">
+    <svg class="w-[26px] h-[26px] fill-white" viewBox="0 0 24 24">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm2.93 12.93L6.5 17.5l2.57-8.43L17.5 6.5l-2.57 8.43zM12 10.9c-.61 0-1.1.49-1.1 1.1s.49 1.1 1.1 1.1 1.1-.49 1.1-1.1-.49-1.1-1.1-1.1z"></path>
+    </svg>
+  </div>
+  <span class="text-[10px] tracking-tight mt-0.5 font-bold">Explore</span>
+</button>
+<!-- Tab 3: Library (Inactive) -->
+<button aria-label="Library" class="flex flex-col items-center justify-center flex-1 py-1 text-neutral-400 hover:text-white transition group focus:outline-none" type="button">
+  <svg class="w-7 h-7 stroke-current fill-none stroke-[1.8] group-hover:scale-105 transition" viewBox="0 0 24 24">
+    <path d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+  <span class="text-[10px] tracking-tight mt-0.5 font-medium">Library</span>
+</button></nav>
+<!-- END: BottomNavigation -->
+</div>
+<!-- BEGIN: InteractiveScripts -->
+<!-- Handlers for simple click preview transitions -->
+<script data-purpose="app-interactivity">
+    // Toggle mini-player pause / play status
+    function togglePlayState(e) {
+      e.stopPropagation();
+      const pauseIcon = document.getElementById('pause-icon');
+      const playIcon = document.getElementById('play-icon');
+      const progressBar = document.getElementById('player-progress');
+
+      if (pauseIcon.classList.contains('hidden')) {
+        pauseIcon.classList.remove('hidden');
+        playIcon.classList.add('hidden');
+        progressBar.style.width = '48%';
+      } else {
+        pauseIcon.classList.add('hidden');
+        playIcon.classList.remove('hidden');
+      }
+    }
+
+    // Interactive expansion toggle for Moods and Genres preview
+    function toggleMoodsExpanded() {
+      const extraItems = document.querySelectorAll('.extra-moods');
+      extraItems.forEach(item => {
+        item.classList.toggle('hidden');
+      });
+    }
+  </script>
+<!-- END: InteractiveScripts -->
+
+
+
+
+</body></html>
