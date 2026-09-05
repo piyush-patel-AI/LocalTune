@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header.jsx';
 import { Library, Plus, Music, Heart, Disc3, User, X } from 'lucide-react';
 import { api } from '../services/api.js';
+import { PlaylistCover } from '../components/PlaylistCover.jsx';
+import { PlaylistDetailScreen } from './PlaylistDetailScreen.jsx';
 import { usePlayer } from '../context/PlayerContext.jsx';
 
 export function LibraryScreen() {
   const [activeTab, setActiveTab] = useState('playlists'); // playlists | songs | favorites | artists
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState(null);
   const [playlists, setPlaylists] = useState([]);
   const [songs, setSongs] = useState([]);
   const [favorites, setFavorites] = useState([]);
@@ -57,6 +60,19 @@ export function LibraryScreen() {
       console.error('Failed to create playlist:', err);
     }
   };
+
+  // If a playlist is selected, render PlaylistDetailScreen
+  if (selectedPlaylistId) {
+    return (
+      <PlaylistDetailScreen
+        playlistId={selectedPlaylistId}
+        onBack={() => {
+          setSelectedPlaylistId(null);
+          loadLibraryData();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col space-y-6 pt-1 pb-32 relative z-10">
@@ -120,15 +136,14 @@ export function LibraryScreen() {
               playlists.map((pl) => (
                 <div
                   key={pl.id}
-                  className="flex items-center space-x-3.5 p-2.5 rounded-2xl bg-neutral-900/60 hover:bg-neutral-800 transition-colors cursor-pointer border border-white/5"
+                  onClick={() => setSelectedPlaylistId(pl.id)}
+                  className="flex items-center space-x-3.5 p-2.5 rounded-2xl bg-neutral-900/60 hover:bg-neutral-800 transition-colors cursor-pointer border border-white/5 group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-900 to-indigo-950 flex items-center justify-center text-white shadow-md">
-                    <Disc3 className="w-6 h-6" />
-                  </div>
+                  <PlaylistCover playlist={pl} size={48} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-white truncate">{pl.name}</p>
+                    <p className="text-sm font-bold text-white truncate group-hover:text-neutral-200">{pl.name}</p>
                     <p className="text-xs text-yt-subtext truncate">
-                      {pl.track_count || 0} tracks • Playlist
+                      {pl.track_count || 0} {pl.track_count === 1 ? 'track' : 'tracks'} • Playlist
                     </p>
                   </div>
                 </div>

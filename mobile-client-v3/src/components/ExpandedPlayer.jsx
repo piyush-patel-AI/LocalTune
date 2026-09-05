@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ChevronDown,
   Play,
@@ -9,7 +9,10 @@ import {
   Shuffle,
   Repeat,
   ListMusic,
-  Plus,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { usePlayer } from '../context/PlayerContext.jsx';
@@ -31,9 +34,13 @@ export function ExpandedPlayer() {
     prevTrack,
     toggleFavorite,
     playTrack,
+    reorderQueue,
+    removeFromQueue,
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'queue'
+  const [draggedIdx, setDraggedIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
   if (!isPlayerExpanded || !currentTrack) return null;
 
@@ -47,9 +54,37 @@ export function ExpandedPlayer() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // Drag and Drop event handlers
+  const handleDragStart = (idx, e) => {
+    setDraggedIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', idx);
+  };
+
+  const handleDragOver = (idx, e) => {
+    e.preventDefault();
+    if (draggedIdx !== null && draggedIdx !== idx) {
+      setDragOverIdx(idx);
+    }
+  };
+
+  const handleDrop = (toIdx, e) => {
+    e.preventDefault();
+    if (draggedIdx !== null && draggedIdx !== toIdx) {
+      reorderQueue(draggedIdx, toIdx);
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-between liquid-glass-bg text-white max-w-md mx-auto animate-in slide-in-from-bottom duration-300 overflow-y-auto no-scrollbar"
+      className="fixed inset-0 z-50 flex flex-col justify-between liquid-glass-bg text-white max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200 overflow-y-auto no-scrollbar"
       data-purpose="expanded-player"
     >
       {/* Top Bar */}
@@ -82,8 +117,12 @@ export function ExpandedPlayer() {
           </button>
         </div>
 
-        <button className="p-2 text-neutral-300 hover:text-white transition-colors">
-          <ListMusic className="w-5 h-5" onClick={() => setActiveTab(activeTab === 'player' ? 'queue' : 'player')} />
+        <button
+          className="p-2 text-neutral-300 hover:text-white transition-colors"
+          onClick={() => setActiveTab(activeTab === 'player' ? 'queue' : 'player')}
+          aria-label="Toggle Up Next Queue"
+        >
+          <ListMusic className="w-5 h-5" />
         </button>
       </div>
 
@@ -177,42 +216,100 @@ export function ExpandedPlayer() {
           </div>
         </div>
       ) : (
-        /* Up Next Queue Tab */
+        /* Up Next Reorderable Queue Tab */
         <div className="flex-1 flex flex-col p-6 overflow-y-auto no-scrollbar space-y-4">
-          <h2 className="text-lg font-bold text-white mb-2">Up Next Queue</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white">Up Next Queue</h2>
+            <span className="text-xs text-neutral-400">Drag handle to reorder</span>
+          </div>
+
           <div className="flex flex-col space-y-2">
             {queue.map((track, idx) => {
               const isCurrent = idx === queueIndex;
+              const isDragging = draggedIdx === idx;
+              const isOver = dragOverIdx === idx;
               const qArtUrl = track.coverUrl || track.cover_art_url || api.getTrackArtUrl(track.id);
+
               return (
                 <div
-                  key={track.id || idx}
+                  key={`${track.id}-${idx}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(idx, e)}
+                  onDragOver={(e) => handleDragOver(idx, e)}
+                  onDrop={(e) => handleDrop(idx, e)}
+                  onDragEnd={handleDragEnd}
                   onClick={() => playTrack(track, queue, idx)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-colors cursor-pointer ${
-                    isCurrent
-                      ? 'bg-white/15 border-white/20 text-white font-semibold'
+                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                    isDragging
+                      ? 'opacity-40 scale-95 border-dashed border-white/40'
+                      : isOver
+                      ? 'border-yt-red bg-red-950/40 translate-y-1'
+                      : isCurrent
+                      ? 'bg-white/15 border-white/20 text-white font-semibold shadow-md'
                       : 'bg-black/30 border-white/5 text-neutral-300 hover:bg-white/10'
                   }`}
                 >
-                  <div className="flex items-center space-x-3 min-w-0">
+                  <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                    {/* Drag Handle */}
+                    <div
+                      className="cursor-grab active:cursor-grabbing p-1 text-neutral-500 hover:text-white transition-colors"
+                      title="Drag to reorder"
+                      aria-label={`Drag to reorder ${track.title}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+
                     <img
                       src={qArtUrl}
                       alt={track.title}
-                      className="w-10 h-10 rounded-lg object-cover bg-neutral-800"
+                      className="w-10 h-10 rounded-lg object-cover bg-neutral-800 flex-shrink-0"
                       onError={(e) => {
                         e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&q=80';
                       }}
                     />
-                    <div className="min-w-0">
+
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium truncate">{track.title}</p>
                       <p className="text-[10px] text-neutral-400 truncate">{track.artist || 'Unknown'}</p>
                     </div>
                   </div>
-                  {isCurrent && (
-                    <span className="text-[10px] uppercase font-bold text-yt-red px-2 py-0.5 rounded bg-red-950/60 border border-red-800/40">
-                      Playing
-                    </span>
-                  )}
+
+                  {/* Accessible Move Actions & Playing Indicator */}
+                  <div className="flex items-center space-x-1 pl-2" onClick={(e) => e.stopPropagation()}>
+                    {isCurrent && (
+                      <span className="text-[10px] uppercase font-bold text-yt-red px-2 py-0.5 rounded bg-red-950/60 border border-red-800/40 mr-1">
+                        Playing
+                      </span>
+                    )}
+
+                    <button
+                      disabled={idx === 0}
+                      onClick={() => reorderQueue(idx, idx - 1)}
+                      className="p-1 text-neutral-500 hover:text-white disabled:opacity-20"
+                      title="Move Up"
+                      aria-label="Move Up"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      disabled={idx === queue.length - 1}
+                      onClick={() => reorderQueue(idx, idx + 1)}
+                      className="p-1 text-neutral-500 hover:text-white disabled:opacity-20"
+                      title="Move Down"
+                      aria-label="Move Down"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => removeFromQueue(idx)}
+                      className="p-1 text-neutral-500 hover:text-red-400 transition-colors"
+                      title="Remove from Queue"
+                      aria-label="Remove from Queue"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               );
             })}

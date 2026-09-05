@@ -114,7 +114,6 @@ export function PlayerProvider({ children }) {
     audio.src = streamUrl;
     audio.play().catch(console.error);
 
-    // Log play recommendation action
     recommendationService.logAction({
       trackId: track.id,
       action: 'play',
@@ -147,7 +146,6 @@ export function PlayerProvider({ children }) {
       setQueueIndex(nextIdx);
       playTrack(queue[nextIdx], queue, nextIdx);
     } else if (currentTrack) {
-      // Autoplay next track from recommendations if queue ended
       try {
         const exclude = queue.map((t) => t.id);
         const autoplayTracks = await recommendationService.getAutoplayTracks(currentTrack.id, exclude, 3);
@@ -214,6 +212,45 @@ export function PlayerProvider({ children }) {
     });
   };
 
+  // Drag and drop reordering function preserving currentTrack identity
+  const reorderQueue = (fromIndex, toIndex) => {
+    if (fromIndex < 0 || fromIndex >= queue.length || toIndex < 0 || toIndex >= queue.length) return;
+    setQueue((prevQueue) => {
+      const newQueue = [...prevQueue];
+      const [movedItem] = newQueue.splice(fromIndex, 1);
+      newQueue.splice(toIndex, 0, movedItem);
+
+      if (currentTrack) {
+        const newCurrentIndex = newQueue.findIndex((t) => t.id === currentTrack.id);
+        if (newCurrentIndex !== -1) {
+          setQueueIndex(newCurrentIndex);
+        }
+      }
+      return newQueue;
+    });
+  };
+
+  const removeFromQueue = (index) => {
+    if (index < 0 || index >= queue.length) return;
+    setQueue((prevQueue) => {
+      const newQueue = [...prevQueue];
+      newQueue.splice(index, 1);
+
+      if (currentTrack) {
+        const newCurrentIndex = newQueue.findIndex((t) => t.id === currentTrack.id);
+        if (newCurrentIndex !== -1) {
+          setQueueIndex(newCurrentIndex);
+        } else if (newQueue.length > 0) {
+          const nextIdx = Math.min(index, newQueue.length - 1);
+          setQueueIndex(nextIdx);
+        } else {
+          setQueueIndex(-1);
+        }
+      }
+      return newQueue;
+    });
+  };
+
   return (
     <PlayerContext.Provider
       value={{
@@ -238,6 +275,8 @@ export function PlayerProvider({ children }) {
         addToQueue,
         playNext,
         setQueue,
+        reorderQueue,
+        removeFromQueue,
       }}
     >
       {children}
