@@ -1,9 +1,15 @@
-import React from 'react';
-import { Bell, Search, Music } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bell, Search, Music, LogOut, User } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export function Header() {
   const { setActiveTab } = usePlayer();
+  const { user, logout } = useAuth();
+  const [showMenu, setShowMenu] = useState(false);
+
+  const displayName = user?.displayName || user?.username || 'User';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <header className="relative px-4 py-2 flex items-center justify-between z-40 bg-transparent" data-purpose="app-header">
@@ -18,7 +24,7 @@ export function Header() {
       </div>
 
       {/* Action Buttons & Avatar */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 relative">
         <button
           aria-label="Notifications"
           className="relative p-1 text-white hover:opacity-80 transition-opacity"
@@ -39,9 +45,36 @@ export function Header() {
           <Search className="w-5 h-5 text-white" />
         </button>
 
-        <div className="w-7 h-7 rounded-full overflow-hidden ring-1 ring-white/20 cursor-pointer bg-neutral-800 flex items-center justify-center">
-          <span className="text-xs font-semibold text-neutral-300">LT</span>
+        <div
+          onClick={() => setShowMenu((prev) => !prev)}
+          className="w-7 h-7 rounded-full overflow-hidden ring-1 ring-white/20 cursor-pointer bg-neutral-800 flex items-center justify-center text-xs font-bold text-white shadow-md hover:ring-white/40 transition-all"
+        >
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+          ) : (
+            initial
+          )}
         </div>
+
+        {/* Profile Dropdown Menu */}
+        {showMenu && (
+          <div className="absolute right-0 top-10 w-44 bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in duration-150">
+            <div className="px-3 py-2 border-b border-white/10">
+              <p className="text-xs font-bold text-white truncate">{displayName}</p>
+              <p className="text-[10px] text-neutral-400 truncate">@{user?.username}</p>
+            </div>
+            <button
+              onClick={() => {
+                setShowMenu(false);
+                logout();
+              }}
+              className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-white/10 text-red-400 text-xs font-semibold transition-colors mt-1"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Out</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

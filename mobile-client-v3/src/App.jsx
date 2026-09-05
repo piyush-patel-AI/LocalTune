@@ -1,13 +1,15 @@
 import React from 'react';
-import { AuthProvider } from './context/AuthContext.jsx';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { PlayerProvider, usePlayer } from './context/PlayerContext.jsx';
 import { HomeScreen } from './screens/HomeScreen.jsx';
 import { ExploreScreen } from './screens/ExploreScreen.jsx';
 import { LibraryScreen } from './screens/LibraryScreen.jsx';
 import { SearchScreen } from './screens/SearchScreen.jsx';
+import { LoginScreen } from './screens/LoginScreen.jsx';
 import { MiniPlayer } from './components/MiniPlayer.jsx';
 import { ExpandedPlayer } from './components/ExpandedPlayer.jsx';
 import { BottomNavigation } from './components/BottomNavigation.jsx';
+import { Music } from 'lucide-react';
 
 function MainLayout() {
   const { activeTab } = usePlayer();
@@ -23,7 +25,7 @@ function MainLayout() {
         <div className="flex items-center space-x-1.5">
           <span className="text-[10px]">5G</span>
           <div className="w-5 h-2.5 border border-white/70 rounded-[2px] p-[1px] flex items-center">
-            <div className="h-full bg-white w-[50%] rounded-[1px]" />
+            <div className="h-full bg-white w-[50%]" />
           </div>
         </div>
       </div>
@@ -44,11 +46,32 @@ function MainLayout() {
   );
 }
 
+function AppContent() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-md min-h-screen flex flex-col items-center justify-center bg-[#030303] text-white mx-auto">
+        <div className="w-12 h-12 rounded-2xl bg-yt-red flex items-center justify-center animate-pulse shadow-xl shadow-red-950/60">
+          <Music className="w-6 h-6 text-white fill-current" />
+        </div>
+        <p className="text-xs text-neutral-400 font-medium mt-3">Connecting to LocalTune...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
+
+  return <MainLayout />;
+}
+
 export function App() {
   return (
     <AuthProvider>
       <PlayerProvider>
-        <MainLayout />
+        <AppContent />
       </PlayerProvider>
     </AuthProvider>
   );
