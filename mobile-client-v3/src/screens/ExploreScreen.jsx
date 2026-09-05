@@ -28,8 +28,32 @@ export function ExploreScreen() {
     async function loadExploreData() {
       setLoading(true);
       try {
-        const tracks = await recommendationService.getDiscoveryRadar();
-        setDiscoveryTracks(tracks);
+        const [discRes, allTracksRes] = await Promise.allSettled([
+          recommendationService.getDiscoveryRadar(),
+          api.getTracks({ limit: 50 }),
+        ]);
+
+        const discTracks = discRes.status === 'fulfilled' && Array.isArray(discRes.value) ? discRes.value : [];
+        const libTracks =
+          allTracksRes.status === 'fulfilled'
+            ? Array.isArray(allTracksRes.value?.tracks)
+              ? allTracksRes.value.tracks
+              : Array.isArray(allTracksRes.value)
+              ? allTracksRes.value
+              : []
+            : [];
+
+        const seenIds = new Set(discTracks.map((t) => t.id));
+        const pool = [...discTracks];
+        for (const track of libTracks) {
+          if (pool.length >= 10) break;
+          if (!seenIds.has(track.id)) {
+            pool.push(track);
+            seenIds.add(track.id);
+          }
+        }
+
+        setDiscoveryTracks(pool);
       } catch (err) {
         console.error('Failed to load discovery radar:', err);
       } finally {

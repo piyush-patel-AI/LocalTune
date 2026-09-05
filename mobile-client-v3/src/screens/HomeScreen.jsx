@@ -26,18 +26,31 @@ export function HomeScreen() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch server recommendations & shelves in parallel
+      // Fetch server recommendations, shelves, and library tracks in parallel
       const [recs, recShelves, allTracks] = await Promise.allSettled([
         recommendationService.getRecommendations(),
         recommendationService.getShelves(),
-        api.getTracks({ limit: 50 }),
+        api.getTracks({ limit: 100 }),
       ]);
 
-      let pool = [];
-      if (recs.status === 'fulfilled' && recs.value.length > 0) {
-        pool = recs.value;
-      } else if (allTracks.status === 'fulfilled' && allTracks.value.length > 0) {
-        pool = allTracks.value;
+      const recTracks = recs.status === 'fulfilled' && Array.isArray(recs.value) ? recs.value : [];
+      const libTracks =
+        allTracks.status === 'fulfilled'
+          ? Array.isArray(allTracks.value?.tracks)
+            ? allTracks.value.tracks
+            : Array.isArray(allTracks.value)
+            ? allTracks.value
+            : []
+          : [];
+
+      // Combine server recommendation candidates first (preserving rank), then fallback library candidates
+      const seenIds = new Set(recTracks.map((t) => t.id));
+      const pool = [...recTracks];
+      for (const track of libTracks) {
+        if (!seenIds.has(track.id)) {
+          pool.push(track);
+          seenIds.add(track.id);
+        }
       }
 
       setCandidatePool(pool);
@@ -75,7 +88,10 @@ export function HomeScreen() {
   });
 
   const speedDialTrackIds = new Set();
-  speedDialPages.forEach((pg) => pg.forEach((t) => speedDialTrackIds.add(t.id)));
+  if (speedDialPages.length > 0) {
+    // Only exclude Page 1 track IDs for Quick Picks so alternatives are shown
+    speedDialPages[0].forEach((t) => speedDialTrackIds.add(t.id));
+  }
 
   const quickPicksTracks = buildQuickPicks({
     candidatePool: filteredCandidates.length > 0 ? filteredCandidates : candidatePool,
@@ -120,19 +136,20 @@ export function HomeScreen() {
 
           {/* Recommendation Shelves Section */}
           {shelves.map((shelf, shelfIdx) => {
-            if (!shelf.items || shelf.items.length === 0) return null;
+            const shelfTracks = shelf.tracks || shelf.items || [];
+            if (!shelfTracks || shelfTracks.length === 0) return null;
             return (
               <section key={shelf.id || shelfIdx} className="px-4">
                 <h2 className="text-xl font-bold tracking-tight text-white mb-3">
                   {shelf.title}
                 </h2>
                 <div className="flex space-x-3 overflow-x-auto no-scrollbar py-1">
-                  {shelf.items.map((track) => {
+                  {shelfTracks.map((track) => {
                     const artUrl = track.coverUrl || track.cover_art_url || api.getTrackArtUrl(track.id);
                     return (
                       <div
                         key={track.id}
-                        onClick={() => playTrack(track, shelf.items, shelf.items.indexOf(track))}
+                        onClick={() => playTrack(track, shelfTracks, shelfTracks.indexOf(track))}
                         className="flex-shrink-0 w-36 cursor-pointer group space-y-2"
                       >
                         <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-neutral-900 shadow-md">
