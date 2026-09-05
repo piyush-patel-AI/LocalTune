@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header.jsx';
-import { Library, Plus, Music, Heart, Disc3, User, X } from 'lucide-react';
+import { Library, Plus, Music, Heart, Disc3, User, X, LogIn } from 'lucide-react';
 import { api } from '../services/api.js';
 import { PlaylistCover } from '../components/PlaylistCover.jsx';
 import { PlaylistDetailScreen } from './PlaylistDetailScreen.jsx';
 import { usePlayer } from '../context/PlayerContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export function LibraryScreen() {
   const [activeTab, setActiveTab] = useState('playlists'); // playlists | songs | favorites | artists
@@ -14,6 +15,8 @@ export function LibraryScreen() {
   const [favorites, setFavorites] = useState([]);
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [libError, setLibError] = useState(null);
+  const [isAuthError, setIsAuthError] = useState(false);
 
   // New Playlist Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,9 +24,12 @@ export function LibraryScreen() {
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
 
   const { playTrack } = usePlayer();
+  const { logout } = useAuth();
 
   const loadLibraryData = async () => {
     setLoading(true);
+    setLibError(null);
+    setIsAuthError(false);
     try {
       const [pls, trks, favs, arts] = await Promise.allSettled([
         api.getPlaylists(),
@@ -32,12 +38,29 @@ export function LibraryScreen() {
         api.getTracks({ groupBy: 'artist' }),
       ]);
 
+      // Detect auth failures
+      const authFailed = [pls, trks, favs, arts].some(
+        (r) => r.status === 'rejected' && r.reason?.status === 401
+      );
+      if (authFailed) {
+        setIsAuthError(true);
+        setLibError('Your session has expired. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
       if (pls.status === 'fulfilled') setPlaylists(pls.value.playlists || pls.value || []);
       if (trks.status === 'fulfilled') setSongs(trks.value.tracks || trks.value || []);
       if (favs.status === 'fulfilled') setFavorites(favs.value.favorites || favs.value || []);
       if (arts.status === 'fulfilled') setArtists(arts.value.artists || arts.value || []);
     } catch (err) {
       console.error('Failed to load library data:', err);
+      if (err.status === 401) {
+        setIsAuthError(true);
+        setLibError('Your session has expired. Please sign in again.');
+      } else {
+        setLibError('Failed to load library. Check your connection.');
+      }
     } finally {
       setLoading(false);
     }
@@ -126,6 +149,26 @@ export function LibraryScreen() {
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-14 bg-neutral-900 animate-pulse rounded-xl" />
           ))}
+        </div>
+      ) : libError ? (
+        <div className="px-4 py-10 text-center space-y-4">
+          <p className="text-sm text-neutral-400">{libError}</p>
+          {isAuthError ? (
+            <button
+              onClick={logout}
+              className="flex items-center justify-center mx-auto space-x-2 px-5 py-2 rounded-full bg-yt-red text-white text-xs font-semibold hover:opacity-90"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Sign In Again</span>
+            </button>
+          ) : (
+            <button
+              onClick={loadLibraryData}
+              className="px-4 py-1.5 rounded-full bg-white text-black text-xs font-semibold hover:bg-neutral-200"
+            >
+              Retry
+            </button>
+          )}
         </div>
       ) : (
         <div className="px-4 flex flex-col space-y-2">

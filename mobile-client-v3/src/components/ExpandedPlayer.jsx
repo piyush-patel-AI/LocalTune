@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ChevronDown,
   Play,
@@ -14,6 +14,107 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { usePlayer } from '../context/PlayerContext.jsx';
+
+// ── Dominant color extraction via canvas ─────────────────────────────────────
+const colorCache = new Map();
+
+function extractDominantColor(img) {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const w = 48;
+    const h = 48;
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const { data } = ctx.getImageData(0, 0, w, h);
+    let r = 0, g = 0, b = 0;
+    const pixels = data.length / 4;
+    for (let i = 0; i < data.length; i += 4) {
+      r += data[i];
+      g += data[i + 1];
+      b += data[i + 2];
+    }
+    r = Math.round(r / pixels);
+    g = Math.round(g / pixels);
+    b = Math.round(b / pixels);
+
+    const dim = 0.35;
+    r = Math.round(r * dim);
+    g = Math.round(g * dim);
+    b = Math.round(b * dim);
+    return `rgb(${r},${g},${b})`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function CustomScrubber({ currentTime, duration, onSeek }) {
+  const scrubberRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const handlePointerDown = (e) => {
+    if (!scrubberRef.current || !duration) return;
+    e.preventDefault();
+    e.stopPropagation();
+    scrubberRef.current.setPointerCapture(e.pointerId);
+    setIsDragging(true);
+
+    const rect = scrubberRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    onSeek(pct * duration);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging || !scrubberRef.current || !duration) return;
+    const rect = scrubberRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    onSeek(pct * duration);
+  };
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <div
+      ref={scrubberRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className="relative w-full h-6 flex items-center cursor-pointer touch-none select-none"
+      role="slider"
+      aria-label="Seek"
+      aria-valuenow={Math.round(currentTime)}
+      aria-valuemin={0}
+      aria-valuemax={Math.round(duration)}
+    >
+      {/* Track background */}
+      <div className="absolute left-0 right-0 h-1.5 rounded-full bg-white/20" />
+
+      {/* Played portion */}
+      <div
+        className="absolute left-0 h-1.5 rounded-full bg-yt-red transition-none"
+        style={{ width: `${progress}%` }}
+      />
+
+      {/* Thumb */}
+      <div
+        className="absolute h-4 w-4 rounded-full bg-white shadow-lg shadow-black/40 pointer-events-none"
+        style={{
+          left: `calc(${progress}% - 8px)`,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          transition: isDragging ? 'none' : 'left 80ms ease-out',
+        }}
+      />
+    </div>
+  );
+}
 
 function ReorderableQueueList({ queue, queueIndex, currentTrack, onReorder, onRemove, onPlayTrack }) {
   const containerRef = useRef(null);
@@ -180,6 +281,11 @@ export function ExpandedPlayer() {
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'queue'
+  const [ambientColor, setAmbientColor] = useState('#030303');
+
+  useEffect(() => {
+    setAmbientColor('#030303');
+  }, [currentTrack?.id]);
 
   if (!isPlayerExpanded || !currentTrack) return null;
 
@@ -193,9 +299,27 @@ export function ExpandedPlayer() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const handleArtworkLoad = (e) => {
+    const img = e.target;
+    if (!img.naturalWidth) return;
+    const cached = colorCache.get(currentTrack.id);
+    if (cached) {
+      setAmbientColor(cached);
+      return;
+    }
+    const color = extractDominantColor(img);
+    if (color) {
+      colorCache.set(currentTrack.id, color);
+      setAmbientColor(color);
+    }
+  };
+
+  const ambientBg = `radial-gradient(circle at 50% 30%, ${ambientColor} 0%, rgba(30,10,35,0.95) 70%, #030303 100%)`;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-between liquid-glass-bg text-white max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200 overflow-y-auto no-scrollbar"
+      className="fixed inset-0 z-50 flex flex-col justify-between text-white max-w-md mx-auto animate-in fade-in zoom-in-95 duration-200 overflow-y-auto no-scrollbar ambient-bg-transition"
+      style={{ background: ambientBg }}
       data-purpose="expanded-player"
     >
       {/* Top Bar */}
@@ -240,12 +364,13 @@ export function ExpandedPlayer() {
       {/* Main Content Area */}
       {activeTab === 'player' ? (
         <div className="flex-1 flex flex-col justify-center px-8 py-4 space-y-6">
-          {/* Artwork Card with Liquid Gloss Glow */}
+          {/* Artwork Card */}
           <div className="relative aspect-square w-full rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/15 mx-auto max-w-[320px]">
             <img
               src={artUrl}
               alt={currentTrack.title}
               className="w-full h-full object-cover"
+              onLoad={handleArtworkLoad}
               onError={(e) => {
                 e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80';
               }}
@@ -275,16 +400,9 @@ export function ExpandedPlayer() {
             </button>
           </div>
 
-          {/* Scrubber Bar */}
+          {/* Custom Scrubber Bar */}
           <div className="space-y-1.5 pt-2">
-            <input
-              type="range"
-              min="0"
-              max={duration || 100}
-              value={currentTime}
-              onChange={(e) => seek(parseFloat(e.target.value))}
-              className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
-            />
+            <CustomScrubber currentTime={currentTime} duration={duration} onSeek={seek} />
             <div className="flex justify-between text-xs text-neutral-400 font-medium px-0.5">
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>

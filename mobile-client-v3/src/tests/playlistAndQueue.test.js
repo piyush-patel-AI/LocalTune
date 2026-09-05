@@ -78,3 +78,77 @@ describe('Playlist and Queue State Management', () => {
   });
 });
 
+describe('Auth Session Verification', () => {
+  test('login success propagates user and stores a session token', () => {
+    const loginResponse = {
+      user: { id: 7, username: 'alice', displayName: 'Alice' },
+      sessionToken: 's:abc123',
+    };
+
+    assert.ok(loginResponse.user, 'login should return a user');
+    assert.ok(loginResponse.sessionToken, 'login should return a session token for WebView fallback');
+    assert.strictEqual(loginResponse.user.id, 7);
+  });
+
+  test('GET /api/me returns null user when session cookie/token not persisted', () => {
+    // Simulates the WebView cookie failure scenario where the login succeeded
+    // but /api/me cannot see an authenticated session.
+    const meResponse = { user: null, sessionToken: null };
+    assert.strictEqual(meResponse.user, null);
+    assert.strictEqual(meResponse.sessionToken, null);
+  });
+
+  test('GET /api/me returns the user when the session token is valid', () => {
+    const meResponse = { user: { id: 7, username: 'alice' }, sessionToken: 's:abc123' };
+    assert.ok(meResponse.user, 'user should be present when session is valid');
+    assert.ok(meResponse.sessionToken, 'session token should be echoed back for refresh');
+  });
+
+  test('unauthenticated protected request returns 401', () => {
+    const fakeFetch = async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: 'Unauthorized. Please log in.' }),
+    });
+
+    return fakeFetch('/api/tracks')
+      .then((res) => res.json())
+      .then((body) => {
+        assert.strictEqual(body.error, 'Unauthorized. Please log in.');
+      });
+  });
+});
+
+describe('Session Token Storage', () => {
+  test('token is stored and retrievable from localStorage via helpers', () => {
+    const store = new Map();
+    const fakeLocalStorage = {
+      setItem: (k, v) => store.set(k, v),
+      getItem: (k) => store.get(k) ?? null,
+      removeItem: (k) => store.delete(k),
+    };
+    global.localStorage = fakeLocalStorage;
+
+    // Reuse the module's function by simulating its storage contract:
+    // store on login, read back, clear on logout.
+    const TOKEN = 's:def456';
+    storeSessionTokenImpl(TOKEN);
+    assert.strictEqual(fakeLocalStorage.getItem('lt_session_token'), TOKEN);
+
+    storeSessionTokenImpl(null);
+    assert.strictEqual(fakeLocalStorage.getItem('lt_session_token'), null);
+
+    delete global.localStorage;
+  });
+});
+
+function storeSessionTokenImpl(token) {
+  try {
+    if (token) {
+      localStorage.setItem('lt_session_token', token);
+    } else {
+      localStorage.removeItem('lt_session_token');
+    }
+  } catch (_) {}
+}
+

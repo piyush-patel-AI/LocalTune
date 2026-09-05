@@ -113,8 +113,11 @@ router.post('/register', async (req, res) => {
   req.session.username = trimmedUsername;
 
   const newUser = await getUserById(newUserId);
+  // Expose sessionID so WebView clients can use it as a Bearer token fallback
+  const sessionToken = req.sessionID || null;
   return res.status(201).json({
-    user: formatUserObj(newUser)
+    user: formatUserObj(newUser),
+    sessionToken,
   });
 });
 
@@ -140,8 +143,11 @@ router.post('/login', async (req, res) => {
   req.session.userId = user.id;
   req.session.username = user.username;
 
+  // Expose sessionID so WebView clients can use it as a Bearer token fallback
+  const sessionToken = req.sessionID || null;
   return res.json({
-    user: formatUserObj(user)
+    user: formatUserObj(user),
+    sessionToken,
   });
 });
 
@@ -164,14 +170,15 @@ router.post('/logout', (req, res) => {
 // GET /api/me (check auth state cleanly without 401 console errors)
 router.get('/me', async (req, res) => {
   if (!req.session || !req.session.userId) {
-    return res.json({ user: null });
+    return res.json({ user: null, sessionToken: null });
   }
   const user = await getUserById(req.session.userId);
   if (!user) {
-    return res.json({ user: null });
+    return res.json({ user: null, sessionToken: null });
   }
   return res.json({
-    user: formatUserObj(user)
+    user: formatUserObj(user),
+    sessionToken: req.sessionID || null,
   });
 });
 

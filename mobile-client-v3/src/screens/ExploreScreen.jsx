@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../components/Header.jsx';
-import { Compass, Flame, Music2, Sparkles, Play } from 'lucide-react';
+import { Compass, Flame, Music2, Sparkles, Play, LogIn } from 'lucide-react';
 import { api } from '../services/api.js';
 import { recommendationService } from '../services/recommendationService.js';
 import { usePlayer } from '../context/PlayerContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const MOODS_AND_GENRES = [
   { name: 'Pop', color: 'from-pink-600 to-purple-800' },
@@ -21,19 +22,36 @@ export function ExploreScreen() {
   const [selectedGenre, setSelectedGenre] = useState(null);
   const [genreTracks, setGenreTracks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exploreError, setExploreError] = useState(null);
+  const [isAuthError, setIsAuthError] = useState(false);
 
   const { playTrack } = usePlayer();
+  const { logout } = useAuth();
 
   useEffect(() => {
     async function loadExploreData() {
       setLoading(true);
+      setExploreError(null);
+      setIsAuthError(false);
       try {
         const [discRes, allTracksRes] = await Promise.allSettled([
           recommendationService.getDiscoveryRadar(),
           api.getTracks({ limit: 50 }),
         ]);
 
-        const discTracks = discRes.status === 'fulfilled' && Array.isArray(discRes.value) ? discRes.value : [];
+        // Detect auth failures
+        const authFailed = [discRes, allTracksRes].some(
+          (r) => r.status === 'rejected' && r.reason?.status === 401
+        );
+        if (authFailed) {
+          setIsAuthError(true);
+          setExploreError('Your session has expired. Please sign in again.');
+          setLoading(false);
+          return;
+        }
+
+        const discTracks =
+          discRes.status === 'fulfilled' && Array.isArray(discRes.value) ? discRes.value : [];
         const libTracks =
           allTracksRes.status === 'fulfilled'
             ? Array.isArray(allTracksRes.value?.tracks)
@@ -56,6 +74,12 @@ export function ExploreScreen() {
         setDiscoveryTracks(pool);
       } catch (err) {
         console.error('Failed to load discovery radar:', err);
+        if (err.status === 401) {
+          setIsAuthError(true);
+          setExploreError('Your session has expired. Please sign in again.');
+        } else {
+          setExploreError('Failed to load discovery. Check your connection.');
+        }
       } finally {
         setLoading(false);
       }
@@ -161,6 +185,21 @@ export function ExploreScreen() {
         <h2 className="text-lg font-bold text-white tracking-tight">Discovery Radar</h2>
         {loading ? (
           <div className="h-32 bg-neutral-900 animate-pulse rounded-2xl" />
+        ) : exploreError ? (
+          <div className="py-6 text-center space-y-3">
+            <p className="text-sm text-neutral-400">{exploreError}</p>
+            {isAuthError ? (
+              <button
+                onClick={logout}
+                className="flex items-center justify-center mx-auto space-x-2 px-5 py-2 rounded-full bg-yt-red text-white text-xs font-semibold hover:opacity-90"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In Again</span>
+              </button>
+            ) : null}
+          </div>
+        ) : discoveryTracks.length === 0 ? (
+          <p className="text-sm text-neutral-500 py-4">No tracks available for discovery.</p>
         ) : (
           <div className="flex space-x-3 overflow-x-auto no-scrollbar py-1">
             {discoveryTracks.map((track, idx) => (

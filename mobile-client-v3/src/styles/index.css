@@ -42,3 +42,10 @@ body {
   background: radial-gradient(circle at 50% 30%, rgba(120, 20, 60, 0.45) 0%, rgba(30, 10, 35, 0.95) 70%, #030303 100%);
   backdrop-filter: blur(24px);
 }
+
+/* Smooth ambient background transition for the expanded player.
+   The ambient color is derived from the current track artwork. */
+.ambient-bg-transition {
+  transition: background 600ms ease;
+  backdrop-filter: blur(24px);
+}

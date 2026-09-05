@@ -10,7 +10,8 @@ import {
   buildQuickPicks,
 } from '../services/recommendationComposition.js';
 import { usePlayer } from '../context/PlayerContext.jsx';
-import { Play } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.jsx';
+import { Play, LogIn } from 'lucide-react';
 
 export function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState(null);
@@ -18,13 +19,16 @@ export function HomeScreen() {
   const [shelves, setShelves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAuthError, setIsAuthError] = useState(false);
   const [refreshOffset, setRefreshOffset] = useState(0);
 
   const { favoritesMap, listenHistory, playTrack } = usePlayer();
+  const { logout } = useAuth();
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
+    setIsAuthError(false);
     try {
       // Fetch server recommendations, shelves, and library tracks in parallel
       const [recs, recShelves, allTracks] = await Promise.allSettled([
@@ -33,7 +37,19 @@ export function HomeScreen() {
         api.getTracks({ limit: 100 }),
       ]);
 
-      const recTracks = recs.status === 'fulfilled' && Array.isArray(recs.value) ? recs.value : [];
+      // Detect authentication failures across any of the parallel calls
+      const authFailed = [recs, recShelves, allTracks].some(
+        (r) => r.status === 'rejected' && r.reason?.status === 401
+      );
+      if (authFailed) {
+        setIsAuthError(true);
+        setError('Your session has expired. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
+      const recTracks =
+        recs.status === 'fulfilled' && Array.isArray(recs.value) ? recs.value : [];
       const libTracks =
         allTracks.status === 'fulfilled'
           ? Array.isArray(allTracks.value?.tracks)
@@ -59,7 +75,12 @@ export function HomeScreen() {
       }
     } catch (err) {
       console.error('Error loading Home feed:', err);
-      setError('Failed to load recommendations');
+      if (err.status === 401) {
+        setIsAuthError(true);
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to load recommendations. Check your connection.');
+      }
     } finally {
       setLoading(false);
     }
@@ -114,14 +135,24 @@ export function HomeScreen() {
           </div>
         </div>
       ) : error ? (
-        <div className="px-4 py-8 text-center space-y-3">
+        <div className="px-4 py-8 text-center space-y-4">
           <p className="text-sm text-neutral-400">{error}</p>
-          <button
-            onClick={loadData}
-            className="px-4 py-1.5 rounded-full bg-white text-black text-xs font-semibold hover:bg-neutral-200"
-          >
-            Retry
-          </button>
+          {isAuthError ? (
+            <button
+              onClick={logout}
+              className="flex items-center justify-center mx-auto space-x-2 px-5 py-2 rounded-full bg-yt-red text-white text-xs font-semibold hover:opacity-90"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Sign In Again</span>
+            </button>
+          ) : (
+            <button
+              onClick={loadData}
+              className="px-4 py-1.5 rounded-full bg-white text-black text-xs font-semibold hover:bg-neutral-200"
+            >
+              Retry
+            </button>
+          )}
         </div>
       ) : (
         <>
