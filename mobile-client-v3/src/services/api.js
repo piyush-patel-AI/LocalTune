@@ -53,7 +53,7 @@ export const api = {
   },
   getTrackArtUrl: (trackId) => apiUrl(`/api/tracks/${trackId}/art`),
   getArtistImageUrl: (artistName) => apiUrl(`/api/tracks/artist-image/${encodeURIComponent(artistName)}`),
-  getStreamUrl: (trackId) => apiUrl(`/api/tracks/${trackId}/stream`),
+  getStreamUrl: (trackId) => apiUrl(`/stream/${trackId}`),
 
   // Playlists
   getPlaylists: () => request('/api/playlists'),
