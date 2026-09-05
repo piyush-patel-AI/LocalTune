@@ -69,4 +69,12 @@ describe('Playlist and Queue State Management', () => {
     assert.strictEqual(playlistWithTracks.sample_tracks[0].id, 201);
     assert.strictEqual(playlistEmpty.sample_tracks, undefined);
   });
+
+  test('API module exports apiUrl correctly on default and named export', async () => {
+    const apiModule = await import('../services/api.js');
+    assert.strictEqual(typeof apiModule.apiUrl, 'function');
+    assert.strictEqual(typeof apiModule.default.apiUrl, 'function');
+    assert.strictEqual(apiModule.apiUrl('/test'), apiModule.default.apiUrl('/test'));
+  });
 });
+

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Disc3 } from 'lucide-react';
-import { api } from '../services/api.js';
+import { api, apiUrl } from '../services/api.js';
 
 export function PlaylistCover({ playlist, tracks = [], size = 48, className = '' }) {
   const [coverFailed, setCoverFailed] = useState(false);
 
   if (!playlist) return null;
 
-  const storedCoverUrl = api.apiUrl(`/api/playlists/${playlist.id}/cover`);
+  const storedCoverUrl = apiUrl(`/api/playlists/${playlist.id}/cover`);
 
   // Custom uploaded cover image
   if (playlist.cover_path && !coverFailed) {

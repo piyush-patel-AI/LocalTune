@@ -3,9 +3,10 @@
 export function apiUrl(path) {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const baseUrl = import.meta.env.VITE_API_URL || '';
+  const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || '';
   return `${baseUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : '/' + path}`;
 }
+
 
 async function request(endpoint, options = {}) {
   const url = apiUrl(endpoint);
@@ -36,6 +37,7 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
+  apiUrl,
   // Auth
   getMe: () => request('/api/me'),
   login: (username, password) => request('/api/login', { method: 'POST', body: { username, password } }),
@@ -74,3 +76,6 @@ export const api = {
       body: { trackId, durationPlayed, completed },
     }).catch((err) => console.warn('Failed to log listen stats:', err)),
 };
+
+export default api;
+

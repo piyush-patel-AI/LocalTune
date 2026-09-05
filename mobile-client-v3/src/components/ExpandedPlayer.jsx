@@ -10,12 +10,153 @@ import {
   Repeat,
   ListMusic,
   GripVertical,
-  ArrowUp,
-  ArrowDown,
   Trash2,
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { usePlayer } from '../context/PlayerContext.jsx';
+
+function ReorderableQueueList({ queue, queueIndex, currentTrack, onReorder, onRemove, onPlayTrack }) {
+  const containerRef = useRef(null);
+  const [dragState, setDragState] = useState(null); // { fromIndex, currentIndex, startY, currentY }
+
+  const handlePointerDown = (index, e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const handleEl = e.currentTarget;
+    try {
+      handleEl.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    setDragState({
+      fromIndex: index,
+      currentIndex: index,
+      startY: e.clientY,
+      currentY: e.clientY,
+    });
+  };
+
+  const handlePointerMove = (e) => {
+    if (!dragState || !containerRef.current) return;
+    const container = containerRef.current;
+    const children = Array.from(container.children);
+    if (children.length === 0) return;
+
+    const currentY = e.clientY;
+    let newIndex = dragState.fromIndex;
+
+    for (let i = 0; i < children.length; i++) {
+      const rect = children[i].getBoundingClientRect();
+      const midPoint = rect.top + rect.height / 2;
+      if (currentY < midPoint) {
+        newIndex = i;
+        break;
+      }
+      if (i === children.length - 1 && currentY >= midPoint) {
+        newIndex = i;
+      }
+    }
+
+    setDragState((prev) => (prev ? { ...prev, currentY, currentIndex: newIndex } : null));
+  };
+
+  const handlePointerUp = () => {
+    if (!dragState) return;
+    if (dragState.fromIndex !== dragState.currentIndex) {
+      onReorder(dragState.fromIndex, dragState.currentIndex);
+    }
+    setDragState(null);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className="flex flex-col space-y-2 relative"
+    >
+      {queue.map((track, idx) => {
+        const isCurrent = idx === queueIndex;
+        const isDragging = dragState?.fromIndex === idx;
+        const qArtUrl = track.coverUrl || track.cover_art_url || api.getTrackArtUrl(track.id);
+
+        let transformStyle = '';
+        if (dragState && !isDragging) {
+          const { fromIndex, currentIndex } = dragState;
+          if (fromIndex < currentIndex && idx > fromIndex && idx <= currentIndex) {
+            transformStyle = 'translateY(-52px)';
+          } else if (fromIndex > currentIndex && idx >= currentIndex && idx < fromIndex) {
+            transformStyle = 'translateY(52px)';
+          }
+        }
+
+        return (
+          <div
+            key={`${track.id}-${idx}`}
+            onClick={() => !dragState && onPlayTrack(track, queue, idx)}
+            className={`flex items-center justify-between p-2.5 rounded-xl border transition-transform duration-150 cursor-pointer select-none ${
+              isDragging
+                ? 'z-30 bg-neutral-800 border-yt-red shadow-2xl scale-[1.02] ring-1 ring-red-500/50 opacity-90'
+                : isCurrent
+                ? 'bg-white/15 border-white/20 text-white font-semibold shadow-md'
+                : 'bg-black/30 border-white/5 text-neutral-300 hover:bg-white/10'
+            }`}
+            style={{
+              transform: isDragging
+                ? `translateY(${dragState.currentY - dragState.startY}px)`
+                : transformStyle,
+            }}
+          >
+            <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+              {/* Drag Handle */}
+              <div
+                onPointerDown={(e) => handlePointerDown(idx, e)}
+                className="cursor-grab active:cursor-grabbing p-1.5 text-neutral-500 hover:text-white transition-colors touch-none"
+                title="Drag to reorder"
+                aria-label={`Drag to reorder ${track.title}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <GripVertical className="w-4 h-4" />
+              </div>
+
+              <img
+                src={qArtUrl}
+                alt={track.title}
+                className="w-10 h-10 rounded-lg object-cover bg-neutral-800 flex-shrink-0"
+                onError={(e) => {
+                  e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&q=80';
+                }}
+              />
+
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium truncate">{track.title}</p>
+                <p className="text-[10px] text-neutral-400 truncate">{track.artist || 'Unknown'}</p>
+              </div>
+            </div>
+
+            {/* Playing Badge & Remove Action */}
+            <div className="flex items-center space-x-1 pl-2" onClick={(e) => e.stopPropagation()}>
+              {isCurrent && (
+                <span className="text-[10px] uppercase font-bold text-yt-red px-2 py-0.5 rounded bg-red-950/60 border border-red-800/40 mr-1">
+                  Playing
+                </span>
+              )}
+
+              <button
+                onClick={() => onRemove(idx)}
+                className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
+                title="Remove from Queue"
+                aria-label="Remove from Queue"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ExpandedPlayer() {
   const {
@@ -39,8 +180,6 @@ export function ExpandedPlayer() {
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'queue'
-  const [draggedIdx, setDraggedIdx] = useState(null);
-  const [dragOverIdx, setDragOverIdx] = useState(null);
 
   if (!isPlayerExpanded || !currentTrack) return null;
 
@@ -52,34 +191,6 @@ export function ExpandedPlayer() {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  // Drag and Drop event handlers
-  const handleDragStart = (idx, e) => {
-    setDraggedIdx(idx);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', idx);
-  };
-
-  const handleDragOver = (idx, e) => {
-    e.preventDefault();
-    if (draggedIdx !== null && draggedIdx !== idx) {
-      setDragOverIdx(idx);
-    }
-  };
-
-  const handleDrop = (toIdx, e) => {
-    e.preventDefault();
-    if (draggedIdx !== null && draggedIdx !== toIdx) {
-      reorderQueue(draggedIdx, toIdx);
-    }
-    setDraggedIdx(null);
-    setDragOverIdx(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIdx(null);
-    setDragOverIdx(null);
   };
 
   return (
@@ -223,97 +334,14 @@ export function ExpandedPlayer() {
             <span className="text-xs text-neutral-400">Drag handle to reorder</span>
           </div>
 
-          <div className="flex flex-col space-y-2">
-            {queue.map((track, idx) => {
-              const isCurrent = idx === queueIndex;
-              const isDragging = draggedIdx === idx;
-              const isOver = dragOverIdx === idx;
-              const qArtUrl = track.coverUrl || track.cover_art_url || api.getTrackArtUrl(track.id);
-
-              return (
-                <div
-                  key={`${track.id}-${idx}`}
-                  draggable
-                  onDragStart={(e) => handleDragStart(idx, e)}
-                  onDragOver={(e) => handleDragOver(idx, e)}
-                  onDrop={(e) => handleDrop(idx, e)}
-                  onDragEnd={handleDragEnd}
-                  onClick={() => playTrack(track, queue, idx)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                    isDragging
-                      ? 'opacity-40 scale-95 border-dashed border-white/40'
-                      : isOver
-                      ? 'border-yt-red bg-red-950/40 translate-y-1'
-                      : isCurrent
-                      ? 'bg-white/15 border-white/20 text-white font-semibold shadow-md'
-                      : 'bg-black/30 border-white/5 text-neutral-300 hover:bg-white/10'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2.5 min-w-0 flex-1">
-                    {/* Drag Handle */}
-                    <div
-                      className="cursor-grab active:cursor-grabbing p-1 text-neutral-500 hover:text-white transition-colors"
-                      title="Drag to reorder"
-                      aria-label={`Drag to reorder ${track.title}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <GripVertical className="w-4 h-4" />
-                    </div>
-
-                    <img
-                      src={qArtUrl}
-                      alt={track.title}
-                      className="w-10 h-10 rounded-lg object-cover bg-neutral-800 flex-shrink-0"
-                      onError={(e) => {
-                        e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&q=80';
-                      }}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">{track.title}</p>
-                      <p className="text-[10px] text-neutral-400 truncate">{track.artist || 'Unknown'}</p>
-                    </div>
-                  </div>
-
-                  {/* Accessible Move Actions & Playing Indicator */}
-                  <div className="flex items-center space-x-1 pl-2" onClick={(e) => e.stopPropagation()}>
-                    {isCurrent && (
-                      <span className="text-[10px] uppercase font-bold text-yt-red px-2 py-0.5 rounded bg-red-950/60 border border-red-800/40 mr-1">
-                        Playing
-                      </span>
-                    )}
-
-                    <button
-                      disabled={idx === 0}
-                      onClick={() => reorderQueue(idx, idx - 1)}
-                      className="p-1 text-neutral-500 hover:text-white disabled:opacity-20"
-                      title="Move Up"
-                      aria-label="Move Up"
-                    >
-                      <ArrowUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      disabled={idx === queue.length - 1}
-                      onClick={() => reorderQueue(idx, idx + 1)}
-                      className="p-1 text-neutral-500 hover:text-white disabled:opacity-20"
-                      title="Move Down"
-                      aria-label="Move Down"
-                    >
-                      <ArrowDown className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => removeFromQueue(idx)}
-                      className="p-1 text-neutral-500 hover:text-red-400 transition-colors"
-                      title="Remove from Queue"
-                      aria-label="Remove from Queue"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ReorderableQueueList
+            queue={queue}
+            queueIndex={queueIndex}
+            currentTrack={currentTrack}
+            onReorder={reorderQueue}
+            onRemove={removeFromQueue}
+            onPlayTrack={playTrack}
+          />
         </div>
       )}
     </div>
