@@ -87,8 +87,18 @@ export function AuthProvider({ children }) {
     setAuthError(null);
   };
 
+  const updateAvatar = async (file) => {
+    const data = await api.uploadUserAvatar(file);
+    if (data && data.user) {
+      setUser(data.user);
+      setAuthError(null);
+      return data.user;
+    }
+    return null;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, authError, login, register, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, authError, login, register, logout, checkAuth, updateAvatar }}>
       {children}
     </AuthContext.Provider>
   );

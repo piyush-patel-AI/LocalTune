@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Play, Shuffle, MoreVertical, Trash2, Music } from 'lucide-react';
-import { api } from '../services/api.js';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Play, Shuffle, Trash2, Music, Camera, ImagePlus, Loader2, AlertCircle } from 'lucide-react';
+import { api, isValidImage, prepareImage, getImageAccept } from '../services/api.js';
 import { PlaylistCover } from '../components/PlaylistCover.jsx';
 import { usePlayer } from '../context/PlayerContext.jsx';
 
@@ -9,8 +9,12 @@ export function PlaylistDetailScreen({ playlistId, onBack }) {
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const fileInputRef = useRef(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverError, setCoverError] = useState(null);
 
-  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
+  const { playTrack, currentTrack } = usePlayer();
 
   const loadPlaylistDetails = async () => {
     if (!playlistId) return;
@@ -64,6 +68,49 @@ export function PlaylistDetailScreen({ playlistId, onBack }) {
     }
   };
 
+  const handleCoverPick = () => {
+    setCoverError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleCoverSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) {
+      // Cancellation
+      return;
+    }
+    setCoverError(null);
+
+    if (!isValidImage(file)) {
+      setCoverError('Please choose a valid image (JPG, PNG, WEBP, or GIF) under 10MB.');
+      return;
+    }
+
+    // Live preview before persistence
+    const objectUrl = URL.createObjectURL(file);
+    setCoverPreviewUrl(objectUrl);
+
+    setCoverUploading(true);
+    try {
+      const prepared = await prepareImage(file);
+      const res = await api.uploadPlaylistCover(playlistId, prepared);
+      // Persist succeeded — reflect the server-authoritative playlist object
+      if (res && res.playlist) {
+        setPlaylist((prev) => ({ ...(prev || {}), ...res.playlist }));
+      }
+      setCoverPreviewUrl(null);
+      setCoverError(null);
+    } catch (err) {
+      console.error('Playlist cover upload failed:', err);
+      setCoverError(err.status === 401 ? 'Session expired. Please sign in again.' : 'Upload failed. Please try again.');
+      setCoverPreviewUrl(null);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+      setCoverUploading(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col space-y-4 pt-3 pb-32 relative z-10 px-4">
       {/* Top Header Navigation */}
@@ -102,13 +149,52 @@ export function PlaylistDetailScreen({ playlistId, onBack }) {
         <>
           {/* Playlist Header Card */}
           <div className="flex flex-col items-center text-center space-y-3 pt-2 pb-4 border-b border-white/10">
-            <PlaylistCover playlist={playlist} tracks={tracks} size={144} className="shadow-2xl ring-1 ring-white/15" />
+            <div className="relative">
+              {coverPreviewUrl ? (
+                <div className="w-36 h-36 rounded-3xl overflow-hidden bg-neutral-900 shadow-2xl ring-1 ring-white/15">
+                  <img src={coverPreviewUrl} alt={playlist?.name} className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <PlaylistCover playlist={playlist} tracks={tracks} size={144} className="shadow-2xl ring-1 ring-white/15" />
+              )}
+
+              {/* Change / Add Photo Action */}
+              <button
+                onClick={handleCoverPick}
+                disabled={coverUploading}
+                className="absolute -bottom-2 -right-2 flex items-center justify-center w-9 h-9 rounded-full bg-white text-black shadow-lg ring-1 ring-black/20 hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+                title={playlist?.cover_path ? 'Change Photo' : 'Add Photo'}
+                aria-label={playlist?.cover_path ? 'Change playlist photo' : 'Add playlist photo'}
+              >
+                {coverUploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : playlist?.cover_path ? (
+                  <Camera className="w-4 h-4" />
+                ) : (
+                  <ImagePlus className="w-4 h-4" />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={getImageAccept()}
+                className="hidden"
+                onChange={handleCoverSelect}
+              />
+            </div>
             <div>
               <h1 className="text-2xl font-extrabold text-white tracking-tight">{playlist?.name}</h1>
               <p className="text-xs text-yt-subtext mt-1 font-medium">
                 {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'} • LocalTune Playlist
               </p>
             </div>
+
+            {coverError && (
+              <div className="flex items-start space-x-2 px-3 py-2 rounded-xl bg-red-950/50 border border-red-800/40 text-red-300 text-xs max-w-xs">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{coverError}</span>
+              </div>
+            )}
 
             {/* Action Buttons */}
             {tracks.length > 0 && (

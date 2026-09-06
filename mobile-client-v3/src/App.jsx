@@ -15,20 +15,9 @@ function MainLayout() {
   const { activeTab } = usePlayer();
 
   return (
-    <div className="w-full max-w-md min-h-screen flex flex-col bg-[#030303] text-white relative shadow-2xl overflow-x-hidden border-x border-neutral-900 mx-auto select-none">
+    <div className="w-full max-w-md min-h-screen flex flex-col bg-[#030303] text-white relative shadow-2xl overflow-x-hidden border-x border-neutral-900 mx-auto select-none app-safe-area">
       {/* Seamless Ambient Top Gradient Mesh */}
       <div className="absolute top-0 left-0 right-0 h-56 top-ambient-mesh pointer-events-none z-0" />
-
-      {/* Top Mobile Status Bar */}
-      <div className="relative h-9 px-6 pt-2 flex items-center justify-between text-[11px] font-semibold text-neutral-300 z-50 bg-transparent">
-        <span>6:11</span>
-        <div className="flex items-center space-x-1.5">
-          <span className="text-[10px]">5G</span>
-          <div className="w-5 h-2.5 border border-white/70 rounded-[2px] p-[1px] flex items-center">
-            <div className="h-full bg-white w-[50%]" />
-          </div>
-        </div>
-      </div>
 
       {/* Screen Router */}
       <main className="flex-1 flex flex-col relative z-10">

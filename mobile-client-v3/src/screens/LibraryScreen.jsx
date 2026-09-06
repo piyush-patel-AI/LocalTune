@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Header } from '../components/Header.jsx';
-import { Library, Plus, Music, Heart, Disc3, User, X, LogIn } from 'lucide-react';
-import { api } from '../services/api.js';
+import { Library, Plus, Music, Heart, Disc3, User, X, LogIn, ImagePlus, Loader2, AlertCircle } from 'lucide-react';
+import { api, isValidImage, prepareImage, getImageAccept } from '../services/api.js';
 import { PlaylistCover } from '../components/PlaylistCover.jsx';
 import { PlaylistDetailScreen } from './PlaylistDetailScreen.jsx';
 import { usePlayer } from '../context/PlayerContext.jsx';
@@ -22,6 +22,11 @@ export function LibraryScreen() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
+  const coverInputRef = useRef(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverError, setCoverError] = useState(null);
+  const [creating, setCreating] = useState(false);
 
   const { playTrack } = usePlayer();
   const { logout } = useAuth();
@@ -73,15 +78,53 @@ export function LibraryScreen() {
   const handleCreatePlaylist = async (e) => {
     e.preventDefault();
     if (!newPlaylistName.trim()) return;
+    setCreating(true);
+    setCoverError(null);
     try {
-      await api.createPlaylist(newPlaylistName.trim(), newPlaylistDesc.trim());
+      let result;
+      if (coverFile) {
+        const prepared = await prepareImage(coverFile);
+        result = await api.createPlaylistWithCover(newPlaylistName.trim(), prepared);
+        setCoverFile(null);
+        setCoverPreviewUrl(null);
+      } else {
+        result = await api.createPlaylist(newPlaylistName.trim(), newPlaylistDesc.trim());
+      }
       setNewPlaylistName('');
       setNewPlaylistDesc('');
       setIsModalOpen(false);
       loadLibraryData();
+      return result;
     } catch (err) {
       console.error('Failed to create playlist:', err);
+      setCoverError('Failed to create playlist. Please try again.');
+    } finally {
+      setCreating(false);
     }
+  };
+
+  const handleCoverPick = () => {
+    setCoverError(null);
+    coverInputRef.current?.click();
+  };
+
+  const handleCoverSelect = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) {
+      // Cancellation
+      return;
+    }
+    setCoverError(null);
+
+    if (!isValidImage(file)) {
+      setCoverError('Please choose a valid image (JPG, PNG, WEBP, or GIF) under 10MB.');
+      return;
+    }
+
+    if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+    setCoverFile(file);
+    setCoverPreviewUrl(URL.createObjectURL(file));
   };
 
   // If a playlist is selected, render PlaylistDetailScreen
@@ -304,6 +347,42 @@ export function LibraryScreen() {
                 />
               </div>
 
+              {/* Cover Photo Picker */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 mb-1.5">Cover Photo (optional)</label>
+                <div className="flex items-center space-x-3">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-neutral-900 border border-white/10 flex items-center justify-center flex-shrink-0">
+                    {coverPreviewUrl ? (
+                      <img src={coverPreviewUrl} alt="Cover preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Disc3 className="w-5 h-5 text-neutral-600" />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCoverPick}
+                    className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-neutral-900 border border-white/10 text-white text-xs font-medium hover:bg-neutral-800 transition-colors"
+                  >
+                    <ImagePlus className="w-3.5 h-3.5" />
+                    <span>{coverPreviewUrl ? 'Change Photo' : 'Add Photo'}</span>
+                  </button>
+                </div>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept={getImageAccept()}
+                  className="hidden"
+                  onChange={handleCoverSelect}
+                />
+              </div>
+
+              {coverError && (
+                <div className="flex items-start space-x-2 px-3 py-2 rounded-xl bg-red-950/50 border border-red-800/40 text-red-300 text-xs">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>{coverError}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end space-x-3 pt-2">
                 <button
                   type="button"
@@ -314,9 +393,17 @@ export function LibraryScreen() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-white text-black text-xs font-bold hover:bg-neutral-200 shadow-md"
+                  disabled={creating}
+                  className="px-5 py-2 rounded-full bg-white text-black text-xs font-bold hover:bg-neutral-200 shadow-md disabled:opacity-50"
                 >
-                  Create
+                  {creating ? (
+                    <span className="flex items-center space-x-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creating...</span>
+                    </span>
+                  ) : (
+                    'Create'
+                  )}
                 </button>
               </div>
             </form>

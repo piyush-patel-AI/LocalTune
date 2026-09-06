@@ -2,15 +2,13 @@ import React, { useState } from 'react';
 import { Bell, Search, Music } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { UserAvatar } from './UserAvatar.jsx';
 import { AccountModal } from './AccountModal.jsx';
 
 export function Header() {
   const { setActiveTab } = usePlayer();
   const { user } = useAuth();
   const [isAccountOpen, setIsAccountOpen] = useState(false);
-
-  const displayName = user?.displayName || user?.username || 'User';
-  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <>
@@ -49,14 +47,10 @@ export function Header() {
 
           <div
             onClick={() => setIsAccountOpen(true)}
-            className="w-7 h-7 rounded-full overflow-hidden ring-1 ring-white/20 cursor-pointer bg-neutral-800 flex items-center justify-center text-xs font-bold text-white shadow-md hover:ring-white/40 transition-all"
+            className="cursor-pointer rounded-full ring-1 ring-white/20 hover:ring-white/40 transition-all"
             title="User Profile"
           >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-            ) : (
-              initial
-            )}
+            <UserAvatar user={user} size={28} />
           </div>
         </div>
       </header>

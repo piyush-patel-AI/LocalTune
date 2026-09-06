@@ -20,6 +20,23 @@ body {
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
+/* Real device/browser safe-area insets (uses env() with iOS constant() fallback).
+   The real OS status bar provides the top inset; we only add spacing so app
+   content never sits under the notch/status bar. No hardcoded height. */
+.app-safe-area {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+}
+
+@supports not (padding-top: env(safe-area-inset-top)) {
+  .app-safe-area {
+    padding-top: constant(safe-area-inset-top, 0px);
+    padding-bottom: constant(safe-area-inset-bottom, 0px);
+  }
+}
+
 /* Gradient overlay for speed dial cards */
 .card-gradient {
   background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
