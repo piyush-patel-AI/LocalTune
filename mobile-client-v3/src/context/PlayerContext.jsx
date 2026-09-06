@@ -5,7 +5,7 @@ import { recommendationService } from '../services/recommendationService.js';
 const PlayerContext = createContext(null);
 
 export function PlayerProvider({ children }) {
-  const audioRef = useRef(new Audio());
+  const audioRef = useRef(null);
 
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -87,6 +87,36 @@ export function PlayerProvider({ children }) {
       }
     });
   }, [currentTrack]);
+
+  // Native MediaSession playbackState sync (observed by the Android bridge polyfill)
+  useEffect(() => {
+    if (!currentTrack || !('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  }, [currentTrack, isPlaying]);
+
+  // Periodic position sync while playing (keeps Android Now Bar scrub in step)
+  useEffect(() => {
+    if (!currentTrack || !isPlaying || !('mediaSession' in navigator)) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const syncPosition = () => {
+      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+      const position = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      if (duration <= 0 || position < 0 || position > duration) return;
+      try {
+        navigator.mediaSession.setPositionState({
+          duration,
+          position,
+          playbackRate: audio.playbackRate || 1,
+        });
+      } catch (_) {}
+    };
+
+    syncPosition();
+    const positionInterval = setInterval(syncPosition, 1000);
+    return () => clearInterval(positionInterval);
+  }, [currentTrack, isPlaying]);
 
   const playTrack = (track, newQueue = null, index = 0) => {
     if (!track) return;
@@ -279,6 +309,7 @@ export function PlayerProvider({ children }) {
         removeFromQueue,
       }}
     >
+      <audio ref={audioRef} preload="auto" style={{ display: 'none' }} />
       {children}
     </PlayerContext.Provider>
   );
