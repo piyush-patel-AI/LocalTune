@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
+  avatar_path TEXT,
+  avatar_version INTEGER NOT NULL DEFAULT 0,
   date_created DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

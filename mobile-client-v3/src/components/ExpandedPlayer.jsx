@@ -14,89 +14,18 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { usePlayer } from '../context/PlayerContext.jsx';
+import {
+  resolveArtworkUrl,
+  ambientKey,
+  extractDominantColor,
+  buildAmbientGradient,
+  buildFallbackBackground,
+} from '../services/ambientColor.js';
 
-// ── Dominant color extraction via canvas ─────────────────────────────────────
+// Artwork -> ambient color cache, keyed by stable artwork identity
+// (track id + artwork URL) so revisiting a known artwork skips extraction.
 const colorCache = new Map();
-
-/**
- * Derive a representative color from artwork using a lightweight single-pass
- * quantization. The canvas is drawn small (48x48) and only read once when the
- * artwork changes — never during playback or per-render.
- *
- * Picks the most frequent quantized color bucket that is neither too dark nor
- * too close to grey, so the ambient background visibly relates to the artwork
- * instead of flattening to a muddy average.
- */
-function extractDominantColor(img) {
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const w = 48;
-    const h = 48;
-    canvas.width = w;
-    canvas.height = h;
-    ctx.drawImage(img, 0, 0, w, h);
-
-    const { data } = ctx.getImageData(0, 0, w, h);
-    const buckets = new Map();
-
-    for (let i = 0; i < data.length; i += 4) {
-      let r = data[i];
-      let g = data[i + 1];
-      let b = data[i + 2];
-      const a = data[i + 3];
-      if (a < 125) continue; // skip transparent pixels
-
-      // Quantize to reduce noise and collapse near-identical shades
-      r = Math.round(r / 32) * 32;
-      g = Math.round(g / 32) * 32;
-      b = Math.round(b / 32) * 32;
-
-      const key = `${r},${g},${b}`;
-      buckets.set(key, (buckets.get(key) || 0) + 1);
-    }
-
-    if (buckets.size === 0) return null;
-
-    // Prefer the most frequent bucket that is vivid enough and not too dark.
-    let best = null;
-    let bestScore = -Infinity;
-    for (const [key, count] of buckets) {
-      const [r, g, b] = key.split(',').map(Number);
-      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      const sat = max === 0 ? 0 : (max - min) / max;
-      if (lum < 45) continue; // too dark — would blend into the black player
-      // Favor frequency, boosted by saturation so colorful artworks keep identity
-      const score = count * (1 + sat * 2);
-      if (score > bestScore) {
-        bestScore = score;
-        best = { r, g, b };
-      }
-    }
-
-    // Fallback: if everything was too dark, use the overall average (kept dark)
-    if (!best) {
-      let R = 0, G = 0, B = 0, n = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] < 125) continue;
-        R += data[i]; G += data[i + 1]; B += data[i + 2]; n++;
-      }
-      if (n === 0) return null;
-      return `rgb(${Math.round(R / n)},${Math.round(G / n)},${Math.round(B / n)})`;
-    }
-
-    // Dim so it reads as an ambient wash, not a solid color block
-    const dim = 0.5;
-    const r = Math.round(best.r * dim);
-    const g = Math.round(best.g * dim);
-    const b = Math.round(best.b * dim);
-    return `rgb(${r},${g},${b})`;
-  } catch (_) {
-    return null;
-  }
-}
+const COLOR_CACHE_MAX = 120;
 
 function CustomScrubber({ currentTime, duration, onSeek }) {
   const scrubberRef = useRef(null);
@@ -329,15 +258,69 @@ export function ExpandedPlayer() {
   } = usePlayer();
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'queue'
-  const [ambientColor, setAmbientColor] = useState('#030303');
+  const [ambientBg, setAmbientBg] = useState(buildFallbackBackground());
 
+  const artUrl = currentTrack ? resolveArtworkUrl(currentTrack) : '';
+
+  // Derive the ambient background from the CURRENT track's artwork whenever the
+  // track or its artwork changes. Runs only on artwork identity changes (never
+  // on progress ticks), is cancelled when the track changes mid-load, and keeps
+  // the previous background until the new color is ready so there is no black
+  // flash. The 600ms CSS transition then crossfades old -> new smoothly.
   useEffect(() => {
-    setAmbientColor('#030303');
-  }, [currentTrack?.id]);
+    if (!currentTrack) {
+      setAmbientBg(buildFallbackBackground());
+      return undefined;
+    }
+
+    const key = ambientKey(currentTrack, artUrl);
+    const cached = colorCache.get(key);
+    if (cached) {
+      setAmbientBg(buildAmbientGradient(cached));
+      return undefined;
+    }
+    if (!artUrl) {
+      setAmbientBg(buildFallbackBackground());
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    // Load the artwork independently of the <img> in the JSX so extraction is
+    // decoupled from rendering. crossOrigin='anonymous' keeps the canvas
+    // un-tainted when artwork is served cross-origin (deployed V3), which the
+    // previous onLoad-based approach never did — the tainted canvas made
+    // getImageData() throw and left the background stuck on the dark default.
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    const applyColor = () => {
+      if (cancelled) return;
+      const color = extractDominantColor(img);
+      if (color) {
+        if (colorCache.size >= COLOR_CACHE_MAX) {
+          colorCache.delete(colorCache.keys().next().value);
+        }
+        colorCache.set(key, color);
+        setAmbientBg(buildAmbientGradient(color));
+      } else {
+        setAmbientBg(buildFallbackBackground());
+      }
+    };
+
+    img.onload = applyColor;
+    img.onerror = () => {
+      if (!cancelled) setAmbientBg(buildFallbackBackground());
+    };
+    img.src = artUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack, artUrl]);
 
   if (!isPlayerExpanded || !currentTrack) return null;
 
-  const artUrl = currentTrack.coverUrl || currentTrack.cover_art_url || api.getTrackArtUrl(currentTrack.id);
   const isFav = !!favoritesMap[currentTrack.id];
 
   const formatTime = (secs) => {
@@ -346,23 +329,6 @@ export function ExpandedPlayer() {
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
-
-  const handleArtworkLoad = (e) => {
-    const img = e.target;
-    if (!img.naturalWidth) return;
-    const cached = colorCache.get(currentTrack.id);
-    if (cached) {
-      setAmbientColor(cached);
-      return;
-    }
-    const color = extractDominantColor(img);
-    if (color) {
-      colorCache.set(currentTrack.id, color);
-      setAmbientColor(color);
-    }
-  };
-
-  const ambientBg = `radial-gradient(circle at 50% 30%, ${ambientColor} 0%, rgba(30,10,35,0.95) 70%, #030303 100%)`;
 
   return (
     <div
@@ -418,7 +384,6 @@ export function ExpandedPlayer() {
               src={artUrl}
               alt={currentTrack.title}
               className="w-full h-full object-cover"
-              onLoad={handleArtworkLoad}
               onError={(e) => {
                 e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80';
               }}

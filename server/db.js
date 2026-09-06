@@ -156,18 +156,24 @@ export const getUserByUsername = async (username) => {
 
 export const getUserById = async (id) => {
   return queryGet(
-    `SELECT id, username, display_name, avatar_path, date_created FROM users WHERE id = $1`,
+    `SELECT id, username, display_name, avatar_path, avatar_version, date_created FROM users WHERE id = $1`,
     [id]
   );
 };
 
 export const updateUserAvatar = async (id, avatarPath) => {
-  await queryRun(`UPDATE users SET avatar_path = $1 WHERE id = $2`, [avatarPath, id]);
+  // Bump avatar_version on every (re)upload so the client's avatar URL gets a
+  // new version query that forces WebViews/browsers to fetch the new bytes
+  // instead of serving the stale immutable-cached image.
+  await queryRun(
+    `UPDATE users SET avatar_path = $1, avatar_version = avatar_version + 1 WHERE id = $2`,
+    [avatarPath, id]
+  );
   return getUserById(id);
 };
 
 export const getAllUsersPublic = async () => {
-  return queryAll(`SELECT id, username, display_name, avatar_path FROM users`);
+  return queryAll(`SELECT id, username, display_name, avatar_path, avatar_version FROM users`);
 };
 
 // --- Track Operations ---

@@ -17,11 +17,15 @@ const formatUserObj = (u) => {
   if (!u) return null;
   const displayName = u.display_name || u.displayName || u.username;
   const hasAvatar = !!u.avatar_path;
+  // Version the avatar URL so browsers/WebViews don't serve a stale,
+  // long-cached (immutable) image after a replacement: each successful upload
+  // bumps avatar_version, producing a fresh URL that fetches the new bytes.
+  const version = u.avatar_version ?? 0;
   return {
     id: u.id,
     username: u.username,
     displayName: displayName,
-    avatarUrl: hasAvatar ? `/api/users/${u.id}/avatar` : null
+    avatarUrl: hasAvatar ? `/api/users/${u.id}/avatar?v=${version}` : null
   };
 };
 
@@ -71,7 +75,21 @@ router.post('/users/avatar', uploadAvatar.single('avatar'), async (req, res) => 
     const ext = extFromMime(req.file.mimetype);
     const key = buildAvatarKey(userId, ext);
 
-    await uploadToStorage(key, req.file.buffer, req.file.mimetype || 'image/jpeg');
+    // upsert:true is required for the REPLACEMENT path: the storage key is
+    // deterministic (avatars/{userId}.{ext}), so an existing account's key
+    // already exists and a plain (upsert:false) upload would be rejected by
+    // Supabase — silently leaving the OLD image in place. With upsert the new
+    // bytes overwrite the object for both first upload and re-upload.
+    const upload = await uploadToStorage(
+      key,
+      req.file.buffer,
+      req.file.mimetype || 'image/jpeg',
+      { upsert: true }
+    );
+    if (!upload) {
+      console.error(`[Auth] Avatar storage upload failed for user ${userId}`);
+      return res.status(500).json({ error: 'Failed to update avatar' });
+    }
 
     const updatedUser = await updateUserAvatar(userId, key);
     return res.json({
