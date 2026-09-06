@@ -432,7 +432,7 @@ export function ExpandedPlayer() {
             <button
               onClick={toggleShuffle}
               className={`p-2 transition-colors ${
-                shuffleEnabled ? 'text-yt-red' : 'text-neutral-400 hover:text-white'
+                shuffleEnabled ? 'text-white' : 'text-neutral-400 hover:text-white'
               }`}
               aria-label={shuffleEnabled ? 'Shuffle on' : 'Shuffle off'}
               aria-pressed={shuffleEnabled}
@@ -467,7 +467,7 @@ export function ExpandedPlayer() {
             <button
               onClick={cycleRepeat}
               className={`relative p-2 transition-colors ${
-                repeatMode !== 'off' ? 'text-yt-red' : 'text-neutral-400 hover:text-white'
+                repeatMode !== 'off' ? 'text-white' : 'text-neutral-400 hover:text-white'
               }`}
               aria-label={
                 repeatMode === 'one'

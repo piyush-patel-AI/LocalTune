@@ -178,14 +178,14 @@ describe('ExpandedPlayer UI wiring (clear state indication)', () => {
   test('Shuffle button calls toggleShuffle and shows active state', async () => {
     const ep = await readSource(EXPANDED);
     assert.ok(/onClick=\{toggleShuffle\}/.test(ep), 'shuffle wired');
-    assert.ok(/shuffleEnabled \? 'text-yt-red' : 'text-neutral-400 hover:text-white'/.test(ep), 'active color when on');
+    assert.ok(/shuffleEnabled \? 'text-white' : 'text-neutral-400 hover:text-white'/.test(ep), 'active color when on');
     assert.ok(/aria-pressed=\{shuffleEnabled\}/.test(ep), 'pressed state exposed');
   });
 
   test('Repeat button cycles modes and shows the "1" indicator for repeat-one', async () => {
     const ep = await readSource(EXPANDED);
     assert.ok(/onClick=\{cycleRepeat\}/.test(ep), 'repeat wired');
-    assert.ok(/repeatMode !== 'off' \? 'text-yt-red' : 'text-neutral-400 hover:text-white'/.test(ep), 'active color when a repeat mode is on');
+    assert.ok(/repeatMode !== 'off' \? 'text-white' : 'text-neutral-400 hover:text-white'/.test(ep), 'active color when a repeat mode is on');
     assert.ok(/repeatMode === 'one'/.test(ep) && /Repeat1/.test(ep), 'repeat-one uses the "1" indicator icon');
     assert.ok(/aria-pressed=\{repeatMode !== 'off'\}/.test(ep), 'pressed state exposed');
   });
