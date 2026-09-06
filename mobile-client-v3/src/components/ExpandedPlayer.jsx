@@ -8,6 +8,7 @@ import {
   Heart,
   Shuffle,
   Repeat,
+  Repeat1,
   ListMusic,
   GripVertical,
   Trash2,
@@ -251,6 +252,10 @@ export function ExpandedPlayer() {
     seek,
     nextTrack,
     prevTrack,
+    repeatMode,
+    shuffleEnabled,
+    cycleRepeat,
+    toggleShuffle,
     toggleFavorite,
     playTrack,
     reorderQueue,
@@ -424,7 +429,14 @@ export function ExpandedPlayer() {
 
           {/* Primary Playback Controls */}
           <div className="flex items-center justify-between px-2 pt-2">
-            <button className="p-2 text-neutral-400 hover:text-white transition-colors">
+            <button
+              onClick={toggleShuffle}
+              className={`p-2 transition-colors ${
+                shuffleEnabled ? 'text-yt-red' : 'text-neutral-400 hover:text-white'
+              }`}
+              aria-label={shuffleEnabled ? 'Shuffle on' : 'Shuffle off'}
+              aria-pressed={shuffleEnabled}
+            >
               <Shuffle className="w-5 h-5" />
             </button>
             <button
@@ -452,8 +464,25 @@ export function ExpandedPlayer() {
             >
               <SkipForward className="w-7 h-7 fill-current" />
             </button>
-            <button className="p-2 text-neutral-400 hover:text-white transition-colors">
-              <Repeat className="w-5 h-5" />
+            <button
+              onClick={cycleRepeat}
+              className={`relative p-2 transition-colors ${
+                repeatMode !== 'off' ? 'text-yt-red' : 'text-neutral-400 hover:text-white'
+              }`}
+              aria-label={
+                repeatMode === 'one'
+                  ? 'Repeat one'
+                  : repeatMode === 'queue'
+                  ? 'Repeat queue'
+                  : 'Repeat off'
+              }
+              aria-pressed={repeatMode !== 'off'}
+            >
+              {repeatMode === 'one' ? (
+                <Repeat1 className="w-5 h-5" />
+              ) : (
+                <Repeat className="w-5 h-5" />
+              )}
             </button>
           </div>
         </div>

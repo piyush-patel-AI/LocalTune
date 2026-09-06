@@ -8,6 +8,7 @@ import {
   pushTrackMetadata,
   pushPlaybackState,
 } from '../services/nativeBridge.js';
+import { shuffleArray, shuffleUpcoming, nextPlaybackAfterEnd } from '../services/playerModes.js';
 
 const PlayerContext = createContext(null);
 
@@ -24,6 +25,12 @@ export function PlayerProvider({ children }) {
   const [favoritesMap, setFavoritesMap] = useState({});
   const [activeTab, setActiveTab] = useState('home'); // home | explore | library | search
   const [listenHistory, setListenHistory] = useState([]);
+  const [repeatMode, setRepeatMode] = useState('off'); // 'off' | 'queue' | 'one'
+  const [shuffleEnabled, setShuffleEnabled] = useState(false);
+
+  // Base (non-shuffled) queue order, so toggling shuffle OFF restores the order
+  // the user actually built instead of permanently destroying it.
+  const originalQueueRef = useRef([]);
 
   // Fetch user favorites on load
   const refreshFavorites = async () => {
@@ -179,7 +186,8 @@ export function PlayerProvider({ children }) {
     setListenHistory((prev) => [...prev, track]);
 
     if (newQueue) {
-      setQueue(newQueue);
+      originalQueueRef.current = [...newQueue];
+      setQueue(shuffleEnabled ? shuffleUpcoming(newQueue, index) : newQueue);
       setQueueIndex(index);
     } else if (queue.length === 0) {
       setQueue([track]);
@@ -222,6 +230,14 @@ export function PlayerProvider({ children }) {
       setQueueIndex(nextIdx);
       playTrack(queue[nextIdx], queue, nextIdx);
     } else if (currentTrack) {
+      // Repeat-queue wrap: return to the top of the (possibly re-shuffled)
+      // queue instead of fetching recommendations.
+      if (repeatMode === 'queue' && queue.length > 0) {
+        const nextCycle = shuffleEnabled ? shuffleArray(queue) : queue;
+        setQueueIndex(0);
+        playTrack(nextCycle[0], nextCycle, 0);
+        return;
+      }
       try {
         const exclude = queue.map((t) => t.id);
         const autoplayTracks = await recommendationService.getAutoplayTracks(currentTrack.id, exclude, 3);
@@ -250,11 +266,73 @@ export function PlayerProvider({ children }) {
     }
   };
 
+  // Single decision path for HTML5 audio `ended`. Resolves repeat-one vs repeat
+  // queue vs shuffle vs normal advancement vs V2 recommendation autoplay in ONE
+  // place. Repeat-one restarts the SAME track (no queueIndex change, no
+  // recommendation request); repeat-queue wraps without growing the queue; only
+  // an exhausted queue with repeat OFF falls through to recommendation autoplay.
   const handleTrackEnded = () => {
     if (currentTrack) {
       api.logListen(currentTrack.id, duration, true);
     }
-    nextTrack();
+    const decision = nextPlaybackAfterEnd({ repeatMode, queue, queueIndex, shuffleEnabled });
+    switch (decision.action) {
+      case 'replay': {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.currentTime = 0;
+          audio.play().catch(console.error);
+        }
+        return;
+      }
+      case 'advance': {
+        const nextIdx = decision.index;
+        setQueueIndex(nextIdx);
+        playTrack(queue[nextIdx], queue, nextIdx);
+        return;
+      }
+      case 'wrap': {
+        const nextCycle = decision.shuffle ? shuffleArray(queue) : queue;
+        setQueueIndex(0);
+        playTrack(nextCycle[0], nextCycle, 0);
+        return;
+      }
+      default:
+        nextTrack();
+    }
+  };
+
+  const cycleRepeat = () => {
+    setRepeatMode((mode) => (mode === 'off' ? 'queue' : mode === 'queue' ? 'one' : 'off'));
+  };
+
+  const toggleShuffle = () => {
+    if (shuffleEnabled) {
+      // OFF: restore the base queue order, keeping the current track in place.
+      setShuffleEnabled(false);
+      const original = originalQueueRef.current;
+      if (original.length) {
+        if (currentTrack) {
+          const idx = original.findIndex((t) => t.id === currentTrack.id);
+          if (idx !== -1) {
+            setQueue(original);
+            setQueueIndex(idx);
+            return;
+          }
+        }
+        setQueue(original);
+      }
+      return;
+    }
+    // ON: snapshot the base order, then randomize ONLY the upcoming tracks so
+    // the currently playing track is never replaced or immediately replayed.
+    originalQueueRef.current = [...queue];
+    if (queueIndex >= 0 && queue.length > 1) {
+      setQueue(shuffleUpcoming(queue, queueIndex));
+    } else if (queue.length > 1) {
+      setQueue(shuffleArray(queue));
+    }
+    setShuffleEnabled(true);
   };
 
   const toggleFavorite = async (trackId) => {
@@ -277,13 +355,18 @@ export function PlayerProvider({ children }) {
   };
 
   const addToQueue = (track) => {
-    setQueue((prev) => [...prev, track]);
+    setQueue((prev) => {
+      const next = [...prev, track];
+      originalQueueRef.current = [...next];
+      return next;
+    });
   };
 
   const playNext = (track) => {
     setQueue((prev) => {
       const copy = [...prev];
       copy.splice(queueIndex + 1, 0, track);
+      originalQueueRef.current = [...copy];
       return copy;
     });
   };
@@ -295,6 +378,7 @@ export function PlayerProvider({ children }) {
       const newQueue = [...prevQueue];
       const [movedItem] = newQueue.splice(fromIndex, 1);
       newQueue.splice(toIndex, 0, movedItem);
+      originalQueueRef.current = [...newQueue];
 
       if (currentTrack) {
         const newCurrentIndex = newQueue.findIndex((t) => t.id === currentTrack.id);
@@ -311,6 +395,7 @@ export function PlayerProvider({ children }) {
     setQueue((prevQueue) => {
       const newQueue = [...prevQueue];
       newQueue.splice(index, 1);
+      originalQueueRef.current = [...newQueue];
 
       if (currentTrack) {
         const newCurrentIndex = newQueue.findIndex((t) => t.id === currentTrack.id);
@@ -347,6 +432,10 @@ export function PlayerProvider({ children }) {
         seek,
         nextTrack,
         prevTrack,
+        repeatMode,
+        shuffleEnabled,
+        cycleRepeat,
+        toggleShuffle,
         toggleFavorite,
         addToQueue,
         playNext,
