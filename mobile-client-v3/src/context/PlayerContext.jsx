@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { api } from '../services/api.js';
 import { recommendationService } from '../services/recommendationService.js';
+import { resolveArtworkUrl } from '../services/ambientColor.js';
+import {
+  isNativeBridgeAvailable,
+  logToNative,
+  pushTrackMetadata,
+  pushPlaybackState,
+} from '../services/nativeBridge.js';
 
 const PlayerContext = createContext(null);
 
@@ -116,6 +123,45 @@ export function PlayerProvider({ children }) {
     syncPosition();
     const positionInterval = setInterval(syncPosition, 1000);
     return () => clearInterval(positionInterval);
+  }, [currentTrack, isPlaying]);
+
+  // Direct push of real track metadata into the existing AndroidMediaBridge JS
+  // interface (Octave WebView). This is the same native method the injected
+  // polyfill calls; driving it directly covers devices whose navigator does
+  // not expose navigator.mediaSession, so the Now Bar never falls back to the
+  // generic "Octave / Streaming Music" placeholders.
+  useEffect(() => {
+    if (!currentTrack || !isNativeBridgeAvailable()) return;
+    const audio = audioRef.current;
+    const trackDuration =
+      audio && Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : currentTrack.duration_seconds || duration || 0;
+
+    pushTrackMetadata({
+      title: currentTrack.title || 'Unknown Track',
+      artist: currentTrack.artist || 'Unknown Artist',
+      album: currentTrack.album || 'LocalTune',
+      artwork: resolveArtworkUrl(currentTrack),
+      duration: trackDuration,
+    });
+    logToNative(`V3 metadata for track #${currentTrack.id}: ${JSON.stringify(currentTrack.title)} - ${JSON.stringify(currentTrack.artist)}`);
+  }, [currentTrack, duration]);
+
+  // Direct play/pause + position/duration push on track/state transitions.
+  // Ongoing position while playing is additionally driven by the polyfill's
+  // 1s DOM-audio heartbeat, so this covers the instant edges.
+  useEffect(() => {
+    if (!currentTrack || !isNativeBridgeAvailable()) return;
+    const audio = audioRef.current;
+    const position =
+      audio && Number.isFinite(audio.currentTime) ? audio.currentTime : currentTime;
+    const trackDuration =
+      audio && Number.isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : duration;
+    pushPlaybackState(isPlaying, position, trackDuration);
+    logToNative(`V3 playback: playing=${isPlaying}`);
   }, [currentTrack, isPlaying]);
 
   const playTrack = (track, newQueue = null, index = 0) => {
@@ -310,6 +356,14 @@ export function PlayerProvider({ children }) {
       }}
     >
       <audio ref={audioRef} preload="auto" style={{ display: 'none' }} />
+      {/* Persistent DOM fallbacks matching the injected Octave polyfill selectors
+          ([aria-label="Next"] / [aria-label="Previous"]) so native next/previous
+          commands reach PlayerContext even when navigator.mediaSession is
+          unavailable. PlayerContext remains the single source of truth. */}
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <button type="button" aria-label="Next" onClick={nextTrack} />
+        <button type="button" aria-label="Previous" onClick={prevTrack} />
+      </div>
       {children}
     </PlayerContext.Provider>
   );

@@ -77,11 +77,122 @@ describe('Android MediaSession bridge contract (Octave polyfill)', () => {
     assert.ok(/setInterval\(syncPosition, 1000\)/.test(region), 'position synced once per second while playing');
   });
 
-  test('seekto handler moves audio without touching the polyfill-owned localTuneBridge', async () => {
+  test('seekto handler moves audio and never redefines the polyfill-owned bridge globals', async () => {
     const pc = await readSource('context/PlayerContext.jsx');
+
+    // V3 must not overwrite the app-injected command bridge (single bridge rule).
+    assert.ok(!/window\.localTuneBridge\s*=/.test(pc), 'does not redefine localTuneBridge');
+    assert.ok(!/window\.octaveBridge\s*=/.test(pc), 'does not redefine octaveBridge alias');
+  });
+
+  test('persistent polyfill fallback buttons (aria-label Next/Previous) are mounted', async () => {
+    const pc = await readSource('context/PlayerContext.jsx');
+
     assert.ok(
-      !/localTuneBridge|octaveBridge|AndroidMediaBridge/.test(pc),
-      'V3 relies on browser Media Session only; the native bridge stays app-injected'
+      /<button type="button" aria-label="Next" onClick=\{nextTrack\} \/>/.test(pc),
+      'hidden Next button wired to PlayerContext.nextTrack'
     );
+    assert.ok(
+      /<button type="button" aria-label="Previous" onClick=\{prevTrack\} \/>/.test(pc),
+      'hidden Previous button wired to PlayerContext.prevTrack'
+    );
+  });
+
+  test('PlayerContext directly pushes real metadata to the existing native bridge', async () => {
+    const pc = await readSource('context/PlayerContext.jsx');
+
+    assert.ok(
+      /pushTrackMetadata\(\{/.test(pc),
+      'metadata pushed through the shared native bridge driver'
+    );
+    assert.ok(/title: currentTrack\.title \|\| 'Unknown Track'/.test(pc), 'uses real track title');
+    assert.ok(/artist: currentTrack\.artist \|\| 'Unknown Artist'/.test(pc), 'uses real track artist');
+    assert.ok(/album: currentTrack\.album \|\| 'LocalTune'/.test(pc), 'uses real track album');
+    assert.ok(/artwork: resolveArtworkUrl\(currentTrack\)/.test(pc), 'artwork resolved from the track');
+    assert.ok(/}, \[currentTrack, duration\]\);/.test(pc), 'metadata re-pushed on track/duration change');
+  });
+
+  test('PlayerContext pushes play/pause state to the existing native bridge', async () => {
+    const pc = await readSource('context/PlayerContext.jsx');
+    assert.ok(/pushPlaybackState\(isPlaying, position, trackDuration\)/.test(pc), 'playback pushed');
+    assert.ok(/}, \[currentTrack, isPlaying\]\);/.test(pc), 'playback pushed on track/play state change');
+  });
+});
+
+describe('Native bridge driver (services/nativeBridge.js)', () => {
+  const savedGlobal = globalThis.window;
+  const savedAndroid = globalThis.AndroidMediaBridge;
+
+  function withBridge(overrides = {}) {
+    const calls = [];
+    const bridge = {
+      updateMetadata: (...args) => calls.push(['updateMetadata', args]),
+      updatePlaybackState: (...args) => calls.push(['updatePlaybackState', args]),
+      logDebug: (...args) => calls.push(['logDebug', args]),
+      ...overrides,
+    };
+    globalThis.window = { AndroidMediaBridge: bridge };
+    return { bridge, calls };
+  }
+
+  test('availability tracks the AndroidMediaBridge JS interface', async () => {
+    const { isNativeBridgeAvailable } = await import('../services/nativeBridge.js');
+    globalThis.window = undefined;
+    assert.equal(isNativeBridgeAvailable(), false, 'no bridge in plain browser');
+    withBridge();
+    assert.equal(isNativeBridgeAvailable(), true, 'bridge present in Octave WebView');
+  });
+
+  test('pushTrackMetadata forwards exact AndroidMediaBridge.updateMetadata arguments', async () => {
+    const { pushTrackMetadata } = await import('../services/nativeBridge.js');
+    const { calls } = withBridge();
+    const ok = pushTrackMetadata({
+      title: 'My Song',
+      artist: 'My Artist',
+      album: 'My Album',
+      artwork: 'https://x/api/tracks/7/art',
+      duration: 245.5,
+    });
+    assert.equal(ok, true);
+    assert.deepEqual(calls[0][0], 'updateMetadata');
+    assert.deepEqual(calls[0][1], ['My Song', 'My Artist', 'My Album', 'https://x/api/tracks/7/art', 245.5]);
+  });
+
+  test('pushPlaybackState forwards exact AndroidMediaBridge.updatePlaybackState arguments', async () => {
+    const { pushPlaybackState } = await import('../services/nativeBridge.js');
+    const { calls } = withBridge();
+    assert.equal(pushPlaybackState(true, 42.5, 245.5), true);
+    assert.deepEqual(calls[0][0], 'updatePlaybackState');
+    assert.deepEqual(calls[0][1], [true, 42.5, 245.5]);
+  });
+
+  test('logToNative forwards to AndroidMediaBridge.logDebug', async () => {
+    const { logToNative } = await import('../services/nativeBridge.js');
+    const { calls } = withBridge();
+    assert.equal(logToNative('V3 metadata pushed'), true);
+    assert.deepEqual(calls[0][0], 'logDebug');
+    assert.deepEqual(calls[0][1], ['V3 metadata pushed']);
+  });
+
+  test('no-throw no-op when the bridge interface is absent', async () => {
+    const { pushTrackMetadata, pushPlaybackState, logToNative } = await import('../services/nativeBridge.js');
+    globalThis.window = undefined;
+    assert.equal(pushTrackMetadata({ title: 'S' }), false);
+    assert.equal(pushPlaybackState(false, 0, 0), false);
+    assert.equal(logToNative('x'), false);
+  });
+
+  test('falls back to globalThis.AndroidMediaBridge when window is populated differently', async () => {
+    const { pushTrackMetadata } = await import('../services/nativeBridge.js');
+    const calls = [];
+    globalThis.window = undefined;
+    globalThis.AndroidMediaBridge = { updateMetadata: (...a) => calls.push(a) };
+    assert.equal(pushTrackMetadata({ title: 'S', artist: 'A', album: 'B', artwork: 'C' }), true);
+    assert.deepEqual(calls[0], ['S', 'A', 'B', 'C', 0]);
+  });
+
+  test('restores global state', () => {
+    globalThis.window = savedGlobal;
+    globalThis.AndroidMediaBridge = savedAndroid;
   });
 });
